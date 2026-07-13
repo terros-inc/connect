@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Compile CLI
+    name: Build packages
     timeout-minutes: 15
     runs-on: "runs-on=${{ github.run_id }},cpu=2,ram=4,family=c8g,image=ubuntu22-full-arm64,extras=s3-cache,spot=false"
     steps:
