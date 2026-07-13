@@ -1,6 +1,9 @@
 name: Compile
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     types: [ opened, synchronize, ready_for_review ]
 
@@ -29,7 +32,7 @@ jobs:
         run: pnpm lint --quiet
 
       - name: Test
-        run: pnpm test
+        run: pnpm -r test
 
       - name: Build
-        run: pnpm build
+        run: pnpm -r build

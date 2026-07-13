@@ -47,7 +47,6 @@
   "scripts": {
     "fetch-openapi": "wget https://docs.terros.com/openapi/terros.yml",
     "build": "tsc",
-    "lint": "oxlint",
     "test": "vitest run",
     "prepack": "pnpm fetch-openapi && pnpm build",
     "start": "node src/index.ts"

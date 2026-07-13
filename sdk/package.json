@@ -34,9 +34,6 @@
   },
   "scripts": {
     "build": "tsc",
-    "format": "oxfmt --write .",
-    "lint": "oxlint",
-    "lint:fix": "oxlint --fix",
     "prepack": "pnpm build",
     "test": "vitest run"
   },
