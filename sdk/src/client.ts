@@ -6,7 +6,7 @@ export class TerrosClient {
   readonly account: AccountClient
   readonly calendar: CalendarClient
 
-  constructor(config: ClientConfig) {
+  constructor(config: ClientConfig = {}) {
     const api = new ApiCaller(config)
     this.user = new UserClient(api)
     this.account = new AccountClient(api)

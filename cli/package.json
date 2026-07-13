@@ -28,7 +28,7 @@
     "terros.yml",
     "dist"
   ],
-  "homepage": "https://github.com/terros-inc/cli#readme",
+  "homepage": "https://github.com/terros-inc/connect/tree/main/cli#readme",
   "keywords": [
     "terros",
     "cli"
@@ -42,7 +42,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/terros-inc/cli.git"
+    "url": "git+https://github.com/terros-inc/connect.git"
   },
   "scripts": {
     "fetch-openapi": "wget https://docs.terros.com/openapi/terros.yml",
@@ -52,5 +52,5 @@
     "start": "node src/index.ts"
   },
   "type": "module",
-  "version": "1.0.10"
+  "version": "1.0.11"
 }
