@@ -1,0 +1,59 @@
+{
+  "author": "Terros Inc.",
+  "bin": {
+    "terros": "./cli.js"
+  },
+  "bugs": {
+    "url": "https://github.com/terros-inc/cli/issues"
+  },
+  "dependencies": {
+    "luxon": "^3.7.2",
+    "minimist": "^1.2.8",
+    "open": "^11.0.0",
+    "yaml": "^2.9.0"
+  },
+  "description": "Command-line interface for Terros Sales platform",
+  "devDependencies": {
+    "@types/luxon": "^3.7.1",
+    "@types/minimist": "^1.2.5",
+    "@types/node": "^24.13.1",
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "cli.js",
+    "terros.yml",
+    "dist"
+  ],
+  "homepage": "https://github.com/terros-inc/cli#readme",
+  "keywords": [
+    "terros",
+    "cli"
+  ],
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "name": "@terros-inc/cli",
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/terros-inc/cli.git"
+  },
+  "scripts": {
+    "fetch-openapi": "wget https://docs.terros.com/openapi/terros.yml",
+    "build": "tsc",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "prepack": "pnpm fetch-openapi && pnpm build",
+    "start": "node src/index.ts"
+  },
+  "type": "module",
+  "version": "1.0.10"
+}

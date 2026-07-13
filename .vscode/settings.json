@@ -1,0 +1,18 @@
+{
+  "files.exclude": {
+    "**/.git": true,
+    "**/.DS_Store": true,
+    "**/node_modules": true
+  },
+  "[typescript]": {
+    "editor.codeActionsOnSave": {
+      "source.removeUnusedImports": "always",
+      "source.fixAll.oxc": "always"
+    }
+  },
+  "search.exclude": {
+    "**/dist": true,
+    "**/node_modules": true
+  },
+  "editor.defaultFormatter": "oxc.oxc-vscode"
+}

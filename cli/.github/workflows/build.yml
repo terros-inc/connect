@@ -1,0 +1,35 @@
+name: Compile
+
+on:
+  pull_request:
+    types: [ opened, synchronize, ready_for_review ]
+
+jobs:
+  build:
+    name: Compile CLI
+    timeout-minutes: 15
+    runs-on: "runs-on=${{ github.run_id }},cpu=2,ram=4,family=c8g,image=ubuntu22-full-arm64,extras=s3-cache,spot=false"
+    steps:
+      - uses: runs-on/action@742bf56072eb4845a0f94b3394673e4903c90ff0 # v2
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: pnpm/action-setup@739bfe42ca9233c5e6aca07c1a25a9d34aca49b0 # v6
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm lint --quiet
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

@@ -1,0 +1,67 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "unicorn", "typescript", "react", "jsx-a11y"],
+  "categories": {
+    "correctness": "off",
+    "nursery": "off",
+    "pedantic": "off",
+    "restriction": "off",
+    "style": "off",
+    "suspicious": "off",
+    "perf": "warn"
+  },
+  "rules": {
+    "no-restricted-globals": ["error", "location", "event"],
+    "import/no-cycle": ["error", { "maxDepth": 1 }],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "regex": "node_modules",
+            "message": "Direct imports from node_modules path are forbidden"
+          }
+        ]
+      }
+    ],
+    "no-unused-vars": "off",
+    "unicorn/prefer-set-has": "off",
+    "typescript/consistent-type-definitions": ["warn", "type"],
+    "typescript/explicit-function-return-type": [
+      "warn",
+      {
+        "allowExpressions": true
+      }
+    ],
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "disallowTypeAnnotations": false,
+        "fixStyle": "inline-type-imports"
+      }
+    ],
+    "no-console": "warn",
+    "import/no-duplicates": [
+      "error",
+      {
+        "prefer-inline": true
+      }
+    ],
+    "typescript/return-await": "warn",
+    "typescript/triple-slash-reference": "off",
+    "unicorn/filename-case": [
+      "warn",
+      {
+        "cases": {
+          "camelCase": true,
+          "pascalCase": true
+        }
+      }
+    ]
+  },
+  "env": {
+    "builtin": true
+  },
+  "globals": {},
+  "ignorePatterns": []
+}
