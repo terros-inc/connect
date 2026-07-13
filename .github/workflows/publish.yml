@@ -1,6 +1,16 @@
 name: Publish to npm
+
 on:
   workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Package'
+        required: true
+        default: 'sdk'
+        type: choice
+        options:
+          - 'sdk'
+          - 'cli'
 
 permissions:
   contents: read
@@ -8,10 +18,11 @@ permissions:
 
 jobs:
   publish:
-    name: Publish npm package
+    name: Publish ${{ inputs.stage }} npm package
     runs-on: ubuntu-latest
     environment: npm
     if: github.ref == 'refs/heads/main'
+    timeout-minutes: 15
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -25,7 +36,8 @@ jobs:
           package-manager-cache: false
 
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
-      - name: Publish
-        run: pnpm stage publish --provenance
+      - name: Publish ${{ inputs.stage }}
+        run: npm publish --provenance
+        working-directory: ${{ inputs.stage }}
