@@ -39,5 +39,5 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Publish ${{ inputs.stage }}
-        run: npm publish --provenance
+        run: pnpm stage publish --provenance
         working-directory: ${{ inputs.stage }}
