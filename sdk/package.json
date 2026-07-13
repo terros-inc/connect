@@ -5,11 +5,9 @@
   },
   "description": "Typescript SDK for Terros Sales platform",
   "devDependencies": {
-    "@types/node": "^24.13.2",
-    "oxfmt": "^0.56.0",
-    "oxlint": "^1.71.0",
-    "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": "^24"

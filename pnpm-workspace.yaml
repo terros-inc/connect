@@ -1,7 +1,6 @@
 packages:
   - sdk
   - cli
-
 blockExoticSubdeps: true
 catalogMode: strict
 cleanupUnusedCatalogs: true
@@ -10,3 +9,15 @@ packageManagerStrictVersion: true
 trustPolicy: no-downgrade
 updateNotifier: false
 verifyDepsBeforeRun: warn
+catalog:
+  "@types/luxon": ^3.7.1
+  "@types/minimist": ^1.2.5
+  '@types/node': ^24.13.2
+  luxon: ^3.7.2
+  minimist: ^1.2.8
+  open: ^11.0.0
+  oxfmt: ^0.57.0
+  oxlint: ^1.72.0
+  typescript: ^6.0.3
+  vitest: ^4.1.10
+  yaml: ^2.9.0
