@@ -6,11 +6,16 @@
   "description": "Typescript SDK for Terros Sales platform",
   "devDependencies": {
     "@types/node": "catalog:",
+    "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "engines": {
     "node": "^24"
+  },
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist"
@@ -21,8 +26,6 @@
     "sdk"
   ],
   "license": "MIT",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "name": "@terros-inc/sdk",
   "publishConfig": {
     "access": "public",
@@ -33,10 +36,11 @@
     "url": "git+https://github.com/terros-inc/connect.git"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsdown",
     "prepack": "pnpm build",
     "test": "vitest run"
   },
   "type": "module",
-  "version": "1.0.5"
+  "types": "./dist/index.d.mts",
+  "version": "1.0.6"
 }
