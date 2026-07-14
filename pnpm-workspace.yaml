@@ -22,5 +22,3 @@ catalog:
   typescript: ^6.0.3
   vitest: ^4.1.10
   yaml: ^2.9.0
-allowBuilds:
-  esbuild: true
