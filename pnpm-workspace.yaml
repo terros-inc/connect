@@ -18,6 +18,9 @@ catalog:
   open: ^11.0.0
   oxfmt: ^0.57.0
   oxlint: ^1.72.0
+  tsdown: ^0.22.3
   typescript: ^6.0.3
   vitest: ^4.1.10
   yaml: ^2.9.0
+allowBuilds:
+  esbuild: true

@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "esnext",
     "lib": [
-      "ES2022"
+      "es2023"
     ],
     "types": [
       "vitest/globals",
       "node"
     ],
-    "module": "ESNext",
+    "module": "preserve",
     "moduleResolution": "Bundler",
 
     "rootDir": "src",

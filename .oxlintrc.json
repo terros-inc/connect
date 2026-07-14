@@ -40,7 +40,7 @@
         "fixStyle": "inline-type-imports"
       }
     ],
-    "no-console": "warn",
+    "no-console": "off",
     "import/no-duplicates": [
       "error",
       {
