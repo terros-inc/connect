@@ -1,10 +1,15 @@
 import type { CommandGroup, CommandRegistry, Subcommand } from './types.ts'
+import { connectCommands } from './connect.ts'
 import { authCommands } from './auth.ts'
 
 export const commandRegistry: CommandRegistry = {
   auth: {
     description: 'Manage authentication',
     subcommands: authCommands,
+  },
+  connect: {
+    description: 'Terros Connect',
+    subcommands: connectCommands,
   },
 }
 
