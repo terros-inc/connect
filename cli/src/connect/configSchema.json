@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Terros Connect app definition file",
+  "type": "object",
+  "definitions": {
+    "baseScript": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "entrypoint": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "cronScript": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "scheduled" },
+        "cron": {
+          "type": "string",
+          "examples": ["0 */12 * * *"]
+        }
+      },
+      "required": ["type", "cron"]
+    },
+    "outgoingScript": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "outgoing" },
+        "dataType": {
+          "enum": ["Account", "Company", "User", "Event"]
+        }
+      },
+      "required": ["type", "dataType"]
+    },
+    "incomingScript": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "incoming" }
+      },
+      "required": ["type"]
+    }
+  },
+  "properties": {
+    "appId": {
+      "type": "string"
+    },
+    "scripts": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          { "$ref": "#/definitions/baseScript" },
+          {
+            "oneOf": [
+              {
+                "$ref": "#/definitions/cronScript"
+              },
+              {
+                "$ref": "#/definitions/outgoingScript"
+              },
+              {
+                "$ref": "#/definitions/incomingScript"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "required": ["appId", "scripts"]
+}

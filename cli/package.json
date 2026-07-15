@@ -10,7 +10,9 @@
     "luxon": "catalog:",
     "minimist": "catalog:",
     "open": "catalog:",
-    "yaml": "catalog:"
+    "rolldown": "catalog:",
+    "yaml": "catalog:",
+    "zod": "catalog:"
   },
   "description": "Command-line interface for Terros Sales platform",
   "devDependencies": {
@@ -45,12 +47,12 @@
     "url": "git+https://github.com/terros-inc/connect.git"
   },
   "scripts": {
-    "fetch-openapi": "wget https://docs.terros.com/openapi/terros.yml",
+    "fetch-openapi": "rm -f terros.yml && wget https://docs.terros.com/openapi/terros.yml",
     "build": "tsc",
     "test": "vitest run",
     "prepack": "pnpm fetch-openapi && pnpm build",
     "start": "node src/index.ts"
   },
   "type": "module",
-  "version": "1.0.11"
+  "version": "1.0.12"
 }
