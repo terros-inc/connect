@@ -40,7 +40,7 @@ export async function packageScripts(): Promise<void> {
     })
   }
   const end = Date.now()
-  const duration = Math.round((end - start) / 10) / 10
+  const duration = ((end - start) / 1000).toFixed(2)
   console.log(`Created ${zips.length} zips in ${duration}s`)
 }
 

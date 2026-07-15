@@ -2,6 +2,7 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { readFile } from 'node:fs/promises'
+import { CONFIG_FILE_NAME } from './constants.ts'
 
 const BaseScript = z.object({
   name: z.string(),
@@ -34,7 +35,7 @@ const ConnectConfig = z.object({
 type ConnectConfig = z.infer<typeof ConnectConfig>
 
 export async function readConnectConfig(): Promise<ConnectConfig> {
-  const file = join(cwd(), 'terros.json')
+  const file = join(cwd(), CONFIG_FILE_NAME)
   const contents = await readFile(file, { encoding: 'utf-8' })
   return ConnectConfig.parse(JSON.parse(contents))
 }
