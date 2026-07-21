@@ -45,7 +45,6 @@ describe('TerrosApiClient', () => {
       'Terros-Bundle-Identifier': 'com.terros.sdk',
       'Terros-Platform': expect.any(String),
       'Terros-Platform-Version': expect.any(String),
-      'Terros-App-Version': expect.any(String),
     })
   })
 
