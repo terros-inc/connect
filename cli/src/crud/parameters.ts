@@ -26,7 +26,13 @@ function getSchemaType(schema: Schema, components: Components): string {
   if ('oneOf' in schema) return schema.oneOf.map((item) => getSchemaType(item, components)).join(' | ')
   if (isAnyOfSchema(schema)) return schema.anyOf.map((item) => getSchemaType(item, components)).join(' | ')
   if ('type' in schema) {
-    if (schema.type === 'array') return `${getSchemaType(schema.items, components)}[]`
+    if (schema.type === 'array') {
+      if ('prefixItems' in schema) {
+        return `[${schema.prefixItems.map((item) => getSchemaType(item, components)).join(', ')}]`
+      }
+
+      return `${getSchemaType(schema.items, components)}[]`
+    }
     return schema.type
   }
 

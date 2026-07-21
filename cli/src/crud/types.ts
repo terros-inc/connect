@@ -49,6 +49,11 @@ export type ArraySchema = SchemaBase & {
   items: Schema
 }
 
+export type TupleSchema = SchemaBase & {
+  type: 'array'
+  prefixItems: Schema[]
+}
+
 export type Schema =
   | RefSchema
   | StringSchema
@@ -58,6 +63,7 @@ export type Schema =
   | ObjectSchema
   | UnionSchema
   | ArraySchema
+  | TupleSchema
 
 export type OpenAPISchema = {
   /**
