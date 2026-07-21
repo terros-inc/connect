@@ -40,7 +40,8 @@
     "prepack": "pnpm build",
     "test": "vitest run"
   },
+  "sideEffects": false,
   "type": "module",
   "types": "./dist/index.d.mts",
-  "version": "1.0.7"
+  "version": "1.0.8"
 }
