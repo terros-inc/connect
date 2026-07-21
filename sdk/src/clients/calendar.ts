@@ -12,7 +12,6 @@ import {
   type CalendarEventConfirmInput,
   type CalendarEventConfirmSuccess,
   type CalendarEventRemoveInput,
-  type ApiSuccess,
   type CalendarAvailabilityInput,
   type CalendarAvailabilitySuccess,
   type CalendarClosersInput,
@@ -20,10 +19,10 @@ import {
   type CalendarTimeslotsInput,
   type CalendarTimeslotsSuccess,
 } from '../models'
-import { type ApiCaller } from '../apiCaller'
+import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
 
 export class CalendarEventClient {
-  constructor(private readonly api: ApiCaller) {}
+  constructor(private readonly api: TerrosApiClient) {}
 
   add(input: CalendarEventAddInput): Promise<CalendarEventAddSuccess> {
     return this.api.call('calendar/event/add', input)
@@ -57,7 +56,7 @@ export class CalendarEventClient {
 export class CalendarClient {
   readonly event: CalendarEventClient
 
-  constructor(private readonly api: ApiCaller) {
+  constructor(private readonly api: TerrosApiClient) {
     this.event = new CalendarEventClient(api)
   }
 

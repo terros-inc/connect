@@ -5,6 +5,7 @@
   },
   "description": "Typescript SDK for Terros Sales platform",
   "devDependencies": {
+    "@terros-inc/connect-common": "workspace:^",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",

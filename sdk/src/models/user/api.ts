@@ -1,4 +1,3 @@
-import type { ApiSuccess } from '../shared'
 import type { CompanyData, CompanyId } from '../company'
 import type {
   CloserStatus,
@@ -14,6 +13,7 @@ import type {
   UserIdentifier,
   UserProfileData,
 } from './model'
+import type { ApiSuccess } from '@terros-inc/connect-common'
 
 export type UserListInput = {
   showArchived?: true | false | 'all'

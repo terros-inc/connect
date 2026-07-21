@@ -8,7 +8,6 @@ import {
   type UserBulkUpdateInput,
   type UserBulkUpdateSuccess,
   type UserRemoveInput,
-  type ApiSuccess,
   type UserGetInput,
   type UserGetSuccess,
   type UserProfileInput,
@@ -23,10 +22,11 @@ import {
   type UserManagerInput,
   type UserManagerSuccess,
 } from '../models'
-import { type ApiCaller } from '../apiCaller'
+import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
+
 
 export class UserClient {
-  constructor(private readonly api: ApiCaller) {}
+  constructor(private readonly api: TerrosApiClient) {}
 
   list(input: UserListInput): Promise<UserListSuccess> {
     return this.api.call('user/list', input)

@@ -1,5 +1,5 @@
-import type { ApiSuccess } from '../../shared'
 import type { AppVersionData, UnsavedAppVersion } from './model'
+import type { ApiSuccess } from '@terros-inc/connect-common'
 
 export type VersionAddInput = {
   versionData: UnsavedAppVersion

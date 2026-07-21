@@ -1,3 +1,4 @@
+import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
 import {
   type AccountStatusAddInput,
   type AccountStatusAddSuccess,
@@ -6,7 +7,6 @@ import {
   type AccountStatusListInput,
   type AccountStatusListSuccess,
   type AccountStatusRemoveInput,
-  type ApiSuccess,
   type AccountAddInput,
   type AccountAddSuccess,
   type AccountUpdateInput,
@@ -24,10 +24,9 @@ import {
   type AccountUpsertInput,
   type AccountUpsertSuccess,
 } from '../models'
-import { type ApiCaller } from '../apiCaller'
 
 export class AccountStatusClient {
-  constructor(private readonly api: ApiCaller) {}
+  constructor(private readonly api: TerrosApiClient) {}
 
   add(input: AccountStatusAddInput): Promise<AccountStatusAddSuccess> {
     return this.api.call('account/status/add', input)
@@ -49,7 +48,7 @@ export class AccountStatusClient {
 export class AccountClient {
   readonly status: AccountStatusClient
 
-  constructor(private readonly api: ApiCaller) {
+  constructor(private readonly api: TerrosApiClient) {
     this.status = new AccountStatusClient(api)
   }
 
