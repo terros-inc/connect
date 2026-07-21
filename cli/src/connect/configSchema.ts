@@ -67,7 +67,7 @@ export const ConnectConfig = z.object({
   appId: z.string(),
   scripts: z.array(UnsavedScript),
 })
-type ConnectConfig = z.infer<typeof ConnectConfig>
+export type ConnectConfig = z.infer<typeof ConnectConfig>
 
 export async function readConnectConfig(): Promise<ConnectConfig> {
   const file = join(cwd(), CONFIG_FILE_NAME)
