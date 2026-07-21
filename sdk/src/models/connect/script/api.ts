@@ -1,5 +1,5 @@
-import type { ApiSuccess } from '../../shared'
 import type { ScriptData, UnsavedScript } from './model'
+import type { ApiSuccess } from '@terros-inc/connect-common'
 
 export type ScriptAddInput = {
   script: UnsavedScript

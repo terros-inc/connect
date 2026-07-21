@@ -1,6 +1,7 @@
 packages:
   - sdk
   - cli
+  - 'packages/*'
 blockExoticSubdeps: true
 catalogMode: strict
 cleanupUnusedCatalogs: true

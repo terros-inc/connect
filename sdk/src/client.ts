@@ -1,5 +1,6 @@
+import { TerrosApiClient, type TerrosClientConfig } from '@terros-inc/connect-common'
+import packageJson from '../package.json'
 import { UserClient, AccountClient, CalendarClient, ConnectClient } from './clients'
-import { ApiCaller, type ClientConfig } from './apiCaller'
 
 export class TerrosClient {
   readonly account: AccountClient
@@ -7,8 +8,13 @@ export class TerrosClient {
   readonly connect: ConnectClient
   readonly user: UserClient
 
-  constructor(config: ClientConfig = {}) {
-    const api = new ApiCaller(config)
+  constructor(config: TerrosClientConfig = {}) {
+    const api = new TerrosApiClient({
+      ...config,
+      analytics: {
+        'Terros-App-Version': packageJson.version,
+      },
+    })
     this.account = new AccountClient(api)
     this.calendar = new CalendarClient(api)
     this.connect = new ConnectClient(api)

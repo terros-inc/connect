@@ -1,3 +1,4 @@
+import { type TerrosApiClient } from '@terros-inc/connect-common'
 import type {
   ScriptAddInput,
   ScriptAddSuccess,
@@ -6,10 +7,9 @@ import type {
   VersionUpdateInput,
   VersionUpdateSuccess,
 } from '../models'
-import type { ApiCaller } from '../apiCaller'
 
 export class ConnectAppVersionClient {
-  constructor(private readonly api: ApiCaller) {}
+  constructor(private readonly api: TerrosApiClient) {}
 
   add(input: VersionAddInput): Promise<VersionAddSuccess> {
     return this.api.call('connect/app/version/add', input)
@@ -21,7 +21,7 @@ export class ConnectAppVersionClient {
 }
 
 export class ConnectScriptClient {
-  constructor(private readonly api: ApiCaller) {}
+  constructor(private readonly api: TerrosApiClient) {}
 
   add(input: ScriptAddInput): Promise<ScriptAddSuccess> {
     return this.api.call('connect/script/add', input)
@@ -31,7 +31,7 @@ export class ConnectScriptClient {
 export class ConnectClient {
   readonly version: ConnectAppVersionClient
   readonly script: ConnectScriptClient
-  constructor(private readonly api: ApiCaller) {
+  constructor(private readonly api: TerrosApiClient) {
     this.version = new ConnectAppVersionClient(api)
     this.script = new ConnectScriptClient(api)
   }

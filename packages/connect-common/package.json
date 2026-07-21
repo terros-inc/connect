@@ -1,0 +1,35 @@
+{
+  "author": "Terros Inc.",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": "^24"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "terros",
+    "sdk"
+  ],
+  "license": "MIT",
+  "name": "@terros-inc/connect-common",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "prepack": "pnpm build",
+    "test": "vitest run"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "version": "1.0.0"
+}
