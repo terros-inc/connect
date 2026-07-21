@@ -81,12 +81,6 @@ importers:
         specifier: 'catalog:'
         version: 4.4.3
     devDependencies:
-      '@terros-inc/connect-common':
-        specifier: workspace:^
-        version: link:../packages/connect-common
-      '@terros-inc/sdk':
-        specifier: workspace:^
-        version: link:../sdk
       '@types/luxon':
         specifier: 'catalog:'
         version: 3.7.2
@@ -96,9 +90,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.2
-      tsdown:
-        specifier: 'catalog:'
-        version: 0.22.3(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
