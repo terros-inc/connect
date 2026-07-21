@@ -1,5 +1,5 @@
-import { packageScripts } from '../connect/package.ts'
-import { cleanBuildDir } from '../connect/clean.ts'
+import { packageScripts } from '../connect/package'
+import { cleanBuildDir } from '../connect/clean'
 
 export const connectCommands = {
   pack: {

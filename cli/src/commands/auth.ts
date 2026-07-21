@@ -1,5 +1,5 @@
-import { getTokens, saveTokens } from '../auth/tokens.ts'
-import { signInToAuth0 } from '../auth/auth0.ts'
+import { getTokens, saveTokens } from '../auth/tokens'
+import { signInToAuth0 } from '../auth/auth0'
 
 export const authCommands = {
   login: {

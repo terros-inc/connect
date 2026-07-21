@@ -1,45 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Terros Connect app definition file",
   "type": "object",
-  "definitions": {
-    "baseScript": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "entrypoint": { "type": "string" }
-      },
-      "required": ["name"]
-    },
-    "cronScript": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "scheduled" },
-        "cron": {
-          "type": "string",
-          "examples": ["0 */12 * * *"]
-        }
-      },
-      "required": ["type", "cron"]
-    },
-    "outgoingScript": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "outgoing" },
-        "dataType": {
-          "enum": ["Account", "Company", "User", "Event"]
-        }
-      },
-      "required": ["type", "dataType"]
-    },
-    "incomingScript": {
-      "type": "object",
-      "properties": {
-        "type": { "const": "incoming" }
-      },
-      "required": ["type"]
-    }
-  },
   "properties": {
     "appId": {
       "type": "string"
@@ -47,24 +8,277 @@
     "scripts": {
       "type": "array",
       "items": {
-        "allOf": [
-          { "$ref": "#/definitions/baseScript" },
+        "oneOf": [
           {
-            "oneOf": [
-              {
-                "$ref": "#/definitions/cronScript"
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
               },
-              {
-                "$ref": "#/definitions/outgoingScript"
+              "entrypoint": {
+                "type": "string"
               },
-              {
-                "$ref": "#/definitions/incomingScript"
+              "configSchema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "number",
+                        "mapping"
+                      ]
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "dataType": {
+                      "type": "string",
+                      "enum": [
+                        "None",
+                        "Account",
+                        "User",
+                        "Event"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "authSchema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "permissions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z]+\\/[a-z/]+$",
+                  "description": "Terros API endpoint permission"
+                }
+              },
+              "slug": {
+                "description": "Stable public key used in incoming webhook URLs.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "incoming"
+                ]
               }
-            ]
+            },
+            "required": [
+              "name",
+              "entrypoint",
+              "configSchema",
+              "authSchema",
+              "permissions",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "entrypoint": {
+                "type": "string"
+              },
+              "configSchema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "number",
+                        "mapping"
+                      ]
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "dataType": {
+                      "type": "string",
+                      "enum": [
+                        "None",
+                        "Account",
+                        "User",
+                        "Event"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "authSchema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "permissions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z]+\\/[a-z/]+$",
+                  "description": "Terros API endpoint permission"
+                }
+              },
+              "slug": {
+                "description": "Stable public key used in incoming webhook URLs.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "outgoing"
+                ]
+              },
+              "dataType": {
+                "type": "string",
+                "enum": [
+                  "Account",
+                  "Company",
+                  "User",
+                  "Event"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "entrypoint",
+              "configSchema",
+              "authSchema",
+              "permissions",
+              "type",
+              "dataType"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "entrypoint": {
+                "type": "string"
+              },
+              "configSchema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "string",
+                        "number",
+                        "mapping"
+                      ]
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "dataType": {
+                      "type": "string",
+                      "enum": [
+                        "None",
+                        "Account",
+                        "User",
+                        "Event"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "type"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "authSchema": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "permissions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z]+\\/[a-z/]+$",
+                  "description": "Terros API endpoint permission"
+                }
+              },
+              "slug": {
+                "description": "Stable public key used in incoming webhook URLs.",
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "scheduled"
+                ]
+              },
+              "cron": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "entrypoint",
+              "configSchema",
+              "authSchema",
+              "permissions",
+              "type",
+              "cron"
+            ],
+            "additionalProperties": false
           }
         ]
       }
     }
   },
-  "required": ["appId", "scripts"]
+  "required": [
+    "appId",
+    "scripts"
+  ],
+  "additionalProperties": false
 }

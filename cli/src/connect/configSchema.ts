@@ -2,36 +2,71 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { readFile } from 'node:fs/promises'
-import { CONFIG_FILE_NAME } from './constants.ts'
+import { CONFIG_FILE_NAME } from './constants'
 
-const BaseScript = z.object({
+export const ApiPermission = z
+    .string()
+    .regex(/^[a-z]+\/[a-z/]+$/, 'Must be a valid API path like "user/add" or "calendar/event/update"')
+    .describe('Terros API endpoint permission')
+
+export const ScriptType = z.enum(['incoming', 'outgoing', 'scheduled'])
+
+export const ScriptDataType = z.enum(['Account', 'Company', 'User', 'Event'])
+
+export const ConfigMappingDataType = z.enum(['None', 'Account', 'User', 'Event'])
+
+export const ConfigFieldType = z.enum(['string', 'number', 'mapping'])
+
+export const ConfigSchemaField = z.object({
   name: z.string(),
-  entrypoint: z.string()
+  type: ConfigFieldType,
+  description: z.string().optional(),
+  dataType: ConfigMappingDataType.optional(),
 })
 
-const Script = z.intersection(
-  BaseScript,
-  z.discriminatedUnion('type', [
-    z.object({
-      type: z.literal('scheduled'),
-      cron: z.string(),
-    }),
-    z.object({
-      type: z.literal('outgoing'),
-      dataType: z.enum(['Account', 'Company', 'User', 'Event']),
-    }),
-    z.object({
-      type: z.literal('incoming'),
-    }),
-  ])
-)
-export type Script = z.infer<typeof Script>
+export const ConfigSchema = z.array(ConfigSchemaField)
 
-const ConnectConfig = z.object({
+export const ScriptAuth = z.record(z.string(), z.string())
+
+export const UnsavedScriptBase = z.object({
+  name: z.string(),
+  entrypoint: z.string(),
+  configSchema: ConfigSchema,
+  authSchema: ScriptAuth,
+  permissions: z.array(ApiPermission),
+  slug: z.string().optional().meta({
+    description: 'Stable public key used in incoming webhook URLs.',
+  }),
+})
+
+export const UnsavedIncomingScript = z.object({
+  ...UnsavedScriptBase.shape,
+  type: ScriptType.extract(['incoming']),
+})
+
+export const UnsavedOutgoingScript = z.object({
+  ...UnsavedScriptBase.shape,
+  type: ScriptType.extract(['outgoing']),
+  dataType: ScriptDataType,
+})
+
+export const UnsavedScheduledScript = z.object({
+  ...UnsavedScriptBase.shape,
+  type: ScriptType.extract(['scheduled']),
+  cron: z.string(),
+})
+
+export const UnsavedScript = z.discriminatedUnion('type', [
+  UnsavedIncomingScript,
+  UnsavedOutgoingScript,
+  UnsavedScheduledScript,
+])
+export type UnsavedScript = z.infer<typeof UnsavedScript>
+
+export const ConnectConfig = z.object({
   appId: z.string(),
-  scripts: z.array(Script),
+  scripts: z.array(UnsavedScript),
 })
-
 type ConnectConfig = z.infer<typeof ConnectConfig>
 
 export async function readConnectConfig(): Promise<ConnectConfig> {

@@ -1,5 +1,5 @@
 import type { ParsedArgs } from 'minimist'
-import type { Endpoint, EndpointParameter } from './endpoint.ts'
+import type { Endpoint, EndpointParameter } from './endpoint'
 
 export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): object {
   const parsedParams = flattenParsedArgs(params)

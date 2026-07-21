@@ -1,6 +1,6 @@
-import type { CommandGroup, CommandRegistry, Subcommand } from './types.ts'
-import { connectCommands } from './connect.ts'
-import { authCommands } from './auth.ts'
+import type { CommandGroup, CommandRegistry, Subcommand } from './types'
+import { connectCommands } from './connect'
+import { authCommands } from './auth'
 
 export const commandRegistry: CommandRegistry = {
   auth: {

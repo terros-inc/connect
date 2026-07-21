@@ -4,11 +4,11 @@ import {
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
-} from './messages.ts'
-import { buildEndpointInput } from './crud/input.ts'
-import { loadEndpoints } from './crud/index.ts'
-import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands/index.ts'
-import { queryTerrosAPI } from './api/query.ts'
+} from './messages'
+import { buildEndpointInput } from './crud/input'
+import { loadEndpoints } from './crud'
+import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
+import { buildTerrosClient } from './api/query'
 
 async function main(): Promise<void> {
   const params = minimist(process.argv.slice(2))
@@ -77,7 +77,8 @@ async function main(): Promise<void> {
   }
 
   const input = buildEndpointInput(endpoint, params)
-  const response = await queryTerrosAPI(endpoint.path, input)
+  const client = buildTerrosClient()
+  const response = await client.call(endpoint.path, input)
   console.log(JSON.stringify(response, null, 2))
 }
 
