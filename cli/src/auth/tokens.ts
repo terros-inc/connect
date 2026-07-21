@@ -3,8 +3,8 @@ import { homedir } from 'node:os'
 import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { DateTime } from 'luxon'
-import type { SavedTokens, TokenResponse } from './types.ts'
-import { refreshTokens } from './auth0.ts'
+import type { SavedTokens, TokenResponse } from './types'
+import { refreshTokens } from './auth0'
 
 const AUTH_DIR_MODE = 0o700
 const AUTH_FILE_MODE = 0o600

@@ -1,4 +1,4 @@
-import type { Schema } from './types.ts'
+import type { Schema } from './types'
 
 export type EndpointParameter = {
   name: string

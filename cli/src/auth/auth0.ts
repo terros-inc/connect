@@ -1,7 +1,7 @@
 import open from 'open'
 import { DateTime } from 'luxon'
-import type { DeviceCodeResponse, TokenResponse } from './types.ts'
-import { AUTH0_CLIENT_ID, AUTH0_DOMAIN } from './constants.ts'
+import type { DeviceCodeResponse, TokenResponse } from './types'
+import { AUTH0_CLIENT_ID, AUTH0_DOMAIN } from './constants'
 
 export async function signInToAuth0(): Promise<TokenResponse> {
   const res = await fetch(`${AUTH0_DOMAIN}/oauth/device/code`, {

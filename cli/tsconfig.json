@@ -1,15 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "es2023",
     "lib": [
-      "ES2022"
+      "es2023"
     ],
     "types": [
       "vitest/globals",
       "node"
     ],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
 
     "rootDir": "src",
     "outDir": "./dist",
@@ -24,8 +24,6 @@
 
     "declaration": false,
     "sourceMap": false,
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true
   },
   "include": [
     "src/**/*.ts"

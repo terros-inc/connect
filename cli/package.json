@@ -16,9 +16,12 @@
   },
   "description": "Command-line interface for Terros Sales platform",
   "devDependencies": {
+    "@terros-inc/connect-common": "workspace:^",
+    "@terros-inc/sdk": "workspace:^",
     "@types/luxon": "catalog:",
     "@types/minimist": "catalog:",
     "@types/node": "catalog:",
+    "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
@@ -36,7 +39,6 @@
     "cli"
   ],
   "license": "MIT",
-  "main": "./dist/index.js",
   "name": "@terros-inc/cli",
   "publishConfig": {
     "access": "public",
@@ -48,11 +50,15 @@
   },
   "scripts": {
     "fetch-openapi": "rm -f terros.yml && wget https://docs.terros.com/openapi/terros.yml",
-    "build": "tsc",
+    "build": "tsdown",
     "test": "vitest run",
     "prepack": "pnpm fetch-openapi && pnpm build",
     "start": "node src/index.ts"
   },
   "type": "module",
-  "version": "1.0.12"
+  "version": "1.0.12",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  }
 }

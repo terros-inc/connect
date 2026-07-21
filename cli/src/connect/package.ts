@@ -4,12 +4,12 @@ import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { build } from 'rolldown'
-import { readConnectConfig, type Script } from './configSchema.ts'
-import { BUILD_DIR, BUNDLE_NAME, ZIP_NAME } from './constants.ts'
+import { readConnectConfig, type UnsavedScript } from './configSchema'
+import { BUILD_DIR, BUNDLE_NAME, ZIP_NAME } from './constants'
 const execFileAsync = promisify(execFile)
 
 type ScriptBuildOptions = {
-  script: Script
+  script: UnsavedScript
   options: {
     input: string
     output: {
@@ -21,7 +21,7 @@ type ScriptBuildOptions = {
 }
 
 type ScriptZip = {
-  script: Script
+  script: UnsavedScript
   zip: string
 }
 
@@ -44,7 +44,7 @@ export async function packageScripts(): Promise<void> {
   console.log(`Created ${zips.length} zips in ${duration}s`)
 }
 
-function getScriptBuildConfiguration(script: Script): ScriptBuildOptions {
+function getScriptBuildConfiguration(script: UnsavedScript): ScriptBuildOptions {
   const uuid = randomUUID()
   const file = join(BUILD_DIR, uuid, BUNDLE_NAME)
   return {
