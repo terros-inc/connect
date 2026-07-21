@@ -73,6 +73,7 @@ describe('TerrosApiClient', () => {
 
   describe('resolveBaseUrl precedence', () => {
     beforeEach(() => {
+      process.env = {}
       mockFetch({ type: 'success' })
     })
 
@@ -86,7 +87,7 @@ describe('TerrosApiClient', () => {
     })
 
     it('falls back to the env var when no baseUrl is configured', async () => {
-      process.env.TERROS_SDK_BASE_URL = 'https://env.example.com'
+      process.env.TERROS_API_ENDPOINT = 'https://env.example.com'
       const caller = new TerrosApiClient({ apiKey: 'test-key' })
 
       await caller.call('user/get', {})
