@@ -1,7 +1,6 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
 import type { SavedTokens, TokenResponse } from './types.ts'
 import { refreshTokens } from './auth0.ts'
 
@@ -21,7 +20,7 @@ export async function getTokens(): Promise<SavedTokens | null> {
 }
 
 function areTokensValid(tokens: SavedTokens): boolean {
-  return tokens.expires_at > Date.now() - MINUTE * 5
+  return tokens.expires_at > Date.now() + MINUTE * 5
 }
 
 async function readTokens(): Promise<SavedTokens | null> {
@@ -54,9 +53,7 @@ export async function saveTokens(tokenResponse: TokenResponse): Promise<SavedTok
 async function getAuthFilePath(): Promise<string> {
   const home = homedir()
   const configPath = join(home, '.config', 'terros')
-  if (!existsSync(configPath)) {
-    await mkdir(configPath, { recursive: true, mode: AUTH_DIR_MODE })
-  }
+  await mkdir(configPath, { recursive: true, mode: AUTH_DIR_MODE })
   await chmod(configPath, AUTH_DIR_MODE)
   return join(configPath, 'auth.json')
 }
