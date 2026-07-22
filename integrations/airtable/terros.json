@@ -3,7 +3,7 @@
   "scripts": [
     {
       "name": "Airtable Sync",
-      "entrypoint": "index.ts",
+      "entrypoint": "src/index.ts",
       "type": "outgoing",
       "dataType": "Company",
       "configSchema": [],
