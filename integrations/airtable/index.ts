@@ -52,7 +52,6 @@ const response = await fetch('https://api.airtable.com/v0/appdkCHwnSvxEDpTd/tbl0
 })
 
 if (!response.ok) {
-  const responseBody = await response.text()
-  console.log(responseBody)
-  throw Error('Failed to update Airtable')
+  console.error(`Airtable request failed with status ${response.status}`)
+  throw Error(`Failed to update Airtable: ${response.status} ${response.statusText}`)
 }
