@@ -16,7 +16,6 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "lint": "oxlint",
     "test": "vitest run",
     "publish": "terros connect publish"
   },
