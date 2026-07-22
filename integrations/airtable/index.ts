@@ -1,0 +1,58 @@
+export {}
+
+type AirtableSyncPayload = {
+  data: {
+    id: string
+    name: string
+    accessStatus?: string
+    kind?: string
+    maxUsers?: number
+  }
+}
+
+type AirtableSyncConfig = {
+  secrets: {
+    accessKey: string
+  }
+}
+
+declare const event: {
+  context: {
+    payload: AirtableSyncPayload
+    config: AirtableSyncConfig
+  }
+}
+
+const { payload, config } = event.context
+const { accessKey } = config.secrets
+
+const body = {
+  performUpsert: {
+    fieldsToMergeOn: ['Name', 'TerrosId'],
+  },
+  records: [
+    {
+      fields: {
+        TerrosId: payload.data.id,
+        Name: payload.data.name,
+        'Terros State': payload.data.accessStatus || payload.data.kind,
+        MaxUsers: payload.data.maxUsers,
+      },
+    },
+  ],
+}
+
+const response = await fetch('https://api.airtable.com/v0/appdkCHwnSvxEDpTd/tbl0FTceajLjffjZG', {
+  method: 'PATCH',
+  headers: {
+    Authorization: `Bearer ${accessKey}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(body),
+})
+
+if (!response.ok) {
+  const responseBody = await response.text()
+  console.log(responseBody)
+  throw Error('Failed to update Airtable')
+}
