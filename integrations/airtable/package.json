@@ -1,0 +1,25 @@
+{
+  "author": "Terros Inc.",
+  "dependencies": {
+    "@terros-inc/sdk": "workspace:"
+  },
+  "description": "",
+  "devDependencies": {
+    "@terros-inc/cli": "workspace:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "name": "@terros-inc/connect-airtable",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "lint": "oxlint",
+    "test": "vitest run",
+    "publish": "terros connect publish"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}

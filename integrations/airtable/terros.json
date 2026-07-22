@@ -1,0 +1,17 @@
+{
+  "appId": "App.0XMK5bwnhhD-xWNU1h8a-",
+  "scripts": [
+    {
+      "name": "Airtable Sync",
+      "entrypoint": "src/index.ts",
+      "type": "outgoing",
+      "dataType": "Company",
+      "configSchema": [],
+      "authSchema": {
+        "accessKey": "Airtable Personal Access Token"
+      },
+      "permissions": [],
+      "slug": "airtable-sync"
+    }
+  ]
+}
