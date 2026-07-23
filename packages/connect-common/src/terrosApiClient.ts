@@ -56,9 +56,9 @@ export class TerrosApiClient {
   }
 
   private determineAuthStrategy(config: Pick<TerrosClientConfig, 'apiKey'>): AuthStrategy {
-    if (config.apiKey) return { type: 'apikey', apiKey: config.apiKey }
+    if (config.apiKey) return { type: 'apikey', apiKey: normalizeApiKey(config.apiKey) }
     const apiKeyFromEnv = readProcessEnv('TERROS_API_KEY')
-    if (apiKeyFromEnv) return { type: 'apikey', apiKey: apiKeyFromEnv }
+    if (apiKeyFromEnv) return { type: 'apikey', apiKey: normalizeApiKey(apiKeyFromEnv) }
     return { type: 'oauth' }
   }
 
@@ -80,4 +80,8 @@ type AuthStrategy =
 function readProcessEnv(key: string): string | undefined {
   if (typeof globalThis.process === 'undefined') return undefined
   return globalThis.process.env[key]
+}
+
+function normalizeApiKey(apiKey: string): string {
+  return apiKey.replace(/^ApiKey /, '')
 }

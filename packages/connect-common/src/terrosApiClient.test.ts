@@ -34,6 +34,20 @@ describe('TerrosApiClient', () => {
     })
   })
 
+  it('removes the ApiKey prefix from an API key', async () => {
+    mockFetch({ type: 'success' })
+    const caller = new TerrosApiClient({ apiKey: 'ApiKey test-key', baseUrl: 'https://example.com' })
+
+    await caller.call('user/get', {})
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://example.com/user/get',
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: 'ApiKey test-key' }),
+      })
+    )
+  })
+
   it('includes analytics headers describing the platform and SDK version', async () => {
     mockFetch({ type: 'success', value: 42 })
     const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
