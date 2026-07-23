@@ -1,0 +1,38 @@
+{
+  "appId": "App.aDFcRGDoKMcD2hK-qY6on",
+  "scripts": [
+    {
+      "name": "Zoho Lead Sync",
+      "entrypoint": "src/index.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "workflowId",
+          "type": "string",
+          "description": "Terros workflow to assign upserted accounts to"
+        },
+        {
+          "name": "workflowTargetMap",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map a Zoho field name to the workflow target to use when that field is present on the lead, e.g. Session_Cancel_Reason -> Canceled. Checked in the order defined; first match wins."
+        },
+        {
+          "name": "workflowTargetFallbackFields",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Zoho fields to fall back to, in order, using the field's own value as the workflow target when none of workflowTargetMap's fields are present, e.g. Lead_Status -> Lead_Status. Only the key is used; set the value to anything."
+        },
+        {
+          "name": "customFieldMap",
+          "type": "mapping",
+          "dataType": "Account",
+          "description": "Map a Zoho field name to the Terros account custom field it should populate, e.g. Session_Cancel_Reason -> Cancel Reason"
+        }
+      ],
+      "authSchema": {},
+      "permissions": ["account/upsert"],
+      "slug": "zoho-lead-sync"
+    }
+  ]
+}
