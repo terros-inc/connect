@@ -1,7 +1,12 @@
-import { type AccountUpsertInput, type WorkflowId, wrapConnectHandler } from '@terros-inc/sdk'
+import {
+  type AccountUpsertInput,
+  type AccountUpsertSuccess,
+  type WorkflowId,
+  wrapConnectHandler,
+} from '@terros-inc/sdk'
 
 type ZohoLeadPayload = {
-  data: Record<string, any>
+  data: Record<string, unknown>
 }
 
 type ZohoLeadData = ZohoLeadPayload['data']
@@ -18,14 +23,14 @@ export const handler = wrapConnectHandler<ZohoLeadPayload>(async (input, client)
   const scriptConfig = config.scriptConfig as unknown as ZohoScriptConfig
   const { data } = payload
 
-  console.log('Incoming Zoho payload:', JSON.stringify(payload))
+  const sourceId = String(data.id ?? data.Id ?? data.ID ?? '').trim()
+
+  console.log('Incoming Zoho record id:', sourceId || '(missing)')
 
   if (isNotDefined(data.Street)) {
     console.log('Skipping: No address detected')
     return
   }
-
-  const sourceId = String(data.id ?? data.Id ?? data.ID ?? '').trim()
 
   if (!sourceId) {
     throw new Error(`Missing Zoho record ID. Keys: ${Object.keys(data).join(', ')}`)
@@ -67,11 +72,16 @@ export const handler = wrapConnectHandler<ZohoLeadPayload>(async (input, client)
     },
   }
 
-  console.log('Terros payload', JSON.stringify(request))
+  console.log('Upserting Terros account for Zoho record:', sourceId)
 
-  const response = await client.call('account/upsert', request)
+  let response: AccountUpsertSuccess
+  try {
+    response = await client.call<AccountUpsertSuccess>('account/upsert', request)
+  } catch (error) {
+    throw new Error(`Failed to upsert account ${sourceId}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
 
-  console.log('Terros response', JSON.stringify(response))
+  console.log('Terros upsert completed for Zoho record:', sourceId, 'accountId:', response.account?.accountId)
 
   return
 })
@@ -101,24 +111,24 @@ function resolveCustomFields(data: ZohoLeadData, fieldMap: Record<string, string
   return omitUndefinedValues(customFields)
 }
 
-function toTrimmedString(value: any): string | undefined {
+function toTrimmedString(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined
   const stringValue = String(value).trim()
   return stringValue === '' ? undefined : stringValue
 }
 
-function toTrimmedNumber(value: any): number | undefined {
+function toTrimmedNumber(value: unknown): number | undefined {
   const stringValue = toTrimmedString(value)
   if (stringValue === undefined) return undefined
   const numberValue = Number(stringValue)
   return Number.isNaN(numberValue) ? undefined : numberValue
 }
 
-function isNotDefined(value: any): boolean {
+function isNotDefined(value: unknown): boolean {
   return !isDefined(value)
 }
 
-function isDefined(value: any): boolean {
+function isDefined(value: unknown): boolean {
   if (value === undefined) return false
   if (value === null) return false
   if (String(value).trim() === '') return false
