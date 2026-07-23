@@ -1,6 +1,5 @@
 import type { UserId } from '../user'
 
-export type CompanyState = 'active' | 'trial' | 'internal' | 'demo' | 'sandbox' | 'template' | 'suspended'
 export type CompanyKind = 'customer' | 'sandbox' | 'demo' | 'template' | 'development'
 export type AccessStatus = 'active' | 'suspended'
 export type BillingMethod = 'stripe' | 'none'
@@ -24,12 +23,11 @@ export type CompanyData = {
   companyId: CompanyId
   name: string
   legalName?: string
-  kind?: CompanyKind
-  accessStatus?: AccessStatus
+  kind: CompanyKind
+  accessStatus: AccessStatus
   internalOwnerId?: UserId
   billingEmail?: string
   billingMethod?: BillingMethod
-  state: CompanyState
   maxUsers?: number
   size?: number
   industries?: CompanyIndustry[]
