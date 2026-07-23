@@ -1,9 +1,12 @@
 import { TerrosApiClient } from '@terros-inc/connect-common'
 
-export type ConnectHandlerFunction<Input, Result> = (payload: ConnectExecutionInput<Input>, client: TerrosApiClient) => Promise<Result>
+export type ConnectHandlerFunction<Input, Result> = (
+  payload: ConnectExecutionInput<Input>,
+  client: TerrosApiClient
+) => Promise<Result>
 
 type ConnectExecutionConfig = {
-  scriptConfig: Record<string, string> // TODO fix type of this
+  scriptConfig: Record<string, string | number | Record<string, string>>
   secrets: Record<string, string>
   authorization?: string
 }
@@ -20,7 +23,9 @@ type ConnectExecutionInput<Payload> = {
 
 type WrappedHandler<Input, Result> = (input: ConnectExecutionInput<Input>) => Promise<Result>
 
-export function wrapConnectHandler<Input, Result = void>(handler: ConnectHandlerFunction<Input, Result>): WrappedHandler<Input, Result> {
+export function wrapConnectHandler<Input, Result = void>(
+  handler: ConnectHandlerFunction<Input, Result>
+): WrappedHandler<Input, Result> {
   return async (input) => {
     const apiKey = input.context.config.authorization
     delete input.context.config.authorization
