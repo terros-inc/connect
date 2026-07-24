@@ -6,6 +6,8 @@ export type SalesforceApiConfig = {
   url: string
 }
 
+const tokenCache = new Map<string, { accessToken: string; expiresAt: number }>()
+
 export async function addLead(
   config: SalesforceApiConfig,
   request: SalesforceLeadAddRequest
@@ -21,6 +23,8 @@ export async function addLead(
     body: JSON.stringify(request),
   })
 
+  if (response.status === 401) tokenCache.delete(config.clientId)
+
   const jsonResponse = (await response.json()) as SalesforceLeadAddResponse
   if (!response.ok || !jsonResponse.success) {
     throw new Error(`Error adding lead to salesforce: ${JSON.stringify(jsonResponse.errors)}`)
@@ -29,6 +33,9 @@ export async function addLead(
 }
 
 async function getAccessToken(config: SalesforceApiConfig): Promise<string> {
+  const cached = tokenCache.get(config.clientId)
+  if (cached && cached.expiresAt > Date.now()) return cached.accessToken
+
   const response = await fetch(`${config.url}/services/oauth2/token`, {
     method: 'POST',
     headers: {
@@ -43,7 +50,10 @@ async function getAccessToken(config: SalesforceApiConfig): Promise<string> {
 
   if (!response.ok) throw new Error('Error getting access token: ' + response.statusText)
 
-  const data = (await response.json()) as { access_token?: string }
+  const data = (await response.json()) as { access_token?: string; expires_in?: number }
   if (!data.access_token) throw new Error('Error getting access token: ' + JSON.stringify(data))
+
+  const ttlMs = ((data.expires_in ?? 900) - 30) * 1000
+  tokenCache.set(config.clientId, { accessToken: data.access_token, expiresAt: Date.now() + ttlMs })
   return data.access_token
 }
