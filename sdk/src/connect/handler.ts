@@ -6,7 +6,7 @@ export type ConnectHandlerFunction<Input, Result> = (
 ) => Promise<Result>
 
 type ConnectExecutionConfig = {
-  scriptConfig: Record<string, string | number | Record<string, string>>
+  scriptConfig: Record<string, string> // TODO fix type of this
   secrets: Record<string, string>
   authorization?: string
 }
@@ -29,7 +29,7 @@ export function wrapConnectHandler<Input, Result = void>(
   return async (input) => {
     const apiKey = input.context.config.authorization
     delete input.context.config.authorization
-    const client = new TerrosApiClient({ apiKey })
+    const client = new TerrosApiClient({ apiKey: apiKey?.replace(/^ApiKey /, '') })
     return await handler(input, client)
   }
 }
