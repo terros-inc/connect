@@ -1,4 +1,5 @@
 export * from './account'
+export * from './area'
 export * from './calendar'
 export * from './connect'
 export * from './user'

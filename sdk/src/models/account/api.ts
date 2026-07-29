@@ -1,7 +1,8 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
 import type { RoleId, SmallUser, TeamId, UserId, UserIdentifier } from '../user'
 import type { LatLng } from '../location'
-import { type CustomFieldId, type CustomFieldMap, type CustomFieldType } from '../customFields'
+import { type RangeFilter, type CustomFieldFilter } from '../customFields/model'
+import { type CustomFieldMap } from '../customFields'
 import type { CompanyId } from '../company'
 import type {
   AccountData,
@@ -29,27 +30,6 @@ import type {
   WorkflowId,
   WorkflowStageId,
 } from './model'
-
-export type RangeFilter = {
-  gte?: number
-  lte?: number
-}
-
-export type CustomFieldFilterValue =
-  | {
-      type: 'range'
-      range: RangeFilter
-    }
-  | {
-      type: 'multipleChoice'
-      values: CustomFieldType[]
-    }
-  | {
-      type: 'exists'
-      exists: boolean
-    }
-
-export type CustomFieldFilter = Record<CustomFieldId, CustomFieldFilterValue>
 
 export type ElasticFilter = {
   cities?: string[]
