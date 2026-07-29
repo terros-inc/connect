@@ -1,6 +1,7 @@
+import type { ApiSuccess } from '@terros-inc/connect-common'
 import type { RoleId, SmallUser, TeamId, UserId, UserIdentifier } from '../user'
-import type { CustomFieldMap } from '../shared'
 import type { LatLng } from '../location'
+import { type CustomFieldMap } from '../customFields'
 import type { CompanyId } from '../company'
 import type {
   AccountData,
@@ -31,7 +32,6 @@ import type {
   WorkflowId,
   WorkflowStageId,
 } from './model'
-import type { ApiSuccess } from '@terros-inc/connect-common'
 
 export type AccountStatusSearchInput = {
   accountIds?: AccountId[]

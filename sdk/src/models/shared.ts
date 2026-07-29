@@ -1,7 +1,5 @@
 import type { UserId } from './user'
 
-export type CustomFieldMap = Record<string, string | number | boolean | null>
-
 export type AuditLog = {
   userId: UserId
   timestamp: number

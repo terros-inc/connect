@@ -1,6 +1,6 @@
 import type { RoleId, SmallUser, TeamId, UserId } from '../user'
-import type { CustomFieldMap } from '../shared'
 import type { LatLng, SmallAddress } from '../location'
+import { type CustomFieldId, type CustomFieldMap, type CustomFieldType } from '../customFields'
 
 export type AccountId = `Account:${string}` | `Account.${string}`
 export type AccountStatusId = `AS.${string}`
@@ -190,6 +190,11 @@ export type BulkModifyAccountsAction = (
   | {
       actionType: 'updateStage'
       stageId: WorkflowStageId
+    }
+  | {
+      actionType: 'updateCustomField'
+      fieldId: CustomFieldId
+      value: CustomFieldType
     }
   | {
       actionType: 'delete' | 'clearDisposition'

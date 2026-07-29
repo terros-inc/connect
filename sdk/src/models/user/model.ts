@@ -1,6 +1,7 @@
 import type { TinyTeam } from '../team'
-import type { AuditProps, CustomFieldMap } from '../shared'
+import type { AuditProps } from '../shared'
 import type { Address } from '../location'
+import { type CustomFieldMap } from '../customFields'
 import type { CompanyId } from '../company'
 
 export type UserId = `U:${string}` | `U.${string}`
