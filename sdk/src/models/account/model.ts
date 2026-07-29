@@ -35,11 +35,6 @@ export type DispositionId =
 
 type ContactMethod = 'door' | 'phone'
 
-export type RangeFilter = {
-  gte?: number
-  lte?: number
-}
-
 /** A cursor for paging through sorted account lists. */
 export type SortCursor = number | number[]
 
@@ -173,9 +168,6 @@ export type AccountData = Omit<UnsavedAccount, 'contacts' | 'notes'> & {
 export type AccountSortBy = 'createdDate' | 'lastActionDate' | 'lastUpdatedDate' | `CF.${string}`
 export type AccountSortOrder = 'asc' | 'desc'
 
-/** Not modeled in detail by this SDK — treat as an opaque record. */
-export type CustomFieldFilter = Record<string, unknown>
-
 export type AccountDataResponse = {
   accounts: AccountData[]
   sortTimestamp?: SortCursor
@@ -200,26 +192,6 @@ export type BulkModifyAccountsAction = (
       actionType: 'delete' | 'clearDisposition'
     }
 )[]
-
-/** Not modeled in detail by this SDK — treat as an opaque record. */
-export type ElasticFilter = {
-  cities?: string[]
-  states?: string[]
-  zipCodes?: string[]
-  advancedCustomFields?: CustomFieldFilter
-  statusIds?: AccountStatusId[]
-  workflowStageIds?: WorkflowStageId[]
-  tagIds?: TagId[]
-  teamIds?: TeamId[]
-  userIds?: UserId[]
-  coordinates?: LatLng[]
-  boundingBox?: {
-    top: LatLng
-    bottom: LatLng
-  }
-  workflowActionCount?: RangeFilter
-  contactCount?: RangeFilter
-}
 
 export type PartialAddress = Partial<Omit<SmallAddress, 'latlng'>> & {
   latlng?: Partial<LatLng>

@@ -1,7 +1,7 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
 import type { RoleId, SmallUser, TeamId, UserId, UserIdentifier } from '../user'
 import type { LatLng } from '../location'
-import { type CustomFieldMap } from '../customFields'
+import { type CustomFieldId, type CustomFieldMap, type CustomFieldType } from '../customFields'
 import type { CompanyId } from '../company'
 import type {
   AccountData,
@@ -13,12 +13,9 @@ import type {
   AccountStatusId,
   BulkModifyAccountsAction,
   ContactId,
-  CustomFieldFilter,
-  ElasticFilter,
   LocationId,
   NoteId,
   PartialAddress,
-  RangeFilter,
   SortCursor,
   StatusHistoryItem,
   TagId,
@@ -32,6 +29,46 @@ import type {
   WorkflowId,
   WorkflowStageId,
 } from './model'
+
+export type RangeFilter = {
+  gte?: number
+  lte?: number
+}
+
+export type CustomFieldFilterValue =
+  | {
+      type: 'range'
+      range: RangeFilter
+    }
+  | {
+      type: 'multipleChoice'
+      values: CustomFieldType[]
+    }
+  | {
+      type: 'exists'
+      exists: boolean
+    }
+
+export type CustomFieldFilter = Record<CustomFieldId, CustomFieldFilterValue>
+
+export type ElasticFilter = {
+  cities?: string[]
+  states?: string[]
+  zipCodes?: string[]
+  advancedCustomFields?: CustomFieldFilter
+  statusIds?: AccountStatusId[]
+  workflowStageIds?: WorkflowStageId[]
+  tagIds?: TagId[]
+  teamIds?: TeamId[]
+  userIds?: UserId[]
+  coordinates?: LatLng[]
+  boundingBox?: {
+    top: LatLng
+    bottom: LatLng
+  }
+  workflowActionCount?: RangeFilter
+  contactCount?: RangeFilter
+}
 
 export type AccountStatusSearchInput = {
   accountIds?: AccountId[]
