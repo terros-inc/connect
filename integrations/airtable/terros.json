@@ -6,7 +6,18 @@
       "entrypoint": "src/index.ts",
       "type": "outgoing",
       "dataType": "Company",
-      "configSchema": [],
+      "configSchema": [
+        {
+          "name": "baseId",
+          "type": "string",
+          "description": "Airtable base ID"
+        },
+        {
+          "name": "tableId",
+          "type": "string",
+          "description": "Airtable table ID"
+        }
+      ],
       "authSchema": {
         "accessKey": "Airtable Personal Access Token"
       },

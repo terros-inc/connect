@@ -13,6 +13,7 @@ type AirtableSyncPayload = {
 export default wrapConnectHandler<AirtableSyncPayload>(async (input, client) => {
   const { payload, config } = input.context
   const { accessKey } = config.secrets
+  const { baseId, tableId } = config.scriptConfig
 
   const body = {
     performUpsert: {
@@ -30,7 +31,7 @@ export default wrapConnectHandler<AirtableSyncPayload>(async (input, client) => 
     ],
   }
 
-  const response = await fetch('https://api.airtable.com/v0/appdkCHwnSvxEDpTd/tbl0FTceajLjffjZG', {
+  const response = await fetch(`https://api.airtable.com/v0/${baseId}/${tableId}`, {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${accessKey}`,
