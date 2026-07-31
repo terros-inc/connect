@@ -1,5 +1,6 @@
 import type { UserId, UserProfileData } from './user'
 import type { CompanyData, CompanyId } from './company'
+import type { AccountData, AccountId } from './account'
 
 export type WebhookAuditProps = {
   createdAt: string
@@ -45,3 +46,9 @@ export type CompanyWebhookData = WebhookAuditProps &
     id: CompanyId
   }
 export type CompanyWebhook = WebhookPayload<'Company', CompanyWebhookData, 'id'>
+
+export type AccountWebhookData = WebhookAuditProps &
+  Omit<AccountData, 'accountId' | 'resident'> & {
+    id: AccountId
+  }
+export type AccountWebhook = WebhookPayload<'Account', AccountWebhookData, 'id'>
