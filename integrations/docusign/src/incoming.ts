@@ -28,7 +28,7 @@ export const handler = wrapConnectHandler<DocusignWebhookPayload>(async (input, 
     return
   }
 
-  const response = await client.call('account/upsert', {
+  const response = await client.account.upsert({
     account: {
       accountId: accountId as AccountId,
       workflowTarget: dsEvent,
