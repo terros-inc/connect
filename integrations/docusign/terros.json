@@ -2,7 +2,7 @@
   "appId": "App.0XMK5bwnhhD-xWNU1h8a-",
   "scripts": [
     {
-      "name": "DocuSign Send",
+      "name": "Docusign Send",
       "entrypoint": "src/outgoing.ts",
       "type": "outgoing",
       "dataType": "Account",
@@ -10,22 +10,22 @@
         {
           "name": "dsAuthServer",
           "type": "string",
-          "description": "DocuSign OAuth authorization server host, e.g. account.docusign.com or account-d.docusign.com"
+          "description": "Docusign OAuth authorization server host, e.g. account.docusign.com or account-d.docusign.com"
         },
         {
           "name": "dsBaseUri",
           "type": "string",
-          "description": "DocuSign API base URI for this account, e.g. https://na3.docusign.net"
+          "description": "Docusign API base URI for this account, e.g. https://na3.docusign.net"
         },
         {
           "name": "dsAccountId",
           "type": "string",
-          "description": "DocuSign account id to create envelopes under"
+          "description": "Docusign account id to create envelopes under"
         },
         {
           "name": "templateId",
           "type": "string",
-          "description": "DocuSign template id to use for the envelope"
+          "description": "Docusign template id to use for the envelope"
         },
         {
           "name": "signerRoleName",
@@ -41,19 +41,19 @@
           "name": "fieldMappings",
           "type": "mapping",
           "dataType": "Account",
-          "description": "Map a Terros account field (CF.* or a dotted path like resident.email) to a DocuSign target: signer.email, signer.name, cc.email, cc.name, or a template tab Data Label"
+          "description": "Map a Terros account field (CF.* or a dotted path like resident.email) to a Docusign target: signer.email, signer.name, cc.email, cc.name, or a template tab Data Label"
         }
       ],
       "authSchema": {
-        "dsIntegrationKey": "DocuSign JWT integration key (client id)",
-        "dsUserId": "DocuSign impersonated user id",
-        "dsPrivateKey": "DocuSign RSA private key (PEM) for JWT signing"
+        "dsIntegrationKey": "Docusign JWT integration key (client id)",
+        "dsUserId": "Docusign impersonated user id",
+        "dsPrivateKey": "Docusign RSA private key (PEM) for JWT signing"
       },
       "permissions": [],
       "slug": "docusign-send"
     },
     {
-      "name": "DocuSign Webhook",
+      "name": "Docusign Webhook",
       "entrypoint": "src/incoming.ts",
       "type": "incoming",
       "configSchema": [],

@@ -1,6 +1,6 @@
 import { type AccountId, wrapConnectHandler } from '@terros-inc/sdk'
 
-type DocuSignWebhookPayload = {
+type DocusignWebhookPayload = {
   event?: string
   data?: {
     envelopeSummary?: {
@@ -11,10 +11,10 @@ type DocuSignWebhookPayload = {
   }
 }
 
-export const handler = wrapConnectHandler<DocuSignWebhookPayload>(async (input, client) => {
+export const handler = wrapConnectHandler<DocusignWebhookPayload>(async (input, client) => {
   const payload = input.context.payload
 
-  console.log('Incoming DocuSign webhook payload:', JSON.stringify(payload))
+  console.log('Incoming Docusign webhook payload:', JSON.stringify(payload))
 
   const dsEvent = payload.event
   if (!dsEvent) {
@@ -39,7 +39,7 @@ export const handler = wrapConnectHandler<DocuSignWebhookPayload>(async (input, 
   console.log('Response', JSON.stringify(response, null, 2))
 })
 
-function findTerrosAccountId(payload: DocuSignWebhookPayload): string | undefined {
+function findTerrosAccountId(payload: DocusignWebhookPayload): string | undefined {
   const textFields = payload?.data?.envelopeSummary?.customFields?.textCustomFields || []
   const match = textFields.find((f) => f.name === 'terrosAccountId')
   return match?.value

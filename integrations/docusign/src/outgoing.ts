@@ -9,7 +9,7 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   const secrets = input.context.config.secrets || {}
 
   if (payload.action === 'remove') {
-    console.log('Skipping DocuSign send for Account remove')
+    console.log('Skipping Docusign send for Account remove')
     throw Error('Account removed: not firing')
   }
 
@@ -23,8 +23,8 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   const dsUserId = secrets.dsUserId
   const dsPrivateKey = secrets.dsPrivateKey
   if (!dsIntegrationKey || !dsUserId || !dsPrivateKey) {
-    console.log('Missing DocuSign auth secrets')
-    throw Error('Missing DocuSign auth secrets (dsIntegrationKey, dsUserId, dsPrivateKey)')
+    console.log('Missing Docusign auth secrets')
+    throw Error('Missing Docusign auth secrets (dsIntegrationKey, dsUserId, dsPrivateKey)')
   }
 
   const accountId = String(account.id || '')
@@ -35,7 +35,7 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
 
   // fieldMappings is a Connect "mapping" config field (install UI "Add Mapping" rows).
   //   key   = Terros account field ref (CF.* or a dotted path like account.resident.email)
-  //   value = DocuSign target: reserved tokens signer.email / signer.name / cc.email / cc.name,
+  //   value = Docusign target: reserved tokens signer.email / signer.name / cc.email / cc.name,
   //           OR a template tab Data Label
   // Everything inferred from the account flows through this one editor.
   const fieldMappings: Record<string, string> =
@@ -86,8 +86,8 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   })
   if (!tokenRes.ok) {
     const text = await tokenRes.text()
-    console.log(`DocuSign auth failed: ${tokenRes.status} ${tokenRes.statusText} ${text}`)
-    throw Error('DocuSign auth failed')
+    console.log(`Docusign auth failed: ${tokenRes.status} ${tokenRes.statusText} ${text}`)
+    throw Error('Docusign auth failed')
   }
   const { access_token } = (await tokenRes.json()) as { access_token: string }
 
@@ -106,12 +106,12 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   })
   if (!envRes.ok) {
     const text = await envRes.text()
-    console.log(`DocuSign envelope create failed: ${envRes.status} ${envRes.statusText} ${text}`)
-    throw Error('DocuSign envelope create failed')
+    console.log(`Docusign envelope create failed: ${envRes.status} ${envRes.statusText} ${text}`)
+    throw Error('Docusign envelope create failed')
   }
   const envelope = (await envRes.json()) as { envelopeId: string; status: string }
 
-  console.log(`Created DocuSign envelope ${envelope.envelopeId} for account ${accountId}`)
+  console.log(`Created Docusign envelope ${envelope.envelopeId} for account ${accountId}`)
 
   return { envelopeId: envelope.envelopeId, status: envelope.status }
 })
