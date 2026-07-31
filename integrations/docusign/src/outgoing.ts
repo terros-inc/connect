@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto'
-import { type AccountWebhook, wrapConnectHandler } from '@terros-inc/sdk'
+import { type AccountWebhook, type AccountWebhookData, type CustomFieldMap, wrapConnectHandler } from '@terros-inc/sdk'
 
 type EnvelopeResult = { envelopeId: string; status: string }
 
@@ -15,17 +15,21 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
 
   const account = payload.data
   if (!account) {
-    console.log('Missing account payload data', JSON.stringify(payload.data))
+    console.log('Missing account payload data', JSON.stringify(payload.data?.id))
     throw Error('Missing account data')
   }
 
-  const dsIntegrationKey = secrets.dsIntegrationKey
-  const dsUserId = secrets.dsUserId
-  const dsPrivateKey = secrets.dsPrivateKey
-  if (!dsIntegrationKey || !dsUserId || !dsPrivateKey) {
-    console.log('Missing Docusign auth secrets')
-    throw Error('Missing Docusign auth secrets (dsIntegrationKey, dsUserId, dsPrivateKey)')
-  }
+  const { dsIntegrationKey, dsUserId, dsPrivateKey } = secrets
+  if (!dsIntegrationKey) throw Error('Missing Docusign auth secret: dsIntegrationKey')
+  if (!dsUserId) throw Error('Missing Docusign auth secret: dsUserId')
+  if (!dsPrivateKey) throw Error('Missing Docusign auth secret: dsPrivateKey')
+
+  const { dsAuthServer, dsBaseUri, dsAccountId, templateId, signerRoleName } = scriptConfig
+  if (!dsAuthServer) throw Error('Missing Docusign script config: dsAuthServer')
+  if (!dsBaseUri) throw Error('Missing Docusign script config: dsBaseUri')
+  if (!dsAccountId) throw Error('Missing Docusign script config: dsAccountId')
+  if (!templateId) throw Error('Missing Docusign script config: templateId')
+  if (!signerRoleName) throw Error('Missing Docusign script config: signerRoleName')
 
   const accountId = String(account.id || '')
   if (!accountId) {
@@ -76,7 +80,7 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   }
 
   const assertion = buildJwt(scriptConfig, dsIntegrationKey, dsUserId, dsPrivateKey)
-  const tokenUrl = `https://${scriptConfig.dsAuthServer}/oauth/token`
+  const tokenUrl = `https://${dsAuthServer.replace(/\/+$/, '')}/oauth/token`
   const tokenBody = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion })
 
   const tokenRes = await fetch(tokenUrl, {
@@ -91,7 +95,7 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   }
   const { access_token } = (await tokenRes.json()) as { access_token: string }
 
-  const envRes = await fetch(`${scriptConfig.dsBaseUri}/restapi/v2.1/accounts/${scriptConfig.dsAccountId}/envelopes`, {
+  const envRes = await fetch(`${dsBaseUri.replace(/\/+$/, '')}/restapi/v2.1/accounts/${dsAccountId}/envelopes`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${access_token}`,
@@ -116,13 +120,14 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
   return { envelopeId: envelope.envelopeId, status: envelope.status }
 })
 
-function resolveField(account: Record<string, unknown>, ref: string): string | undefined {
+function resolveField(account: AccountWebhookData, ref: string): string | undefined {
   if (!ref) return undefined
   const key = String(ref).trim()
   if (!key) return undefined
   if (key.startsWith('CF.')) {
-    const customFieldMap = account.customFieldMap as Record<string, string> | undefined
-    return customFieldMap?.[key]
+    const customFields = account.customFields as CustomFieldMap | undefined
+    const value = customFields?.[key as keyof CustomFieldMap]
+    return value === null || value === undefined ? undefined : String(value)
   }
   const path = removePayloadPrefix(key)
   return path.split('.').reduce<unknown>((value, k) => {
@@ -152,7 +157,7 @@ function buildJwt(
       JSON.stringify({
         iss: dsIntegrationKey,
         sub: dsUserId,
-        aud: scriptConfig.dsAuthServer,
+        aud: scriptConfig.dsAuthServer?.replace(/\/+$/, ''),
         iat: now,
         exp: now + 3600,
         scope: 'signature impersonation',
