@@ -1,7 +1,6 @@
 import {
   type AccountData,
   type AccountId,
-  type AccountUpdateSuccess,
   type WebhookAuditProps,
   type WebhookPayload,
   wrapConnectHandler,
@@ -41,7 +40,7 @@ export const handler = wrapConnectHandler<WebhookAccount>(async (input, client) 
   const response = await addLead({ clientId, clientSecret, url }, leadInput)
 
   try {
-    await client.call<AccountUpdateSuccess>('account/update', {
+    await client.account.update({
       account: {
         accountId: payload.data.id,
         externalLeadId: response.id,
