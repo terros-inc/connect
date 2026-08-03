@@ -76,7 +76,7 @@ export const handler = wrapConnectHandler<ZohoLeadPayload>(async (input, client)
 
   let response: AccountUpsertSuccess
   try {
-    response = await client.call<AccountUpsertSuccess>('account/upsert', request)
+    response = await client.account.upsert(request)
   } catch (error) {
     throw new Error(`Failed to upsert account ${sourceId}: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
