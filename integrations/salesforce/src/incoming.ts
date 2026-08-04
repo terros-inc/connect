@@ -49,7 +49,7 @@ export const handler = wrapConnectHandler<SalesforceAccountWebhookPayload>(async
     },
   })
 
-  console.log('Response', JSON.stringify(response, null, 2))
+  console.log('Successfully synced account:', response.account?.accountId)
 })
 
 function getMostRecentStatusItem(history?: StatusHistoryItem[]): StatusHistoryItem | undefined {
