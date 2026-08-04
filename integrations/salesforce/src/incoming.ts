@@ -36,9 +36,6 @@ export const handler = wrapConnectHandler<SalesforceAccountWebhookPayload>(async
     return
   }
 
-  // requestType 'upsert' (default) creates the account if no match is found on
-  // accountId/externalLeadId, mirroring the sales repo's create-or-update behavior
-  // in matchSalesforceAccount/salesforceHandler.
   const response = await client.account.upsert({
     account: {
       accountId: payload.accountId,
