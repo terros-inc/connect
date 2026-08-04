@@ -1,60 +1,61 @@
-import { type AccountId, type CustomFieldMap, wrapConnectHandler } from '@terros-inc/sdk'
+import {
+  type AccountId,
+  type AccountStatusId,
+  type CustomFieldMap,
+  type PartialAddress,
+  type UserId,
+  wrapConnectHandler,
+} from '@terros-inc/sdk'
 
-type SalesforceStatusWebhookPayload = {
-  Id?: string
-  id?: string
-  leadId?: string
-  accountId?: string
-  Status?: string
-  status?: string
-  customFields?: CustomFieldMap
-  location?: {
-    line1?: string
-    locality?: string
-    countrySubd?: string
-    postal1?: string
-    latitude?: number
-    longitude?: number
-  }
+type StatusHistoryItem = {
+  statusId: AccountStatusId
+  sourceStatus?: string
+  statusChangedDate: number
 }
 
-export const handler = wrapConnectHandler<SalesforceStatusWebhookPayload>(async (input, client) => {
+type SalesforceAccountWebhookPayload = {
+  accountId?: AccountId
+  externalLeadId?: string
+  statusHistory?: StatusHistoryItem[]
+  customFields?: CustomFieldMap
+  location?: PartialAddress
+  ownerId?: UserId
+}
+
+export const handler = wrapConnectHandler<SalesforceAccountWebhookPayload>(async (input, client) => {
   const payload = input.context.payload
 
-  const externalLeadId = payload.Id ?? payload.id ?? payload.leadId
-  const status = payload.Status ?? payload.status
-
-  if (!externalLeadId && !payload.accountId) {
-    console.log('Skipping: no Salesforce lead id or account id in payload')
-    return
-  }
-  if (!status) {
-    console.log('Skipping: no status in payload')
+  if (!payload.accountId && !payload.externalLeadId) {
+    console.log('Skipping: no accountId or externalLeadId in payload')
     return
   }
 
-  const { location } = payload
+  const latest = getMostRecentStatusItem(payload.statusHistory)
+  if (!latest?.sourceStatus) {
+    console.log('Skipping: no status history with a source status in payload')
+    return
+  }
 
+  // requestType 'upsert' (default) creates the account if no match is found on
+  // accountId/externalLeadId, mirroring the sales repo's create-or-update behavior
+  // in matchSalesforceAccount/salesforceHandler.
   const response = await client.account.upsert({
     account: {
-      accountId: payload.accountId as AccountId | undefined,
-      externalLeadId,
+      accountId: payload.accountId,
+      externalLeadId: payload.externalLeadId,
       accountSource: 'Salesforce',
-      sourceStatus: status,
-      workflowTarget: status,
+      sourceStatus: latest.sourceStatus,
+      workflowTarget: latest.sourceStatus,
       customFields: payload.customFields,
-      location: location && {
-        line1: location.line1,
-        locality: location.locality,
-        countrySubd: location.countrySubd,
-        postal1: location.postal1,
-        latlng:
-          location.latitude !== undefined && location.longitude !== undefined
-            ? { latitude: location.latitude, longitude: location.longitude }
-            : undefined,
-      },
+      location: payload.location,
+      owner: payload.ownerId ? { userId: payload.ownerId } : undefined,
     },
   })
 
   console.log('Response', JSON.stringify(response, null, 2))
 })
+
+function getMostRecentStatusItem(history?: StatusHistoryItem[]): StatusHistoryItem | undefined {
+  if (!history?.length) return
+  return [...history].sort((a, b) => b.statusChangedDate - a.statusChangedDate)[0]
+}
