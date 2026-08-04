@@ -20,6 +20,15 @@
       },
       "permissions": ["account/update"],
       "slug": "salesforce-lead-sync"
+    },
+    {
+      "name": "Salesforce Status Sync",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [],
+      "authSchema": {},
+      "permissions": ["account/match", "account/upsert"],
+      "slug": "salesforce-status-sync"
     }
   ]
 }
