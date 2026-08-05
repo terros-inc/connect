@@ -2,7 +2,7 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { type AppId, TerrosClient } from '@terros-inc/sdk'
+import { type AppId, TerrosClient, type VersionAddSuccess } from '@terros-inc/sdk'
 import { packageScripts, type ScriptZip } from './package'
 
 export async function publishConnectScripts(): Promise<void> {
@@ -11,14 +11,10 @@ export async function publishConnectScripts(): Promise<void> {
   const { version } = JSON.parse(readFileSync(packageJson, { encoding: 'utf-8' })) as { version: string }
   const client = new TerrosClient()
   const appId = config.appId as AppId
-  const { appVersion } = await client.connect.version.add({
-    versionData: {
-      appId,
-      appVersion: version,
-      status: 'draft',
-    },
-  })
-  console.log('Created new app version')
+  const { versions } = await client.connect.app.get({ appId })
+  const existingVersion = versions.find((v) => v.appVersion === version && v.status === 'draft')
+  const appVersion = existingVersion ?? (await createVersion(version, appId, client)).appVersion
+  if (!existingVersion) console.log('Created new app version')
   await Promise.all(scripts.map((s) => uploadScript(client, appId, version, s)))
   await new Promise((resolve) => setTimeout(resolve, 5000))
   await client.connect.version.update({
@@ -28,6 +24,16 @@ export async function publishConnectScripts(): Promise<void> {
     },
   })
   console.log(`Published new version ${version}`)
+}
+
+async function createVersion(version: string, appId: AppId, client: TerrosClient): Promise<VersionAddSuccess> {
+  return await client.connect.version.add({
+    versionData: {
+      appId,
+      appVersion: version,
+      status: 'draft',
+    },
+  })
 }
 
 async function uploadScript(
@@ -57,7 +63,7 @@ async function uploadScript(
     body: data,
     headers: {
       'Content-Type': 'application/zip',
-      'If-None-Match': '*'
+      'If-None-Match': '*',
     },
   })
 
