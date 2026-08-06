@@ -11,7 +11,7 @@ import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } f
 import { buildTerrosClient } from './api/query'
 
 async function main(): Promise<void> {
-  const params = minimist(process.argv.slice(2), { string: ['impersonate'] })
+  const params = minimist(process.argv.slice(2))
   const commands = params._
   if (commands.length === 0) {
     console.log(HELP_PARENT_MESSAGE)
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
   }
 
   const input = buildEndpointInput(endpoint, params)
-  const client = buildTerrosClient(params)
+  const client = buildTerrosClient()
   const response = await client.call(endpoint.path, input)
   console.log(JSON.stringify(response, null, 2))
 }

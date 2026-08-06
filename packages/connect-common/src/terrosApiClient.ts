@@ -28,14 +28,16 @@ export class TerrosApiClient {
     let response: Response
     try {
       const authorization = await this.getAuthorizationHeader()
+      const headers: Record<string, string | undefined> = {
+        ...this.analytics,
+        'Content-Type': 'application/json',
+        authorization,
+      }
+      if (this.impersonateUserId) headers.impersonate_user_id = this.impersonateUserId
+
       response = await fetch(`${this.baseUrl}/${route}`, {
         method: 'POST',
-        headers: {
-          ...this.analytics,
-          'Content-Type': 'application/json',
-          authorization,
-          ...(this.impersonateUserId ? { impersonate_user_id: this.impersonateUserId } : {}),
-        },
+        headers,
         body: JSON.stringify(input),
       })
     } catch (cause) {
