@@ -6,6 +6,7 @@ export type TerrosClientConfig = {
   apiKey?: string
   baseUrl?: string
   analytics?: TerrosHeaderMetadata
+  impersonateUserId?: string
 }
 
 const PROD_BASE_URL = 'https://api.terros.com'
@@ -14,24 +15,29 @@ export class TerrosApiClient {
   private readonly baseUrl: string
   private readonly authStrategy: AuthStrategy
   private readonly analytics: Record<string, string | undefined>
+  private readonly impersonateUserId: string | undefined
 
   constructor(config: TerrosClientConfig = {}) {
     this.baseUrl = this.determineBaseUrl(config)
     this.analytics = getAnalyticsHeaders(config.analytics)
     this.authStrategy = this.determineAuthStrategy(config)
+    this.impersonateUserId = config.impersonateUserId ?? readProcessEnv('TERROS_IMPERSONATE')
   }
 
   async call<Success>(route: ApiRoute, input: object): Promise<Success> {
     let response: Response
     try {
       const authorization = await this.getAuthorizationHeader()
+      const headers: Record<string, string | undefined> = {
+        ...this.analytics,
+        'Content-Type': 'application/json',
+        authorization,
+      }
+      if (this.impersonateUserId) headers.impersonate_user_id = this.impersonateUserId
+
       response = await fetch(`${this.baseUrl}/${route}`, {
         method: 'POST',
-        headers: {
-          ...this.analytics,
-          'Content-Type': 'application/json',
-          authorization,
-        },
+        headers,
         body: JSON.stringify(input),
       })
     } catch (cause) {
