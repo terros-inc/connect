@@ -29,6 +29,7 @@ export function loadEndpoints(): EndpointGroups {
     endpoints[group][alias] = {
       path,
       properties: schema,
+      components: data.components,
       parameters: getEndpointParameters(schema, data.components),
     }
   })
