@@ -87,6 +87,7 @@ async function main(): Promise<void> {
 function resolveTypeDepth(params: ParsedArgs): number {
   if (params.depth === undefined) return DEFAULT_TYPE_DEPTH
   const depth = Number(params.depth)
+  if (Number.isNaN(depth)) return DEFAULT_TYPE_DEPTH
   return depth === -1 ? Infinity : depth
 }
 
@@ -125,6 +126,7 @@ function showHelp(commands: string[], requestedAlias: string, params: ParsedArgs
           }
           console.error(`Unknown parameter: ${parameterName}`)
           process.exitCode = 1
+          return
         }
 
         console.log(formatSubcommandParametersHelp(requestedAlias, subcommand, parameters))

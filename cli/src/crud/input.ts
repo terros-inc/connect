@@ -105,7 +105,7 @@ function parseParameterValue(value: unknown, parameter: EndpointParameter): unkn
 
 function parseValue(value: unknown, type: string, parameterName: string): unknown {
   if (type.endsWith('[]')) {
-    return parseArrayValue(value, type.slice(0, -2), parameterName)
+    return parseArrayValue(value, unwrapParens(type.slice(0, -2)), parameterName)
   }
 
   if (type.includes('|')) {
@@ -127,6 +127,10 @@ function parseValue(value: unknown, type: string, parameterName: string): unknow
     default:
       return parseJsonValue(value, parameterName)
   }
+}
+
+function unwrapParens(type: string): string {
+  return type.startsWith('(') && type.endsWith(')') ? type.slice(1, -1) : type
 }
 
 function parseStringValue(value: unknown, parameterName: string): string {

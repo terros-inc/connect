@@ -50,7 +50,7 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
   if (variants) return variants.map((item) => getSchemaType(item, components, depth)).join(' | ')
 
   const enumValues = getEnumValues(schema)
-  if (enumValues) return enumValues.map((value) => JSON.stringify(value)).join(' | ')
+  if (enumValues && enumValues.length > 0) return enumValues.map((value) => JSON.stringify(value)).join(' | ')
 
   if ('type' in schema) {
     if (schema.type === 'array') {
@@ -58,6 +58,7 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
         return `[${schema.prefixItems.map((item) => getSchemaType(item, components, depth)).join(', ')}]`
       }
 
+      if (!schema.items) return 'unknown[]'
       const itemType = getSchemaType(schema.items, components, depth)
       return isCompoundSchema(schema.items, components) ? `(${itemType})[]` : `${itemType}[]`
     }
