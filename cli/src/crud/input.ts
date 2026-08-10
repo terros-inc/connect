@@ -57,7 +57,7 @@ function flattenValue(flattened: Record<string, unknown>, prefix: string, value:
 
 function getHiddenWrapperPrefix(endpoint: Endpoint): string[] {
   const schema = endpoint.properties
-  if (!('type' in schema) || schema.type !== 'object') return []
+  if (!('type' in schema) || schema.type !== 'object' || !schema.properties) return []
 
   const propertyNames = Object.keys(schema.properties)
   if (propertyNames.length !== 1) return []

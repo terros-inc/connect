@@ -63,8 +63,11 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
       return isCompoundSchema(schema.items, components) ? `(${itemType})[]` : `${itemType}[]`
     }
     if (schema.type === 'object') {
-      if (depth <= 0 || !schema.properties) return 'object'
-      return formatObjectShape(schema, components, depth)
+      if (depth <= 0) return 'object'
+      if (schema.properties) return formatObjectShape(schema, components, depth)
+      if (schema.additionalProperties)
+        return `{ [key: string]: ${getSchemaType(schema.additionalProperties, components, depth - 1)} }`
+      return 'object'
     }
     return schema.type
   }
@@ -73,6 +76,7 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
 }
 
 function formatObjectShape(schema: ObjectSchema, components: Components, depth: number): string {
+  if (!schema.properties) return '{}'
   const properties = Object.entries(schema.properties).map(([name, property]) => {
     const suffix = schema.required?.includes(name) ? '' : '?'
     return `${name}${suffix}: ${getSchemaType(property, components, depth - 1)}`
