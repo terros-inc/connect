@@ -52,6 +52,8 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
   const enumValues = getEnumValues(schema)
   if (enumValues && enumValues.length > 0) return enumValues.map((value) => JSON.stringify(value)).join(' | ')
 
+  if ('const' in schema) return JSON.stringify(schema.const)
+
   if ('type' in schema) {
     if (schema.type === 'array') {
       if ('prefixItems' in schema) {
