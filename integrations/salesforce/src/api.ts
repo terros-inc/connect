@@ -31,7 +31,7 @@ export async function addLead(
   const jsonResponse = (await response.json()) as SalesforceLeadAddResponse
   if (!response.ok || !jsonResponse.success) {
     console.error(`Salesforce lead creation failed: ${response.status} ${response.statusText}`)
-    throw new Error(`Error adding lead to salesforce: ${JSON.stringify(jsonResponse.errors)}`)
+    throw new Error(`Error adding lead to salesforce: ${JSON.stringify(jsonResponse)}`)
   }
   return jsonResponse
 }
