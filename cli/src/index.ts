@@ -1,12 +1,6 @@
-import minimist, { type ParsedArgs } from 'minimist'
-import {
-  formatCommandsHelp,
-  formatParameterHelp,
-  formatSubcommandParametersHelp,
-  formatSubcommandsHelp,
-  HELP_PARENT_MESSAGE,
-} from './messages'
-import { DEFAULT_TYPE_DEPTH, getEndpointParameters } from './crud/parameters'
+import minimist from 'minimist'
+import { formatCommandsHelp, formatSubcommandParametersHelp, formatSubcommandsHelp, HELP_PARENT_MESSAGE } from './messages'
+import { getEndpointParameters } from './crud/parameters'
 import { buildEndpointInput } from './crud/input'
 import { loadEndpoints } from './crud'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
@@ -27,7 +21,7 @@ async function main(): Promise<void> {
   }
 
   if (commands.at(-1) === 'help') {
-    showHelp(commands, requestedAlias, params)
+    showHelp(commands, requestedAlias)
     return
   }
 
@@ -84,14 +78,7 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(response, null, 2))
 }
 
-function resolveTypeDepth(params: ParsedArgs): number {
-  if (params.depth === undefined) return DEFAULT_TYPE_DEPTH
-  const depth = Number(params.depth)
-  if (Number.isNaN(depth)) return DEFAULT_TYPE_DEPTH
-  return depth === -1 ? Infinity : depth
-}
-
-function showHelp(commands: string[], requestedAlias: string, params: ParsedArgs): void {
+function showHelp(commands: string[], requestedAlias: string): void {
   const commandGroup = getCommandGroup(requestedAlias)
   if (commandGroup) {
     const subcommand = commands.at(1)
@@ -111,24 +98,7 @@ function showHelp(commands: string[], requestedAlias: string, params: ParsedArgs
     if (subcommand && commands.length >= 3) {
       const requestedSubcommand = endpoint[subcommand]
       if (requestedSubcommand) {
-        const parameters = getEndpointParameters(
-          requestedSubcommand.properties,
-          requestedSubcommand.components,
-          resolveTypeDepth(params)
-        )
-
-        const parameterName = commands.length >= 4 ? commands.at(-2) : undefined
-        if (parameterName) {
-          const parameter = parameters.find((candidate) => candidate.name === parameterName)
-          if (parameter) {
-            console.log(formatParameterHelp(requestedAlias, subcommand, parameter))
-            return
-          }
-          console.error(`Unknown parameter: ${parameterName}`)
-          process.exitCode = 1
-          return
-        }
-
+        const parameters = getEndpointParameters(requestedSubcommand.properties, requestedSubcommand.components)
         console.log(formatSubcommandParametersHelp(requestedAlias, subcommand, parameters))
         return
       }

@@ -7,7 +7,7 @@ export type Components = {
   }
 }
 
-export const DEFAULT_TYPE_DEPTH = 1
+export const DEFAULT_TYPE_DEPTH = Infinity
 
 type FlattenContext = {
   components: Components

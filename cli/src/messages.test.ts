@@ -14,22 +14,27 @@ describe('formatSubcommandParametersHelp', () => {
     ).toBe(`usage: terros report kpi [parameters]
 
 Parameters:
-  --grouping  "team" | "user"  required`)
+  --grouping
+    type         "team" | "user"
+    required     yes`)
   })
 
-  it('truncates long types', () => {
-    const longType = Array.from({ length: 10 }, (_, i) => `"value${i}"`).join(' | ')
+  it('separates multiple parameters with a blank line', () => {
+    expect(
+      formatSubcommandParametersHelp('report', 'kpi', [
+        { name: 'grouping', type: '"team" | "user"', required: true },
+        { name: 'accumulator', type: 'string', required: false, description: 'how to combine values' },
+      ])
+    ).toBe(`usage: terros report kpi [parameters]
 
-    const result = formatSubcommandParametersHelp('report', 'kpi', [
-      {
-        name: 'accumulator',
-        type: longType,
-        required: false,
-      },
-    ])
+Parameters:
+  --grouping
+    type         "team" | "user"
+    required     yes
 
-    const typeColumn = result.split('\n').at(-1)?.split('  ')[2]
-    expect(typeColumn?.length).toBeLessThan(longType.length)
-    expect(typeColumn?.endsWith('…')).toBe(true)
+  --accumulator
+    type         string
+    required     no
+    description  how to combine values`)
   })
 })
