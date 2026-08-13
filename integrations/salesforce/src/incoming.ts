@@ -58,9 +58,13 @@ function getMostRecentStatusItem(history?: StatusHistoryItem[]): StatusHistoryIt
 }
 
 function sanitizeLocation(location?: PartialAddress): PartialAddress | undefined {
-  if (!location?.latlng) return location
-  const { latitude, longitude } = location.latlng
-  if (latitude != null && longitude != null) return location
-  const { latlng, ...rest } = location
-  return rest
+  if (!location) return location
+  const filtered: PartialAddress = Object.fromEntries(Object.entries(location).filter(([, value]) => value != null))
+  if (filtered.latlng) {
+    if (filtered.latlng.latitude == null || filtered.latlng.longitude == null) {
+      const { latlng, ...rest } = filtered
+      return rest
+    }
+  }
+  return filtered
 }
