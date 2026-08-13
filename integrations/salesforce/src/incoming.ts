@@ -44,7 +44,7 @@ export const handler = wrapConnectHandler<SalesforceAccountWebhookPayload>(async
       sourceStatus: latest.sourceStatus,
       workflowTarget: latest.sourceStatus,
       customFields: payload.customFields,
-      location: payload.location,
+      location: sanitizeLocation(payload.location),
       owner: payload.ownerId ? { userId: payload.ownerId } : undefined,
     },
   })
@@ -55,4 +55,12 @@ export const handler = wrapConnectHandler<SalesforceAccountWebhookPayload>(async
 function getMostRecentStatusItem(history?: StatusHistoryItem[]): StatusHistoryItem | undefined {
   if (!history?.length) return
   return [...history].sort((a, b) => b.statusChangedDate - a.statusChangedDate)[0]
+}
+
+function sanitizeLocation(location?: PartialAddress): PartialAddress | undefined {
+  if (!location?.latlng) return location
+  const { latitude, longitude } = location.latlng
+  if (latitude != null && longitude != null) return location
+  const { latlng, ...rest } = location
+  return rest
 }
