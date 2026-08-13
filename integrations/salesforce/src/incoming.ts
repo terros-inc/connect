@@ -43,7 +43,7 @@ export const handler = wrapConnectHandler<SalesforceAccountWebhookPayload>(async
       accountSource: 'Salesforce',
       sourceStatus: latest.sourceStatus,
       workflowTarget: latest.sourceStatus,
-      customFields: payload.customFields,
+      customFields: stripNulls(payload.customFields),
       location: sanitizeLocation(payload.location),
       owner: payload.ownerId ? { userId: payload.ownerId } : undefined,
     },
@@ -57,14 +57,16 @@ function getMostRecentStatusItem(history?: StatusHistoryItem[]): StatusHistoryIt
   return [...history].sort((a, b) => b.statusChangedDate - a.statusChangedDate)[0]
 }
 
+function stripNulls<T extends object>(obj?: T): T | undefined {
+  if (!obj) return undefined
+  return Object.fromEntries(Object.entries(obj).filter(([, value]) => value != null)) as T
+}
+
 function sanitizeLocation(location?: PartialAddress): PartialAddress | undefined {
-  if (!location) return location
-  const filtered: PartialAddress = Object.fromEntries(Object.entries(location).filter(([, value]) => value != null))
-  if (filtered.latlng) {
-    if (filtered.latlng.latitude == null || filtered.latlng.longitude == null) {
-      const { latlng, ...rest } = filtered
-      return rest
-    }
+  const filtered = stripNulls(location)
+  if (filtered?.latlng && (filtered.latlng.latitude == null || filtered.latlng.longitude == null)) {
+    const { latlng, ...rest } = filtered
+    return rest
   }
   return filtered
 }
