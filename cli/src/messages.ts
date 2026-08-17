@@ -38,9 +38,14 @@ export function formatSubcommandsHelp(command: string, subcommands: string[]): s
 export function formatSubcommandParametersHelp(
   command: string,
   subcommand: string,
-  parameters: EndpointParameter[]
+  parameters: EndpointParameter[],
+  description?: string
 ): string {
-  const lines = [`usage: terros ${command} ${subcommand} [parameters]`, '', 'Parameters:']
+  const lines = [`usage: terros ${command} ${subcommand} [parameters]`, '']
+
+  if (description) lines.push(description, '')
+
+  lines.push('Parameters:')
 
   if (parameters.length === 0) {
     lines.push('  none')

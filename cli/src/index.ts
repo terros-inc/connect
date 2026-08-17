@@ -1,5 +1,10 @@
 import minimist from 'minimist'
-import { formatCommandsHelp, formatSubcommandParametersHelp, formatSubcommandsHelp, HELP_PARENT_MESSAGE } from './messages'
+import {
+  formatCommandsHelp,
+  formatSubcommandParametersHelp,
+  formatSubcommandsHelp,
+  HELP_PARENT_MESSAGE,
+} from './messages'
 import { getEndpointParameters } from './crud/parameters'
 import { buildEndpointInput } from './crud/input'
 import { loadEndpoints } from './crud'
@@ -99,7 +104,9 @@ function showHelp(commands: string[], requestedAlias: string): void {
       const requestedSubcommand = endpoint[subcommand]
       if (requestedSubcommand) {
         const parameters = getEndpointParameters(requestedSubcommand.properties, requestedSubcommand.components)
-        console.log(formatSubcommandParametersHelp(requestedAlias, subcommand, parameters))
+        console.log(
+          formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedSubcommand.description)
+        )
         return
       }
     }

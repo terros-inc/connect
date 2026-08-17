@@ -10,6 +10,7 @@ export type EndpointParameter = {
 
 export type Endpoint = {
   path: string
+  description?: string
   properties: Schema
   components: Components
   parameters: EndpointParameter[]
