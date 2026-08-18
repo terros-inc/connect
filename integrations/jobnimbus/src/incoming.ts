@@ -36,7 +36,7 @@ export const handler = wrapConnectHandler<JobNimbusJobPayload>(async (input, cli
 
   const statusName = payload.status_name
   if (!statusName) {
-    console.log(`Skipping JobNimbus job ${jobId}; missing status_name`, JSON.stringify(payload))
+    console.log(`Skipping JobNimbus job ${jobId}; missing status_name`)
     throw Error('No status name')
   }
 
@@ -67,9 +67,9 @@ export const handler = wrapConnectHandler<JobNimbusJobPayload>(async (input, cli
     },
   }
 
-  console.log('Terros Payload', JSON.stringify(account))
-
   const requestType = getRequestType(scriptConfig.requestType)
+
+  console.log(`Upserting Terros account for JobNimbus job ${jobId} with status ${statusName} (requestType: ${requestType})`)
 
   const result = await client.account.upsert({
     requestType,
@@ -77,11 +77,11 @@ export const handler = wrapConnectHandler<JobNimbusJobPayload>(async (input, cli
   })
 
   if (result.type === 'success') {
-    console.log(`Updated Terros account from JobNimbus job ${jobId} with status ${statusName}`)
+    console.log(
+      `Updated Terros account ${result.account?.accountId} from JobNimbus job ${jobId} with status ${statusName}`
+    )
   } else {
-    console.log(JSON.stringify(result))
+    console.log(`Upsert failed for JobNimbus job ${jobId}`)
     throw Error('Upsert failed')
   }
-
-  console.log(JSON.stringify(result))
 })

@@ -4,6 +4,15 @@ export function normalizeEmail(email: string | undefined): string {
     .toLowerCase()
 }
 
+export function maskEmail(email: string | undefined): string {
+  if (!email) return 'unknown'
+
+  const [local, domain] = email.split('@')
+  if (!domain || !local) return '***'
+
+  return `${local[0]}***@${domain}`
+}
+
 export function removeUndefinedValues(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined))
 }
@@ -15,9 +24,11 @@ export function findFirstMappedValue(
 ): string | undefined {
   for (const field of Object.keys(fieldMapping || {})) {
     const value = getPathValue(source, field)
+    if (value === null || value === undefined) continue
+
     const mappedValue = valueMapping?.[String(value)]
 
-    if (mappedValue) return mappedValue
+    if (mappedValue !== undefined) return mappedValue
   }
 
   return undefined
@@ -42,7 +53,7 @@ export function getRequestType(request: string | undefined): 'add' | 'update' | 
   if (!request) return 'upsert'
   const normalized = request.trim().toLowerCase()
   if (normalized === 'update') return 'update'
-  if (normalized === 'create') return 'add'
+  if (normalized === 'create' || normalized === 'add') return 'add'
   return 'upsert'
 }
 
@@ -53,7 +64,7 @@ export function cleanNullValue(value: string | null | undefined): string | undef
 }
 
 export function toMilliseconds(value: number | string | undefined): number | undefined {
-  if (!value) return undefined
+  if (value === null || value === undefined || value === '') return undefined
 
   const number = Number(value)
   if (!Number.isFinite(number)) return undefined

@@ -1,9 +1,10 @@
-import type { AccountWebhookData } from '@terros-inc/sdk'
-import { findFirstMappedValue, normalizeEmail, removeUndefinedValues } from './util.ts'
+import type { AccountWebhookData, LatLng } from '@terros-inc/sdk'
+import { findFirstMappedValue, maskEmail, normalizeEmail, removeUndefinedValues } from './util.ts'
 
 export type JobNimbusUser = { id: string; email?: string }
 export type JobNimbusRecordResponse = { jnid?: string; [key: string]: unknown }
-type JobNimbusGeo = { latitude: number; longitude: number }
+
+const baseUrl: string = 'https://app.jobnimbus.com/api1'
 
 export async function getSalesRepId(owner: AccountWebhookData['owner'], apiKey: string): Promise<string | undefined> {
   if (!owner?.email) return undefined
@@ -12,11 +13,11 @@ export async function getSalesRepId(owner: AccountWebhookData['owner'], apiKey: 
   const salesRep = users?.find((user) => normalizeEmail(user.email) === normalizeEmail(owner.email))
 
   if (!salesRep) {
-    console.log(`No JobNimbus user matched owner email ${owner.email}`)
+    console.log(`No JobNimbus user matched owner email ${maskEmail(owner.email)}`)
     return undefined
   }
 
-  console.log(`Matched JobNimbus sales rep ${salesRep.id} by owner email ${owner.email}`)
+  console.log(`Matched JobNimbus sales rep ${salesRep.id} by owner email ${maskEmail(owner.email)}`)
   return salesRep.id
 }
 
@@ -105,8 +106,9 @@ function getStatusName(account: AccountWebhookData, scriptConfig: Record<string,
   return undefined
 }
 
-function toJobNimbusGeo(latlng: JobNimbusGeo | undefined): { lat: number; lon: number } | undefined {
+function toJobNimbusGeo(latlng: LatLng | undefined): { lat: number; lon: number } | undefined {
   if (!latlng) return undefined
+  if (typeof latlng.latitude !== 'number' || typeof latlng.longitude !== 'number') return undefined
 
   return {
     lat: latlng.latitude,
@@ -119,7 +121,7 @@ export async function createJobNimbusRecord(
   jobNimbusPath: string,
   record: Record<string, unknown>
 ): Promise<JobNimbusRecordResponse | undefined> {
-  const response = await fetch(`https://app.jobnimbus.com/api1/${jobNimbusPath}`, {
+  const response = await fetch(`${baseUrl}/${jobNimbusPath}`, {
     method: 'POST',
     headers: getJobNimbusHeaders(apiKey),
     body: JSON.stringify(record),
@@ -140,7 +142,7 @@ export async function updateJobNimbusRecord(
   recordId: string,
   record: Record<string, unknown>
 ): Promise<JobNimbusRecordResponse | undefined> {
-  const response = await fetch(`https://app.jobnimbus.com/api1/${jobNimbusPath}/${recordId}`, {
+  const response = await fetch(`${baseUrl}/${jobNimbusPath}/${recordId}`, {
     method: 'PUT',
     headers: getJobNimbusHeaders(apiKey),
     body: JSON.stringify(record),
@@ -156,7 +158,7 @@ export async function updateJobNimbusRecord(
 }
 
 async function listJobNimbusUsers(apiKey: string): Promise<JobNimbusUser[] | undefined> {
-  const response = await fetch('https://app.jobnimbus.com/api1/account/users', {
+  const response = await fetch(`${baseUrl}/account/users`, {
     method: 'GET',
     headers: getJobNimbusHeaders(apiKey),
   })

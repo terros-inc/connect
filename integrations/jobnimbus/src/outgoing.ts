@@ -1,5 +1,6 @@
 import { type AccountWebhook, wrapConnectHandler } from '@terros-inc/sdk'
 import { createJobNimbusRecord, getSalesRepId, toJobNimbusRecord, updateJobNimbusRecord } from './jobnimbus.ts'
+import { maskEmail } from './util.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
   const payload = input.context.payload
@@ -8,36 +9,37 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
 
   if (payload.action === 'remove') {
     console.log('Skipping JobNimbus send for Account remove')
-    throw Error('Account removed: not firing')
+    return
   }
 
   const account = payload.data
   if (!account) {
-    console.log('Missing account payload data', JSON.stringify(payload.data))
     throw Error('Missing account data')
   }
 
   const apiKey = secrets.apiKey
   if (!apiKey) {
-    console.log('Missing JobNimbus apiKey secret')
     throw Error('No JobNimbus apiKey')
   }
 
   const salesRepId = await getSalesRepId(account.owner, apiKey)
   if (!salesRepId) {
-    console.log(`No JobNimbus sales rep id found for ${account.owner?.email || account.ownerId || 'missing owner'}`)
+    console.log(
+      `No JobNimbus sales rep id found for account ${account.id} (owner ${account.ownerId || maskEmail(account.owner?.email)})`
+    )
     throw Error('Cannot assign to a user: No JobNimbus sales rep id found')
   }
 
-  const jobNimbusRecord = (scriptConfig.jobNimbusRecord || 'job').toLowerCase().trim()
-  const jobNimbusPath = `${jobNimbusRecord}s`
+  let jobNimbusRecord = (scriptConfig.jobNimbusRecord || 'job').toLowerCase().trim()
 
   if (jobNimbusRecord !== 'job' && jobNimbusRecord !== 'contact') {
     console.warn(
-      `Unsupported jobNimbusRecord "${scriptConfig.jobNimbusRecord}": using job payload fields. Expected 'job' or 'contact'`
+      `Unsupported jobNimbusRecord "${scriptConfig.jobNimbusRecord}": defaulting to 'job'. Expected 'job' or 'contact'`
     )
-    console.log('Please double check that you have input jobNimbusRecord correctly.')
+    jobNimbusRecord = 'job'
   }
+
+  const jobNimbusPath = `${jobNimbusRecord}s`
 
   const record = toJobNimbusRecord(account, salesRepId, scriptConfig, jobNimbusRecord)
   if (!record) {
@@ -46,7 +48,9 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
 
   if (account.externalLeadId) {
     const updatedRecord = await updateJobNimbusRecord(apiKey, jobNimbusPath, account.externalLeadId, record)
-    if (!updatedRecord) return
+    if (!updatedRecord) {
+      throw Error(`Failed to update JobNimbus ${jobNimbusRecord} ${account.externalLeadId} for account ${account.id}`)
+    }
 
     console.log(`Updated JobNimbus ${jobNimbusRecord} ${account.externalLeadId} for account ${account.id}`)
     return
@@ -54,11 +58,11 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
 
   const createdRecord = await createJobNimbusRecord(apiKey, jobNimbusPath, record)
   if (!createdRecord?.jnid) {
-    console.log(`JobNimbus ${jobNimbusRecord} create response did not include jnid`)
-    throw Error('Failed to detected jnid from JobNimbus response')
+    console.log(`JobNimbus ${jobNimbusRecord} create response for account ${account.id} did not include jnid`)
+    throw Error('Failed to detect jnid from JobNimbus response')
   }
 
-  console.log('Created JobNimbus', JSON.stringify(createdRecord))
+  console.log(`Created JobNimbus ${jobNimbusRecord} ${createdRecord.jnid} for account ${account.id}`)
 
   const updated = await client.account.update({
     account: {
@@ -68,9 +72,9 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
   })
 
   if (updated.type === 'success') {
-    console.log(`Updated Terros account externalId ${createdRecord.jnid}`)
+    console.log(`Updated Terros account ${account.id} externalId ${createdRecord.jnid}`)
   } else {
-    console.log(JSON.stringify(updated))
+    console.log(`Failed to update Terros account ${account.id} with externalId ${createdRecord.jnid}`)
     throw Error('Failed to update Terros account with externalId')
   }
 })
