@@ -7,6 +7,7 @@ describe('buildEndpointInput', () => {
   it('should not add a hidden wrapper prefix for a single non-object property', () => {
     const endpoint: Endpoint = {
       path: '/user/profile',
+      components: { schemas: {} },
       parameters: [
         {
           name: 'userId',
@@ -40,6 +41,7 @@ describe('buildEndpointInput', () => {
   it('should add a hidden wrapper prefix for a single object property', () => {
     const endpoint: Endpoint = {
       path: '/user/profile',
+      components: { schemas: {} },
       parameters: [
         {
           name: 'userId',

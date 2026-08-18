@@ -38,27 +38,31 @@ export function formatSubcommandsHelp(command: string, subcommands: string[]): s
 export function formatSubcommandParametersHelp(
   command: string,
   subcommand: string,
-  parameters: EndpointParameter[]
+  parameters: EndpointParameter[],
+  description?: string
 ): string {
-  const lines = [`usage: terros ${command} ${subcommand} [parameters]`, '', 'Parameters:']
+  const lines = [`usage: terros ${command} ${subcommand} [parameters]`, '']
+
+  if (description) lines.push(description, '')
+
+  lines.push('Parameters:')
 
   if (parameters.length === 0) {
     lines.push('  none')
     return lines.join('\n')
   }
 
-  const nameWidth = Math.max(...parameters.map((parameter) => parameter.name.length))
-  const typeWidth = Math.max(...parameters.map((parameter) => parameter.type.length))
+  const labelWidth = Math.max('type'.length, 'required'.length, 'description'.length)
 
-  lines.push(
-    ...parameters.map((parameter) => {
-      const name = parameter.name.padEnd(nameWidth)
-      const type = parameter.type.padEnd(typeWidth)
-      const required = parameter.required ? 'required' : 'optional'
-      const description = parameter.description ? `  ${parameter.description}` : ''
-      return `  --${name}  ${type}  ${required}${description}`
-    })
-  )
+  parameters.forEach((parameter, index) => {
+    if (index > 0) lines.push('')
+    lines.push(
+      `  --${parameter.name}`,
+      `    ${'type'.padEnd(labelWidth)}  ${parameter.type}`,
+      `    ${'required'.padEnd(labelWidth)}  ${parameter.required ? 'yes' : 'no'}`
+    )
+    if (parameter.description) lines.push(`    ${'description'.padEnd(labelWidth)}  ${parameter.description}`)
+  })
 
   return lines.join('\n')
 }

@@ -31,4 +31,46 @@ describe('getEndpointParameters', () => {
       },
     ])
   })
+
+  it('expands one layer of object properties and folds enum values into the type', () => {
+    const schema: Schema = {
+      type: 'object',
+      properties: {
+        grouping: {
+          oneOf: [
+            {
+              type: 'object',
+              properties: {
+                level: { type: 'integer' },
+              },
+              required: ['level'],
+            },
+            {
+              type: 'object',
+              properties: {},
+            },
+          ],
+        },
+        accumulator: {
+          type: 'string',
+          enum: ['total', 'average'],
+        },
+      },
+    }
+
+    const components = { schemas: {} }
+
+    expect(getEndpointParameters(schema, components)).toEqual([
+      {
+        name: 'grouping',
+        type: '{ level: integer } | {}',
+        required: false,
+      },
+      {
+        name: 'accumulator',
+        type: '"total" | "average"',
+        required: false,
+      },
+    ])
+  })
 })

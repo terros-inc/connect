@@ -1,16 +1,19 @@
-import type { Schema } from './types'
+import type { ObjectSchema, Schema } from './types'
 import type { EndpointParameter } from './endpoint'
 
-type Components = {
+export type Components = {
   schemas: {
     [name: string]: Schema
   }
 }
 
+export const DEFAULT_TYPE_DEPTH = Infinity
+
 type FlattenContext = {
   components: Components
   path: string[]
   required: boolean
+  depth: number
 }
 
 function isRefSchema(schema: Schema): schema is Schema & { $ref: string } {
@@ -21,22 +24,67 @@ function isAnyOfSchema(schema: Schema): schema is Schema & { anyOf: Schema[] } {
   return 'anyOf' in schema
 }
 
-function getSchemaType(schema: Schema, components: Components): string {
-  if (isRefSchema(schema)) return getSchemaType(resolveSchema(schema, components), components)
-  if ('oneOf' in schema) return schema.oneOf.map((item) => getSchemaType(item, components)).join(' | ')
-  if (isAnyOfSchema(schema)) return schema.anyOf.map((item) => getSchemaType(item, components)).join(' | ')
+function getVariants(schema: Schema): Schema[] | undefined {
+  if ('oneOf' in schema) return schema.oneOf
+  if (isAnyOfSchema(schema)) return schema.anyOf
+  return undefined
+}
+
+function getEnumValues(schema: Schema): unknown[] | undefined {
+  if ('enum' in schema && schema.enum !== undefined) return schema.enum
+  return undefined
+}
+
+function isCompoundSchema(schema: Schema, components: Components): boolean {
+  const resolved = resolveSchema(schema, components)
+  const variants = getVariants(resolved)
+  if (variants) return variants.length > 1
+
+  const enumValues = getEnumValues(resolved)
+  return (enumValues?.length ?? 0) > 1
+}
+
+function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_TYPE_DEPTH): string {
+  if (isRefSchema(schema)) return getSchemaType(resolveSchema(schema, components), components, depth)
+  const variants = getVariants(schema)
+  if (variants) return variants.map((item) => getSchemaType(item, components, depth)).join(' | ')
+
+  const enumValues = getEnumValues(schema)
+  if (enumValues && enumValues.length > 0) return enumValues.map((value) => JSON.stringify(value)).join(' | ')
+
+  if ('const' in schema) return JSON.stringify(schema.const)
+
   if ('type' in schema) {
     if (schema.type === 'array') {
       if ('prefixItems' in schema) {
-        return `[${schema.prefixItems.map((item) => getSchemaType(item, components)).join(', ')}]`
+        return `[${schema.prefixItems.map((item) => getSchemaType(item, components, depth)).join(', ')}]`
       }
 
-      return `${getSchemaType(schema.items, components)}[]`
+      if (!schema.items) return 'unknown[]'
+      const itemType = getSchemaType(schema.items, components, depth)
+      return isCompoundSchema(schema.items, components) ? `(${itemType})[]` : `${itemType}[]`
+    }
+    if (schema.type === 'object') {
+      if (depth <= 0) return 'object'
+      if (schema.properties) return formatObjectShape(schema, components, depth)
+      if (schema.additionalProperties)
+        return `{ [key: string]: ${getSchemaType(schema.additionalProperties, components, depth - 1)} }`
+      return 'object'
     }
     return schema.type
   }
 
   return 'unknown'
+}
+
+function formatObjectShape(schema: ObjectSchema, components: Components, depth: number): string {
+  if (!schema.properties) return '{}'
+  const properties = Object.entries(schema.properties).map(([name, property]) => {
+    const suffix = schema.required?.includes(name) ? '' : '?'
+    return `${name}${suffix}: ${getSchemaType(property, components, depth - 1)}`
+  })
+
+  return properties.length > 0 ? `{ ${properties.join(', ')} }` : '{}'
 }
 
 function resolveSchema(schema: Schema, components: Components, seen = new Set<string>()): Schema {
@@ -66,6 +114,7 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
         components: context.components,
         path: [...context.path, name],
         required: context.required && required,
+        depth: context.depth,
       })
     })
   }
@@ -73,7 +122,7 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
   return [
     {
       name: context.path.join('.'),
-      type: getSchemaType(resolved, context.components),
+      type: getSchemaType(resolved, context.components, context.depth),
       required: context.required,
       ...((schema.description ?? resolved.description)
         ? { description: schema.description ?? resolved.description }
@@ -95,12 +144,17 @@ function hideSingleObjectWrapper(parameters: EndpointParameter[]): EndpointParam
   }))
 }
 
-export function getEndpointParameters(schema: Schema, components: Components): EndpointParameter[] {
+export function getEndpointParameters(
+  schema: Schema,
+  components: Components,
+  depth = DEFAULT_TYPE_DEPTH
+): EndpointParameter[] {
   return hideSingleObjectWrapper(
     flattenSchema(schema, {
       components,
       path: [],
       required: true,
+      depth,
     })
   )
 }

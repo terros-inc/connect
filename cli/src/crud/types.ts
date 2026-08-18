@@ -34,9 +34,10 @@ export type BooleanSchema = SchemaBase & {
 
 export type ObjectSchema = SchemaBase & {
   type: 'object'
-  properties: {
+  properties?: {
     [key: string]: Schema
   }
+  additionalProperties?: Schema
   required?: string[]
 }
 

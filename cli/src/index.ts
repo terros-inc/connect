@@ -5,6 +5,7 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
+import { getEndpointParameters } from './crud/parameters'
 import { buildEndpointInput } from './crud/input'
 import { loadEndpoints } from './crud'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
@@ -102,7 +103,10 @@ function showHelp(commands: string[], requestedAlias: string): void {
     if (subcommand && commands.length >= 3) {
       const requestedSubcommand = endpoint[subcommand]
       if (requestedSubcommand) {
-        console.log(formatSubcommandParametersHelp(requestedAlias, subcommand, requestedSubcommand.parameters))
+        const parameters = getEndpointParameters(requestedSubcommand.properties, requestedSubcommand.components)
+        console.log(
+          formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedSubcommand.description)
+        )
         return
       }
     }

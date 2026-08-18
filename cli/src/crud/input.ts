@@ -57,7 +57,7 @@ function flattenValue(flattened: Record<string, unknown>, prefix: string, value:
 
 function getHiddenWrapperPrefix(endpoint: Endpoint): string[] {
   const schema = endpoint.properties
-  if (!('type' in schema) || schema.type !== 'object') return []
+  if (!('type' in schema) || schema.type !== 'object' || !schema.properties) return []
 
   const propertyNames = Object.keys(schema.properties)
   if (propertyNames.length !== 1) return []
@@ -105,7 +105,7 @@ function parseParameterValue(value: unknown, parameter: EndpointParameter): unkn
 
 function parseValue(value: unknown, type: string, parameterName: string): unknown {
   if (type.endsWith('[]')) {
-    return parseArrayValue(value, type.slice(0, -2), parameterName)
+    return parseArrayValue(value, unwrapParens(type.slice(0, -2)), parameterName)
   }
 
   if (type.includes('|')) {
@@ -127,6 +127,10 @@ function parseValue(value: unknown, type: string, parameterName: string): unknow
     default:
       return parseJsonValue(value, parameterName)
   }
+}
+
+function unwrapParens(type: string): string {
+  return type.startsWith('(') && type.endsWith(')') ? type.slice(1, -1) : type
 }
 
 function parseStringValue(value: unknown, parameterName: string): string {

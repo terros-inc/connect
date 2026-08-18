@@ -28,7 +28,9 @@ export function loadEndpoints(): EndpointGroups {
 
     endpoints[group][alias] = {
       path,
+      description: config.post.description ?? config.post.summary,
       properties: schema,
+      components: data.components,
       parameters: getEndpointParameters(schema, data.components),
     }
   })
