@@ -1,18 +1,25 @@
-name: Publish integrations
+name: Publish Integrations
 #
-# Automatically publishes each integration under integrations/* to the Terros
-# platform whenever a PR touching it is merged to main. Only integrations
-# with changed files in the merge are published.
+# Manually publishes an integration under integrations/* to the Terros
+# platform. Triggered on demand via workflow_dispatch so a merge to main
+# doesn't automatically cut a new published version.
 #
 # Required secrets (npm environment):
 #   TERROS_API_KEY - API key used by the Terros CLI to authenticate publish requests
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'integrations/**'
+  workflow_dispatch:
+    inputs:
+      integration:
+        description: 'Integration to publish'
+        required: true
+        type: choice
+        options:
+          - airtable
+          - docusign
+          - jobnimbus
+          - salesforce
+          - zoho
 
 concurrency:
   group: publish-integrations-${{ github.ref }}
@@ -22,38 +29,11 @@ permissions:
   contents: read
 
 jobs:
-  detect:
-    name: Detect changed integrations
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      integrations: ${{ steps.detect.outputs.integrations }}
-    steps:
-      - name: Check out code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed integrations
-        id: detect
-        run: |
-          CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- integrations \
-            | awk -F/ 'NF > 2 { print $2 }' \
-            | sort -u \
-            | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "integrations=$CHANGED" >> "$GITHUB_OUTPUT"
-
   publish:
-    name: Publish ${{ matrix.integration }}
-    needs: detect
-    if: needs.detect.outputs.integrations != '[]'
+    name: Publish ${{ inputs.integration }}
     runs-on: ubuntu-latest
     environment: npm
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        integration: ${{ fromJson(needs.detect.outputs.integrations) }}
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -72,8 +52,8 @@ jobs:
       - name: Build packages
         run: pnpm -r build
 
-      - name: Publish ${{ matrix.integration }}
+      - name: Publish ${{ inputs.integration }}
         run: pnpm run publish
-        working-directory: integrations/${{ matrix.integration }}
+        working-directory: integrations/${{ inputs.integration }}
         env:
           TERROS_API_KEY: ${{ secrets.TERROS_API_KEY }}
