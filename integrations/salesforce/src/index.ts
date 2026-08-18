@@ -27,17 +27,28 @@ export const handler = wrapConnectHandler<WebhookAccount>(async (input, client) 
   const { secrets, scriptConfig } = config
   const { clientId, clientSecret, url } = secrets
 
-  if (payload.action === 'remove') return
-  if (payload.data.externalLeadId) return
+  if (payload.action === 'remove') {
+    console.log('Skipping: account removal webhooks are not sent to Salesforce')
+    return
+  }
+  if (payload.data.externalLeadId) {
+    console.log(`Skipping account ${payload.data.id}: already has externalLeadId ${payload.data.externalLeadId}`)
+    return
+  }
 
   if (!clientId) throw new Error('Missing Salesforce clientId')
   if (!clientSecret) throw new Error('Missing Salesforce clientSecret')
   if (!url) throw new Error('Missing Salesforce url')
 
   const leadInput = toSalesforceLead(payload, scriptConfig.leadType)
-  if (!leadInput) return
+  if (!leadInput) {
+    console.log(`Skipping account ${payload.data.id}: missing resident firstName, lastName, or email`)
+    return
+  }
 
+  console.log(`Creating Salesforce lead for account ${payload.data.id}`)
   const response = await addLead({ clientId, clientSecret, url }, leadInput)
+  console.log(`Created Salesforce lead ${response.id} for account ${payload.data.id}`)
 
   try {
     await client.account.update({
@@ -52,6 +63,8 @@ export const handler = wrapConnectHandler<WebhookAccount>(async (input, client) 
       `Created Salesforce lead ${response.id} for account ${payload.data.id} but failed to save externalLeadId back to the account (retrying this webhook will create a duplicate lead): ${message}`
     )
   }
+
+  console.log(`Saved externalLeadId ${response.id} on account ${payload.data.id}`)
 })
 
 function toSalesforceLead(account: WebhookAccount, leadType?: string): SalesforceLeadAddRequest | undefined {

@@ -23,11 +23,15 @@ export async function addLead(
     body: JSON.stringify(request),
   })
 
-  if (response.status === 401) tokenCache.delete(config.clientId)
+  if (response.status === 401) {
+    console.log('Salesforce rejected the cached access token, clearing cache')
+    tokenCache.delete(config.clientId)
+  }
 
   const jsonResponse = (await response.json()) as SalesforceLeadAddResponse
   if (!response.ok || !jsonResponse.success) {
-    throw new Error(`Error adding lead to salesforce: ${JSON.stringify(jsonResponse.errors)}`)
+    console.error(`Salesforce lead creation failed: ${response.status} ${response.statusText}`)
+    throw new Error(`Error adding lead to salesforce: ${JSON.stringify(jsonResponse)}`)
   }
   return jsonResponse
 }
