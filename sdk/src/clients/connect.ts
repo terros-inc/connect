@@ -6,6 +6,8 @@ import type {
   ScriptAddSuccess,
   VersionAddInput,
   VersionAddSuccess,
+  VersionGetInput,
+  VersionGetSuccess,
   VersionUpdateInput,
   VersionUpdateSuccess,
 } from '../models'
@@ -20,6 +22,10 @@ export class ConnectAppClient {
 
 export class ConnectAppVersionClient {
   constructor(private readonly api: TerrosApiClient) {}
+
+  get(input: VersionGetInput): Promise<VersionGetSuccess> {
+    return this.api.call('connect/app/version/get', input)
+  }
 
   add(input: VersionAddInput): Promise<VersionAddSuccess> {
     return this.api.call('connect/app/version/add', input)

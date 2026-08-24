@@ -2,7 +2,7 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { type AppId, TerrosClient, type VersionAddSuccess } from '@terros-inc/sdk'
+import { type AppId, type AppVersionData, TerrosClient, type VersionAddSuccess } from '@terros-inc/sdk'
 import { packageScripts, type ScriptZip } from './package'
 
 export async function publishConnectScripts(): Promise<void> {
@@ -11,8 +11,10 @@ export async function publishConnectScripts(): Promise<void> {
   const { version } = JSON.parse(readFileSync(packageJson, { encoding: 'utf-8' })) as { version: string }
   const client = new TerrosClient()
   const appId = config.appId as AppId
-  const { versions } = await client.connect.app.get({ appId })
-  const existingVersion = versions.find((v) => v.appVersion === version && v.status === 'draft')
+  const existingVersion = await getExistingVersion(client, { appId, appVersion: version })
+  if (existingVersion && existingVersion.status !== 'draft') {
+    throw new Error(`Version ${version} has already been published with status '${existingVersion.status}'`)
+  }
   const appVersion = existingVersion ?? (await createVersion(version, appId, client)).appVersion
   if (!existingVersion) console.log('Created new app version')
   await Promise.all(scripts.map((s) => uploadScript(client, appId, version, s)))
@@ -24,6 +26,18 @@ export async function publishConnectScripts(): Promise<void> {
     },
   })
   console.log(`Published new version ${version}`)
+}
+
+async function getExistingVersion(
+  client: TerrosClient,
+  input: { appId: AppId; appVersion: string }
+): Promise<AppVersionData | undefined> {
+  try {
+    const { appVersion } = await client.connect.version.get(input)
+    return appVersion
+  } catch {
+    return undefined
+  }
 }
 
 async function createVersion(version: string, appId: AppId, client: TerrosClient): Promise<VersionAddSuccess> {

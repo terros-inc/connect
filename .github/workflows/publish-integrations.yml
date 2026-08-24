@@ -32,7 +32,7 @@ jobs:
   publish:
     name: Publish ${{ inputs.integration }}
     runs-on: ubuntu-latest
-    environment: npm
+    environment: terros
     timeout-minutes: 15
     steps:
       - name: Check out code
