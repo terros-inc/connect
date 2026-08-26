@@ -48,6 +48,7 @@ export type ElasticFilter = {
   }
   workflowActionCount?: RangeFilter
   contactCount?: RangeFilter
+  stageEntryDate?: RangeFilter
 }
 
 export type AccountStatusSearchInput = {
@@ -58,6 +59,7 @@ export type AccountStatusSearchInput = {
   /** @deprecated */
   statusIds?: AccountStatusId[]
   teamId?: TeamId
+  teamIds?: TeamId[]
   userId?: UserId
   roleIds?: RoleId[]
   startTime?: string | number
@@ -74,6 +76,7 @@ export type AccountStatusSearchInput = {
   contactCount?: RangeFilter
   workflowActionCount?: RangeFilter
   lastActionDate?: RangeFilter
+  stageEntryDate?: RangeFilter
   sortBy?: AccountSortBy
   sortOrder?: AccountSortOrder
 }

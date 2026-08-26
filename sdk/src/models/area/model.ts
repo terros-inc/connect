@@ -7,6 +7,7 @@ import type { AccountStatusId, WorkflowStageId } from '../account'
 
 export type AreaId = `Area.${string}`
 export type AreaAssignmentType = 'user' | 'team' | 'company' | 'draft'
+export type AreaStateName = 'draft' | 'scheduled' | 'assigned' | 'expiring' | 'unassigned'
 export type AreaRunType = 'assign' | 'unassign' | 'reassign'
 
 export type AreaFilters = {
