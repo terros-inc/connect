@@ -86,4 +86,6 @@ export type TinyCompany = Pick<
   | 'avatarUrl'
   | 'avatarBlurhash'
   | 'maxUsers'
+  | 'activeUserCount'
+  | 'salesforceAccountId'
 >
