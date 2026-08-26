@@ -19,6 +19,20 @@ export type TinyRole = {
   name: string
 }
 
+export type RoleData = AuditProps & {
+  roleId: RoleId
+  companyId: CompanyId
+  name: string
+  roleType?: 'admin' | 'manager' | 'recruit' | null
+  description?: string
+  assignment?: 'user' | 'team'
+  avatarBlurhash?: string
+  avatarUrl?: string
+  uploadAvatarUrl?: string
+  canAssign?: boolean
+  isDeleted?: boolean
+}
+
 export type TinyUser = {
   userId: UserId
   clientUserId?: string
