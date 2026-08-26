@@ -153,8 +153,6 @@ export type AccountData = Omit<UnsavedAccount, 'contacts' | 'notes'> & {
   workflowStageName?: string
   workflowActionName?: string
   homeowner?: TinyResidentData
-  userMissDate?: number
-  locationMissDate?: number
   expiresAt?: number
   contacts?: AccountContact[]
   notes?: AccountNote[]

@@ -79,6 +79,19 @@ export type CloserSettings = {
 export type TinyCloser = {
   user: TinyUser
   times: { startTime: number; duration: number }[]
+  bookingPercent: number
+  serviceArea:
+    | {
+        type: 'unrestricted'
+      }
+    | {
+        type: 'radius'
+        center: { latitude: number; longitude: number }
+        radiusMeters: number
+      }
+    | {
+        type: 'unknown'
+      }
 }
 
 export type SmallCloser = TinyUser & CloserSettings & { timezone: string }
