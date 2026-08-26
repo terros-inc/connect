@@ -1,8 +1,10 @@
+import type { AuditProps } from '../shared'
 import type { UserId } from '../user'
 
 export type CompanyKind = 'customer' | 'sandbox' | 'demo' | 'template' | 'development'
 export type AccessStatus = 'active' | 'suspended'
 export type BillingMethod = 'stripe' | 'none'
+export type CompanySize = number
 export type CompanyIndustry =
   | 'solar'
   | 'pest'
@@ -19,32 +21,69 @@ export type CompanyIndustry =
 
 export type CompanyId = `C:${string}` | `C.${string}`
 
-export type CompanyData = {
-  companyId: CompanyId
+export type DemoState = 'Ready' | 'Copying' | 'Failed'
+
+export type ManualAccessOverride = AuditProps & {
+  accessStatus: AccessStatus
+  note?: string
+  expiresAt: number
+}
+
+export type UnsavedCompany = {
   name: string
   legalName?: string
-  kind: CompanyKind
-  accessStatus: AccessStatus
+  kind?: CompanyKind
+  accessStatus?: AccessStatus
   internalOwnerId?: UserId
   billingEmail?: string
   billingMethod?: BillingMethod
   maxUsers?: number
-  size?: number
+  parentCompanyId?: CompanyId
+  salesforceAccountId?: string
+  size?: CompanySize
   industries?: CompanyIndustry[]
   salesChannels?: string[]
-  highestTeamLevel?: number
-  lowestTeamLevel?: number
-  levelNames?: Record<string, string>
-  timeZone?: string
-  avatarUrl?: string
-  avatarBlurhash?: string
-  uploadAvatarUrl?: string
-  iconUrl?: string
-  iconBlurhash?: string
-  uploadIconUrl?: string
-  isDeleted?: boolean
-  createdAt?: number
-  createdBy?: UserId
-  updatedAt?: number
-  updatedBy?: UserId
+  demoOwnerId?: UserId
 }
+
+export type CompanyData = AuditProps &
+  UnsavedCompany & {
+    companyId: CompanyId
+    kind: CompanyKind
+    accessStatus: AccessStatus
+    accessOverride?: ManualAccessOverride
+    highestTeamLevel?: number
+    lowestTeamLevel?: number
+    levelNames?: Record<string, string>
+    timeZone?: string
+    avatarUrl?: string
+    avatarBlurhash?: string
+    uploadAvatarUrl?: string
+    iconUrl?: string
+    iconBlurhash?: string
+    uploadIconUrl?: string
+    demoState?: DemoState
+    activeUserCount?: number
+    isDeleted?: boolean
+  }
+
+export type PartialCompanyData = Partial<CompanyData> & {
+  companyId: CompanyId
+  legalName?: string | null
+  internalOwnerId?: UserId | null
+  salesforceAccountId?: string | null
+  demoOwnerId?: UserId | null
+}
+
+export type TinyCompany = Pick<
+  CompanyData,
+  | 'companyId'
+  | 'name'
+  | 'kind'
+  | 'accessStatus'
+  | 'modifiedBy'
+  | 'demoState'
+  | 'avatarUrl'
+  | 'avatarBlurhash'
+  | 'maxUsers'
+>
