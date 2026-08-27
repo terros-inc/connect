@@ -4,6 +4,7 @@ import { getAnalyticsHeaders, type TerrosHeaderMetadata } from './analytics.ts'
 
 export type TerrosClientConfig = {
   apiKey?: string
+  authType?: 'ApiKey' | 'ConnectKey'
   baseUrl?: string
   analytics?: TerrosHeaderMetadata
   impersonateUserId?: string
@@ -51,7 +52,7 @@ export class TerrosApiClient {
 
   private async getAuthorizationHeader(): Promise<string> {
     if (this.authStrategy.type === 'apikey') {
-      return `ApiKey ${this.authStrategy.apiKey}`
+      return `${this.authStrategy.authType} ${this.authStrategy.apiKey}`
     }
     const cliTokens = await getTokens()
     if (cliTokens === null)
@@ -61,10 +62,11 @@ export class TerrosApiClient {
     return `Bearer ${cliTokens.access_token}`
   }
 
-  private determineAuthStrategy(config: Pick<TerrosClientConfig, 'apiKey'>): AuthStrategy {
-    if (config.apiKey) return { type: 'apikey', apiKey: config.apiKey }
+  private determineAuthStrategy(config: Pick<TerrosClientConfig, 'apiKey' | 'authType'>): AuthStrategy {
+    const authType = config.authType ?? 'ApiKey'
+    if (config.apiKey) return { type: 'apikey', apiKey: config.apiKey, authType }
     const apiKeyFromEnv = readProcessEnv('TERROS_API_KEY')
-    if (apiKeyFromEnv) return { type: 'apikey', apiKey: apiKeyFromEnv }
+    if (apiKeyFromEnv) return { type: 'apikey', apiKey: apiKeyFromEnv, authType }
     return { type: 'oauth' }
   }
 
@@ -80,6 +82,7 @@ type AuthStrategy =
   | {
       type: 'apikey'
       apiKey: string
+      authType: 'ApiKey' | 'ConnectKey'
     }
   | { type: 'oauth' }
 
