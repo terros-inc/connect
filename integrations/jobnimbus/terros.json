@@ -1,0 +1,75 @@
+{
+  "appId": "App.FvbSC5ZJ_brTaEg-4d7FR",
+  "scripts": [
+    {
+      "name": "JobNimbus Send",
+      "entrypoint": "src/outgoing.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "configSchema": [
+        {
+          "name": "jobNimbusRecord",
+          "type": "string",
+          "description": "JobNimbus record type to create/update: 'job' or 'contact' (defaults to 'job')"
+        },
+        {
+          "name": "workflowType",
+          "type": "string",
+          "description": "JobNimbus record_type_name to assign, e.g. Customer (defaults to 'Customer')"
+        },
+        {
+          "name": "defaultCompanyName",
+          "type": "string",
+          "description": "Fallback company name used for JobNimbus contacts when the account has no business name"
+        },
+        {
+          "name": "defaultStatus",
+          "type": "string",
+          "description": "Fallback JobNimbus status_name used when no statusFields/statusValues mapping matches"
+        },
+        {
+          "name": "statusFields",
+          "type": "mapping",
+          "dataType": "Account",
+          "description": "Terros account field(s) (CF.* or a dotted path) whose value determines the JobNimbus status; checked in order until one resolves via statusValues"
+        },
+        {
+          "name": "statusValues",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map a raw value read via statusFields to the JobNimbus status_name to send"
+        }
+      ],
+      "authSchema": {
+        "apiKey": "JobNimbus API key"
+      },
+      "permissions": ["account/update"],
+      "slug": "jobnimbus-send"
+    },
+    {
+      "name": "JobNimbus Webhook",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "workflowId",
+          "type": "string",
+          "description": "Terros workflow id (WF.*) to apply to accounts created/updated from JobNimbus job webhooks"
+        },
+        {
+          "name": "accountSource",
+          "type": "string",
+          "description": "Terros accountSource to record on the account (defaults to 'JobNimbus')"
+        },
+        {
+          "name": "requestType",
+          "type": "string",
+          "description": "Terros account/upsert request type: 'create', 'update', or 'upsert' (defaults to 'upsert')"
+        }
+      ],
+      "authSchema": {},
+      "permissions": ["account/upsert"],
+      "slug": "jobnimbus-webhook"
+    }
+  ]
+}
