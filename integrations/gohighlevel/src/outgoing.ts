@@ -8,6 +8,7 @@ import {
   getPipeline,
   type GoHighLevelContact,
   type GoHighLevelContactInput,
+  type GoHighLevelCustomField,
   type GoHighLevelOpportunityInput,
   updateContact,
   updateOpportunity,
@@ -19,6 +20,10 @@ type ScriptConfig = {
   teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
   contactFieldMappings: Record<string, string>
+}
+
+type AccountFieldSource = {
+  customFields?: AccountWebhookData['customFields']
 }
 
 export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
@@ -104,7 +109,7 @@ function toContactInput(
   config: ScriptConfig,
   assignedTo: string | undefined
 ): GoHighLevelContactInput {
-  const customFields = resolveCustomFields(account, config.contactFieldMappings)
+  const goHighLevelCustomFields = toGoHighLevelCustomFields(account, config.contactFieldMappings)
 
   const contact: GoHighLevelContactInput = {
     locationId,
@@ -119,7 +124,7 @@ function toContactInput(
     postalCode: account.location?.postal1,
     assignedTo,
     source: 'Terros',
-    customFields: customFields.length ? customFields : undefined,
+    customFields: goHighLevelCustomFields,
   }
   return contact
 }
@@ -148,48 +153,42 @@ function toOpportunityInput(
   return opportunity
 }
 
-// everything from here down needs explaining on what it's doing. it's impossible to read what it's doing and best I can tell it's just fancy useless code
-
-// Each configured entry maps a Terros account field path to a GoHighLevel custom-field ID. GHL expects those
-// resolved values as an array of { id, fieldValue } objects and accepts only primitive field values here.
-
-// in this case then why is it called "resolveCustomFields"? the code does not seem to have anything at all to do with custom fields.
-// the function names in no way relate to the explanation of the code you just gave, not to mention the horrible use of no less than 5 operators in a single if statement.
-// I'd even argue that making fieldValue unknown would be for the best as long as resolveAccountField can't return an array or object
-// rename it to something that explains that it's a GHL custom field not a terros custom field, that's the main source of confusion
-// and once again, explain why it's here. at least now I know it's GHL custom fields, but WHY do we need those? how do we know which ones we need?
-function resolveCustomFields(
-  account: AccountWebhookData,
+export function toGoHighLevelCustomFields(
+  account: AccountFieldSource,
   mappings: Record<string, string>
-): { id: string; fieldValue: string | number | boolean }[] {
-  return Object.entries(mappings).flatMap(([sourceField, targetFieldId]) => {
-    const value = resolveAccountField(account, sourceField)
-    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return []
-    return [{ id: targetFieldId, fieldValue: value }]
-  })
+): GoHighLevelCustomField[] {
+  const goHighLevelCustomFields: GoHighLevelCustomField[] = []
+
+  for (const [terrosAccountField, goHighLevelCustomFieldId] of Object.entries(mappings)) {
+    const fieldValue = getAccountFieldValue(account, terrosAccountField)
+    if (fieldValue === undefined || fieldValue === null) continue
+
+    switch (typeof fieldValue) {
+      case 'string':
+      case 'number':
+      case 'boolean':
+        goHighLevelCustomFields.push({ id: goHighLevelCustomFieldId, fieldValue })
+        break
+      default:
+        throw Error(`Cannot send non-primitive Terros field ${terrosAccountField} to a GoHighLevel custom field`)
+    }
+  }
+
+  return goHighLevelCustomFields
 }
 
-function resolveAccountField(account: AccountWebhookData, field: string): unknown {
-  // Terros custom-field keys include their CF. prefix and are stored directly in the customFields map.
+function getAccountFieldValue(account: AccountFieldSource, field: string): unknown {
+  if (isCustomFieldId(field)) return account.customFields?.[field]
 
-  // I like what you did here, doing to remove these comments on my next pass
-  if (isCustomFieldId(field)) {
-    return account.customFields?.[field]
+  const accountField = field.startsWith('account.') ? field.slice('account.'.length) : field
+  let fieldValue: unknown = account
+
+  for (const key of accountField.split('.')) {
+    if (typeof fieldValue !== 'object' || fieldValue === null) return
+    fieldValue = Reflect.get(fieldValue, key)
   }
 
-  // Other mapping keys are dotted account paths selected in Connect, such as homeowner.email.
-
-  // why? why do we need the paths like this?
-  // you've explained what, not why. I still have no reason to believe this code serves any purpose
-  let value: unknown = account
-  for (const key of field.split('.')) {
-    if (typeof value !== 'object' || value === null) {
-      throw Error(`Cannot read ${key} from non-object account field ${field}`)
-    }
-    value = Reflect.get(value, key)
-  }
-
-  return value
+  return fieldValue
 }
 
 function isCustomFieldId(field: string): field is CustomFieldId {
