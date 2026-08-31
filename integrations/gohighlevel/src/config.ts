@@ -10,6 +10,12 @@ export type IncomingTeamRoute = TeamRoute & {
   workflowId: WorkflowId
 }
 
+export type CalendarRoute = {
+  teamId: TeamId
+  locationId: string
+  calendarId: string
+}
+
 export function resolveTeamRoute(
   config: { teamLocations: Record<string, string>; teamPipelines: Record<string, string> },
   teamId: TeamId
@@ -50,6 +56,19 @@ export function resolveIncomingTeamRoute(
   if (!isWorkflowId(workflowId)) throw Error(`Invalid Terros workflow ID in routing config: ${workflowId}`)
 
   return { teamId, locationId, pipelineId, workflowId }
+}
+
+export function resolveCalendarRoute(
+  config: { teamLocations: Record<string, string>; teamCalendars: Record<string, string> },
+  teamId: TeamId
+): CalendarRoute {
+  const locationId = config.teamLocations[teamId]
+  const calendarId = config.teamCalendars[teamId]
+
+  if (!locationId) throw Error(`Missing teamLocations mapping for team ${teamId}`)
+  if (!calendarId) throw Error(`Missing teamCalendars mapping for team ${teamId}`)
+
+  return { teamId, locationId, calendarId }
 }
 
 export function resolveStageName(sourceStageName: string): string {

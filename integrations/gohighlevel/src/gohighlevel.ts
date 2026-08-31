@@ -53,6 +53,28 @@ export type GoHighLevelOpportunityInput = {
   assignedTo?: string
 }
 
+export type GoHighLevelAppointment = {
+  id: string
+  calendarId: string
+  locationId: string
+  contactId: string
+}
+
+export type GoHighLevelAppointmentInput = {
+  calendarId: string
+  locationId: string
+  contactId: string
+  title: string
+  startTime: string
+  endTime: string
+  appointmentStatus: 'confirmed'
+  assignedUserId?: string
+  address?: string
+  toNotify: true
+  ignoreDateRange: true
+  ignoreFreeSlotValidation: true
+}
+
 type GoHighLevelLocation = {
   id: string
   companyId: string
@@ -196,6 +218,27 @@ export async function updateOpportunity(
     body: JSON.stringify(opportunity),
   })
   return response.opportunity
+}
+
+export async function createAppointment(
+  apiKey: string,
+  appointment: GoHighLevelAppointmentInput
+): Promise<GoHighLevelAppointment> {
+  return await ghlApi<GoHighLevelAppointment>(apiKey, '/calendars/events/appointments', {
+    method: 'POST',
+    body: JSON.stringify(appointment),
+  })
+}
+
+export async function updateAppointment(
+  apiKey: string,
+  appointmentId: string,
+  appointment: Omit<GoHighLevelAppointmentInput, 'locationId' | 'contactId'>
+): Promise<GoHighLevelAppointment> {
+  return await ghlApi<GoHighLevelAppointment>(apiKey, `/calendars/events/appointments/${appointmentId}`, {
+    method: 'PUT',
+    body: JSON.stringify(appointment),
+  })
 }
 
 async function ghlApi<T>(apiKey: string, path: string, init: RequestInit = {}): Promise<T> {

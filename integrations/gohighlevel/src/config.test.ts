@@ -1,4 +1,4 @@
-import { resolveIncomingTeamRoute, resolveStageName, resolveTeamRoute } from './config.ts'
+import { resolveCalendarRoute, resolveIncomingTeamRoute, resolveStageName, resolveTeamRoute } from './config.ts'
 
 describe('GoHighLevel config', () => {
   const teamId = 'Team.example' as const
@@ -20,6 +20,19 @@ describe('GoHighLevel config', () => {
     const config = { teamLocations: { [teamId]: 'location-1' }, teamPipelines: {} }
 
     expect(() => resolveTeamRoute(config, teamId)).toThrow('Missing teamPipelines mapping')
+  })
+
+  test('resolves a calendar route for a team', () => {
+    const config = {
+      teamLocations: { [teamId]: 'location-1' },
+      teamCalendars: { [teamId]: 'calendar-1' },
+    }
+
+    expect(resolveCalendarRoute(config, teamId)).toEqual({
+      teamId,
+      locationId: 'location-1',
+      calendarId: 'calendar-1',
+    })
   })
 
   test('reverse resolves a unique incoming route', () => {
