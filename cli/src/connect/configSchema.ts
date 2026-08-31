@@ -30,12 +30,15 @@ export const ScriptAuth = z.record(z.string(), z.string())
 
 export const UnsavedScriptBase = z.object({
   name: z.string(),
+  description: z.string().optional().meta({
+    description: 'Instructions on how to configure the script',
+  }),
   entrypoint: z.string(),
   configSchema: ConfigSchema,
   authSchema: ScriptAuth,
   permissions: z.array(ApiPermission),
   slug: z.string().optional().meta({
-    description: 'Stable public key used in incoming webhook URLs.',
+    description: 'Stable public key used in incoming webhook URLs. Generated on create when omitted.',
   }),
 })
 

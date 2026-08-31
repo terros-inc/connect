@@ -15,7 +15,6 @@ export type ScriptBase = {
   configSchema: ConfigSchemaField[]
   authSchema: Record<string, string>
   scriptStorage?: 'inline' | 'blob'
-  mainScript?: string
   permissions: string[]
   slug?: string
 }
