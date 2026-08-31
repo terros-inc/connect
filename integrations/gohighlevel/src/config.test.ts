@@ -39,14 +39,12 @@ describe('GoHighLevel config', () => {
     const config = {
       teamLocations: { [teamId]: 'location-1' },
       teamPipelines: { [teamId]: 'pipeline-1' },
-      teamWorkflows: { [teamId]: 'WF.example' },
     }
 
     expect(resolveIncomingTeamRoute(config, 'location-1', 'pipeline-1')).toEqual({
       teamId,
       locationId: 'location-1',
       pipelineId: 'pipeline-1',
-      workflowId: 'WF.example',
     })
   })
 
@@ -54,7 +52,6 @@ describe('GoHighLevel config', () => {
     const config = {
       teamLocations: { 'Team.one': 'location-1', 'Team.two': 'location-1' },
       teamPipelines: { 'Team.one': 'pipeline-1', 'Team.two': 'pipeline-1' },
-      teamWorkflows: { 'Team.one': 'WF.one', 'Team.two': 'WF.two' },
     }
 
     expect(() => resolveIncomingTeamRoute(config, 'location-1', 'pipeline-1')).toThrow('Multiple Terros teams map')
