@@ -61,6 +61,31 @@
       },
       "permissions": ["account/match", "account/upsert"],
       "slug": "gohighlevel-opportunity-webhook"
+    },
+    {
+      "name": "GoHighLevel Appointment Sync",
+      "entrypoint": "src/calendar.ts",
+      "type": "outgoing",
+      "dataType": "Event",
+      "configSchema": [
+        {
+          "name": "teamLocations",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel location/sub-account ID"
+        },
+        {
+          "name": "teamCalendars",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to that sub-account's Book a Consultation calendar ID; this calendar is required by the reminder automation"
+        }
+      ],
+      "authSchema": {
+        "apiKey": "GoHighLevel admin API token"
+      },
+      "permissions": ["account/get", "calendar/event/get", "calendar/event/update"],
+      "slug": "gohighlevel-appointment-sync"
     }
   ]
 }
