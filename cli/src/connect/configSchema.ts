@@ -1,13 +1,8 @@
 import { cwd } from 'node:process'
 import { join } from 'node:path'
-import { z } from 'zod'
 import { readFile } from 'node:fs/promises'
+import { z } from 'zod'
 import { CONFIG_FILE_NAME } from './constants'
-
-export const ApiPermission = z
-    .string()
-    .regex(/^[a-z]+\/[a-z/]+$/, 'Must be a valid API path like "user/add" or "calendar/event/update"')
-    .describe('Terros API endpoint permission')
 
 export const ScriptType = z.enum(['incoming', 'outgoing', 'scheduled'])
 
@@ -36,7 +31,7 @@ export const UnsavedScriptBase = z.object({
   entrypoint: z.string(),
   configSchema: ConfigSchema,
   authSchema: ScriptAuth,
-  permissions: z.array(ApiPermission),
+  permissions: z.array(z.string()),
   slug: z.string().optional().meta({
     description: 'Stable public key used in incoming webhook URLs. Generated on create when omitted.',
   }),
