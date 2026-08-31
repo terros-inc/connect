@@ -1,11 +1,11 @@
 import { type AccountWebhook, type AccountWebhookData, wrapConnectHandler } from '@terros-inc/sdk'
 import {
   createOpportunity,
+  findAssignedUserId,
   findOpportunity,
   findPipelineStage,
   getContact,
   getPipeline,
-  type GoHighLevelConfig,
   type GoHighLevelContact,
   type GoHighLevelContactInput,
   type GoHighLevelOpportunityInput,
@@ -13,7 +13,13 @@ import {
   updateOpportunity,
   upsertContact,
 } from './gohighlevel.ts'
-import { parseScriptConfig, resolveStageName, resolveTeamRoute } from './config.ts'
+import { resolveStageName, resolveTeamRoute } from './config.ts'
+
+type ScriptConfig = {
+  teamLocations: Record<string, string>
+  teamPipelines: Record<string, string>
+  contactFieldMappings: Record<string, string>
+}
 
 export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
   const payload = input.context.payload
@@ -26,17 +32,23 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
   if (!account.teamId) throw Error(`Terros account ${account.id} has no teamId`)
   if (!account.workflowStageName) throw Error(`Terros account ${account.id} has no workflow stage name`)
 
-  const scriptConfig = parseScriptConfig(input.context.config.scriptConfig)
+  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const apiKey = input.context.config.secrets.apiKey
   if (!apiKey) throw Error('Missing GoHighLevel apiKey')
 
-  const ghlConfig: GoHighLevelConfig = { apiKey }
   const route = resolveTeamRoute(scriptConfig, account.teamId)
-  const contactInput = toContactInput(account, route.locationId, scriptConfig)
-  const contact = await syncContact(ghlConfig, account.externalLeadId, contactInput)
+  const assignedTo = await findAssignedUserId(apiKey, route.locationId, account.owner?.email)
+  const contactInput = toContactInput(account, route.locationId, scriptConfig, assignedTo)
+  const contact = await syncContact(apiKey, account.externalLeadId, contactInput)
 
-  // if the externalLeadId is different then we probably shouldn't update it. I also believe that we use sourceId as well, as long as we're being consistent it shouldn't matter?
-  if (account.externalLeadId !== contact.id) {
+  // actually, looking at it, we looked it up by id, it should always be the same id right? this check should be redundant
+  if (account.externalLeadId && account.externalLeadId !== contact.id) {
+    throw Error(
+      `Terros account ${account.id} stores GoHighLevel contact ${account.externalLeadId}, but GoHighLevel returned ${contact.id}`
+    )
+  }
+
+  if (!account.externalLeadId) {
     await client.account.update({
       account: {
         accountId: account.id,
@@ -48,16 +60,14 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
     )
   }
 
-  const pipeline = await getPipeline(ghlConfig, route.locationId, route.pipelineId)
+  const pipeline = await getPipeline(apiKey, route.locationId, route.pipelineId)
   const stageName = resolveStageName(account.workflowStageName)
   const stage = findPipelineStage(pipeline, stageName)
-  const existingOpportunity = await findOpportunity(ghlConfig, route, contact.id)
-  // I don't think we want to force the installer to map every user to every GHL user, this is unscalable and is better served with team id/looking up the user
-  const assignedTo = account.ownerId ? scriptConfig.userMappings[account.ownerId] : undefined
+  const existingOpportunity = await findOpportunity(apiKey, route, contact.id)
   const opportunityInput = toOpportunityInput(account, route, contact.id, stage.id, assignedTo)
 
   if (!existingOpportunity) {
-    const createdOpportunity = await createOpportunity(ghlConfig, opportunityInput)
+    const createdOpportunity = await createOpportunity(apiKey, opportunityInput)
     console.log(
       `Created GoHighLevel opportunity ${createdOpportunity.id} for Terros account ${account.id}, team ${account.teamId}, location ${route.locationId}, pipeline ${route.pipelineId}, and stage ${stage.name}`
     )
@@ -71,21 +81,20 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
     return
   }
 
-  const updatedOpportunity = await updateOpportunity(ghlConfig, existingOpportunity.id, opportunityInput)
+  const updatedOpportunity = await updateOpportunity(apiKey, existingOpportunity.id, opportunityInput)
   console.log(
     `Updated GoHighLevel opportunity ${updatedOpportunity.id} for Terros account ${account.id}, and stage ${stage.name}`
   )
 })
 
 async function syncContact(
-  config: GoHighLevelConfig,
+  apiKey: string,
   contactId: string | undefined,
   contactInput: GoHighLevelContactInput
 ): Promise<GoHighLevelContact> {
-  if (!contactId) return upsertContact(config, contactInput)
+  if (!contactId) return upsertContact(apiKey, contactInput)
 
-  const existingContact = await getContact(config, contactId)
-  // pretty sure location id is a terros thing? we can't expect them to have the same location id that we do. have you looked at the GHL docs to make sure that everything we're calling is correct?
+  const existingContact = await getContact(apiKey, contactId)
   if (existingContact.locationId !== contactInput.locationId) {
     throw Error(
       `GoHighLevel contact ${contactId} belongs to location ${existingContact.locationId}, expected ${contactInput.locationId}`
@@ -93,25 +102,24 @@ async function syncContact(
   }
 
   const { locationId: _locationId, ...updatedContact } = contactInput
-  return updateContact(config, contactId, updatedContact)
+  return updateContact(apiKey, contactId, updatedContact)
 }
 
 function toContactInput(
   account: AccountWebhookData,
   locationId: string,
-  config: ReturnType<typeof parseScriptConfig>
+  config: ScriptConfig,
+  assignedTo: string | undefined
 ): GoHighLevelContactInput {
   const customFields = resolveCustomFields(account, config.contactFieldMappings)
-  const assignedTo = account.ownerId ? config.userMappings[account.ownerId] : undefined
 
-  // I refactored this a bit and I'm still not happy with constructing the object being passed into removeUndefinedValues inline
-  const contact = removeUndefinedValues({
+  const contact: GoHighLevelContactInput = {
     locationId,
-    firstName: toString(getObjectValue(account.homeowner, 'firstName')),
-    lastName: toString(getObjectValue(account.homeowner, 'lastName')),
-    name: toString(getObjectValue(account.homeowner, 'name')),
-    email: toString(getObjectValue(account.homeowner, 'email')),
-    phone: toString(getObjectValue(account.homeowner, 'phone')),
+    firstName: readTrimmedString(getObjectValue(account.homeowner || {}, 'firstName')),
+    lastName: readTrimmedString(getObjectValue(account.homeowner || {}, 'lastName')),
+    name: readTrimmedString(getObjectValue(account.homeowner || {}, 'name')),
+    email: readTrimmedString(getObjectValue(account.homeowner || {}, 'email')),
+    phone: readTrimmedString(getObjectValue(account.homeowner || {}, 'phone')),
     address1: account.location?.line1,
     city: account.location?.locality,
     state: account.location?.countrySubd,
@@ -119,8 +127,8 @@ function toContactInput(
     assignedTo,
     source: 'Terros',
     customFields: customFields.length ? customFields : undefined,
-  })
-  return contact
+  }
+  return removeUndefinedValues(contact)
 }
 
 function toOpportunityInput(
@@ -130,15 +138,18 @@ function toOpportunityInput(
   pipelineStageId: string,
   assignedTo: string | undefined
 ): GoHighLevelOpportunityInput {
+  // this is ridiculous for just getting a name. also why is this an array? just `${firstName} ${lastName}` call it a day
   const name =
-    [toString(getObjectValue(account.homeowner, 'firstName')), toString(getObjectValue(account.homeowner, 'lastName'))]
+    [
+      readTrimmedString(getObjectValue(account.homeowner || {}, 'firstName')),
+      readTrimmedString(getObjectValue(account.homeowner || {}, 'lastName')),
+    ]
       .filter(Boolean)
       .join(' ') ||
-    toString(getObjectValue(account.homeowner, 'name')) ||
+    readTrimmedString(getObjectValue(account.homeowner || {}, 'name')) ||
     `Terros Account ${account.id}`
 
-  // same as with above, don't like the inlined creation of the object. probably best to create the object then return removeUndefinedValues(obj)
-  return removeUndefinedValues({
+  const opportunity: GoHighLevelOpportunityInput = {
     locationId: route.locationId,
     pipelineId: route.pipelineId,
     pipelineStageId,
@@ -146,9 +157,11 @@ function toOpportunityInput(
     name,
     status: 'open',
     assignedTo,
-  })
+  }
+  return removeUndefinedValues(opportunity)
 }
 
+// everything from here down needs explaining on what it's doing. it's impossible to read what it's doing and best I can tell it's just fancy useless code
 function resolveCustomFields(
   account: AccountWebhookData,
   mappings: Record<string, string>
@@ -162,29 +175,25 @@ function resolveCustomFields(
 
 function resolveAccountField(account: AccountWebhookData, field: string): unknown {
   if (field.startsWith('CF.')) {
-    return getObjectValue(account.customFields, field)
+    return getObjectValue(account.customFields || {}, field)
   }
 
-  // why are we replacing parts of the string? not entirely sure what the purpose of this entire function is tbh
-  const normalizedField = field.replace(/^(account|payload|data)\./, '')
-  return normalizedField.split('.').reduce<unknown>((value, key) => {
+  return field.split('.').reduce<unknown>((value, key) => {
     return getObjectValue(value, key)
   }, account)
 }
 
-// not sure I like this function, it's better to assume it's an object and accept the error that would rightfully be thrown when it isn't
 function getObjectValue(value: unknown, key: string): unknown {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return
-  return Object.entries(value).find(([entryKey]) => entryKey === key)?.[1]
+  if (typeof value !== 'object' || value === null) throw Error(`Cannot read ${key} from a non-object account field`)
+  return Reflect.get(value, key)
 }
 
-// don't call it toString if it's not making anything a string. make it part of a more generic removeUndefined if it's going to just be doing this
-function toString(value: unknown): string | undefined {
+function readTrimmedString(value: unknown): string | undefined {
   if (typeof value !== 'string') return
   const trimmed = value.trim()
   return trimmed || undefined
 }
 
-function removeUndefinedValues<T extends Record<string, unknown>>(value: T): T {
+function removeUndefinedValues<T extends object>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T
 }

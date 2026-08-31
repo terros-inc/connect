@@ -1,8 +1,3 @@
-// this time can be removed now probably since it's just an apiKey. not entirely sure why it's has it's own type to begin with
-export type GoHighLevelConfig = {
-  apiKey: string
-}
-
 export type GoHighLevelContact = {
   id: string
   locationId: string
@@ -53,18 +48,25 @@ export type GoHighLevelOpportunityInput = {
   assignedTo?: string
 }
 
-const baseUrl = 'https://services.leadconnectorhq.com'
+type GoHighLevelLocation = {
+  id: string
+  companyId: string
+}
 
-export async function getContact(config: GoHighLevelConfig, contactId: string): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(config, `/contacts/${contactId}`)
+type GoHighLevelUser = {
+  id: string
+  email?: string
+}
+
+const baseUrl = 'https://services.leadconnectorhq.com' // why do we have a base url here? this seems to be company specfic and should be config only in that case
+
+export async function getContact(apiKey: string, contactId: string): Promise<GoHighLevelContact> {
+  const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, `/contacts/${contactId}`)
   return response.contact
 }
 
-export async function upsertContact(
-  config: GoHighLevelConfig,
-  contact: GoHighLevelContactInput
-): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(config, '/contacts/upsert', {
+export async function upsertContact(apiKey: string, contact: GoHighLevelContactInput): Promise<GoHighLevelContact> {
+  const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, '/contacts/upsert', {
     method: 'POST',
     body: JSON.stringify(contact),
   })
@@ -72,11 +74,11 @@ export async function upsertContact(
 }
 
 export async function updateContact(
-  config: GoHighLevelConfig,
+  apiKey: string,
   contactId: string,
   contact: Omit<GoHighLevelContactInput, 'locationId'>
 ): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(config, `/contacts/${contactId}`, {
+  const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, `/contacts/${contactId}`, {
     method: 'PUT',
     body: JSON.stringify(contact),
   })
@@ -84,19 +86,48 @@ export async function updateContact(
 }
 
 export async function getPipeline(
-  config: GoHighLevelConfig,
+  apiKey: string,
   locationId: string,
   pipelineId: string
 ): Promise<GoHighLevelPipeline> {
   const search = new URLSearchParams({ locationId })
-  const response = await ghlApi<{ pipelines: GoHighLevelPipeline[] }>(config, `/opportunities/pipelines?${search}`)
-  const pipelines = response.pipelines.filter((pipeline) => pipeline.id === pipelineId)
-  // just grabbing the first in the list isn't great, we need a better way to find which one
-  const pipeline = pipelines[0]
-  if (pipelines.length !== 1 || !pipeline) {
-    throw Error(`Expected one GoHighLevel pipeline ${pipelineId} in location ${locationId}, found ${pipelines.length}`)
-  }
+  const response = await ghlApi<{ pipelines: GoHighLevelPipeline[] }>(apiKey, `/opportunities/pipelines?${search}`)
+  const pipeline = response.pipelines.find((candidate) => candidate.id === pipelineId)
+  if (!pipeline) throw Error(`GoHighLevel pipeline ${pipelineId} was not found in location ${locationId}`)
   return pipeline
+}
+
+export async function findAssignedUserId(
+  apiKey: string,
+  locationId: string,
+  ownerEmail: string | undefined
+): Promise<string | undefined> {
+  if (!ownerEmail) return
+
+  const locationResponse = await ghlApi<{ location: GoHighLevelLocation }>(apiKey, `/locations/${locationId}`)
+  const search = new URLSearchParams({
+    companyId: locationResponse.location.companyId,
+    locationId,
+    query: ownerEmail,
+    limit: '2',
+  })
+  const response = await ghlApi<{ users: GoHighLevelUser[] }>(apiKey, `/users/search?${search}`)
+  const normalizedOwnerEmail = normalizeName(ownerEmail)
+  const matchingUsers = response.users.filter(
+    (user) => user.email && normalizeName(user.email) === normalizedOwnerEmail
+  )
+
+  if (matchingUsers.length > 1) {
+    throw Error(`Multiple GoHighLevel users matched the Terros account owner in location ${locationId}`)
+  }
+
+  const matchingUser = matchingUsers[0]
+  if (!matchingUser) {
+    console.log(`No GoHighLevel user matched the Terros account owner in location ${locationId}`)
+    return
+  }
+
+  return matchingUser.id
 }
 
 export function findPipelineStage(pipeline: GoHighLevelPipeline, stageName: string): GoHighLevelPipelineStage {
@@ -121,7 +152,7 @@ export function getPipelineStageName(pipeline: GoHighLevelPipeline, stageId: str
 }
 
 export async function findOpportunity(
-  config: GoHighLevelConfig,
+  apiKey: string,
   route: { locationId: string; pipelineId: string },
   contactId: string
 ): Promise<GoHighLevelOpportunity | undefined> {
@@ -132,7 +163,7 @@ export async function findOpportunity(
     status: 'all',
     limit: '2',
   })
-  const response = await ghlApi<{ opportunities: GoHighLevelOpportunity[] }>(config, `/opportunities/search?${search}`)
+  const response = await ghlApi<{ opportunities: GoHighLevelOpportunity[] }>(apiKey, `/opportunities/search?${search}`)
   if (response.opportunities.length > 1) {
     throw Error(`Multiple GoHighLevel opportunities found for contact ${contactId} in pipeline ${route.pipelineId}`)
   }
@@ -140,10 +171,10 @@ export async function findOpportunity(
 }
 
 export async function createOpportunity(
-  config: GoHighLevelConfig,
+  apiKey: string,
   opportunity: GoHighLevelOpportunityInput
 ): Promise<GoHighLevelOpportunity> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(config, '/opportunities/', {
+  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(apiKey, '/opportunities/', {
     method: 'POST',
     body: JSON.stringify(opportunity),
   })
@@ -151,24 +182,25 @@ export async function createOpportunity(
 }
 
 export async function updateOpportunity(
-  config: GoHighLevelConfig,
+  apiKey: string,
   opportunityId: string,
   opportunity: Pick<GoHighLevelOpportunityInput, 'pipelineId' | 'pipelineStageId' | 'name' | 'status' | 'assignedTo'>
 ): Promise<GoHighLevelOpportunity> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(config, `/opportunities/${opportunityId}`, {
+  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(apiKey, `/opportunities/${opportunityId}`, {
     method: 'PUT',
     body: JSON.stringify(opportunity),
   })
   return response.opportunity
 }
 
-async function ghlApi<T>(config: GoHighLevelConfig, path: string, init: RequestInit = {}): Promise<T> {
+async function ghlApi<T>(apiKey: string, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
     headers: {
       Accept: 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
+      Version: 'v3',
       ...init.headers,
     },
   })

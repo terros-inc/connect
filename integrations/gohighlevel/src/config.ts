@@ -1,13 +1,5 @@
 import type { TeamId, WorkflowId } from '@terros-inc/sdk'
 
-export type ScriptConfig = {
-  teamLocations: Record<string, string>
-  teamPipelines: Record<string, string>
-  teamWorkflows: Record<string, string>
-  userMappings: Record<string, string>
-  contactFieldMappings: Record<string, string>
-}
-
 export type TeamRoute = {
   teamId: TeamId
   locationId: string
@@ -18,19 +10,10 @@ export type IncomingTeamRoute = TeamRoute & {
   workflowId: WorkflowId
 }
 
-export function parseScriptConfig(value: unknown): ScriptConfig {
-  const config = isRecord(value) ? value : {}
-  return {
-    teamLocations: readMapping(config.teamLocations),
-    teamPipelines: readMapping(config.teamPipelines),
-    teamWorkflows: readMapping(config.teamWorkflows),
-    userMappings: readMapping(config.userMappings),
-    contactFieldMappings: readMapping(config.contactFieldMappings),
-  }
-}
-
-// seriously considering adding nested objects to the mapping schema, just for this. just noting that this might be greatly simplified/removed in the future
-export function resolveTeamRoute(config: ScriptConfig, teamId: TeamId): TeamRoute {
+export function resolveTeamRoute(
+  config: { teamLocations: Record<string, string>; teamPipelines: Record<string, string> },
+  teamId: TeamId
+): TeamRoute {
   const locationId = config.teamLocations[teamId]
   const pipelineId = config.teamPipelines[teamId]
 
@@ -41,7 +24,11 @@ export function resolveTeamRoute(config: ScriptConfig, teamId: TeamId): TeamRout
 }
 
 export function resolveIncomingTeamRoute(
-  config: ScriptConfig,
+  config: {
+    teamLocations: Record<string, string>
+    teamPipelines: Record<string, string>
+    teamWorkflows: Record<string, string>
+  },
   locationId: string,
   pipelineId: string
 ): IncomingTeamRoute | undefined {
@@ -67,18 +54,6 @@ export function resolveIncomingTeamRoute(
 
 export function resolveStageName(sourceStageName: string): string {
   return sourceStageName.trim()
-}
-
-// this function should be entirely unnecessary because config is enforced from the install, I see no purpose in keeping something that will only make bad configs fail quieter
-function readMapping(value: unknown): Record<string, string> {
-  if (!isRecord(value)) return {}
-
-  const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-  return Object.fromEntries(entries)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isTeamId(value: string): value is TeamId {

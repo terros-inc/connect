@@ -6,8 +6,14 @@ import {
   type WorkflowId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { getPipeline, getPipelineStageName, type GoHighLevelConfig } from './gohighlevel.ts'
-import { parseScriptConfig, resolveIncomingTeamRoute, resolveStageName } from './config.ts'
+import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
+import { resolveIncomingTeamRoute, resolveStageName } from './config.ts'
+
+type ScriptConfig = {
+  teamLocations: Record<string, string>
+  teamPipelines: Record<string, string>
+  teamWorkflows: Record<string, string>
+}
 
 type OpportunityStageUpdate = {
   type?: string
@@ -20,19 +26,19 @@ type OpportunityStageUpdate = {
 
 export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, client) => {
   const payload = input.context.payload
-  // note sure I like this check, would love to see a justification for it
   if (payload.type !== 'OpportunityStageUpdate') {
     console.log(`Skipping unsupported GoHighLevel webhook type ${payload.type || '(missing)'}`)
     return
   }
 
   const { locationId, pipelineId, pipelineStageId, contactId } = payload
-  // split this out into individual checks with more specific messages
-  if (!locationId || !pipelineId || !pipelineStageId || !contactId) {
-    throw Error('GoHighLevel OpportunityStageUpdate is missing locationId, pipelineId, pipelineStageId, or contactId')
-  }
+  if (!locationId) throw Error('GoHighLevel OpportunityStageUpdate is missing locationId')
+  if (!pipelineId) throw Error('GoHighLevel OpportunityStageUpdate is missing pipelineId')
+  if (!pipelineStageId) throw Error('GoHighLevel OpportunityStageUpdate is missing pipelineStageId')
+  if (!contactId) throw Error('GoHighLevel OpportunityStageUpdate is missing contactId')
 
-  const scriptConfig = parseScriptConfig(input.context.config.scriptConfig)
+  // there are several other integrations using mappings without using as unkown as Mapping types, can you see what those are doing differently?
+  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const route = resolveIncomingTeamRoute(scriptConfig, locationId, pipelineId)
   if (!route) {
     console.log(`Skipping unconfigured GoHighLevel location ${locationId} and pipeline ${pipelineId}`)
@@ -41,8 +47,7 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
 
   const apiKey = input.context.config.secrets.apiKey
   if (!apiKey) throw Error('Missing GoHighLevel apiKey')
-  const ghlConfig: GoHighLevelConfig = { apiKey }
-  const pipeline = await getPipeline(ghlConfig, locationId, pipelineId)
+  const pipeline = await getPipeline(apiKey, locationId, pipelineId)
   const stageName = getPipelineStageName(pipeline, pipelineStageId)
   const workflowTarget = resolveStageName(stageName)
 

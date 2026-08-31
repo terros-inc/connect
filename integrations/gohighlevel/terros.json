@@ -20,12 +20,6 @@
           "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
         },
         {
-          "name": "userMappings",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Optional mapping from Terros user ID to GoHighLevel user ID"
-        },
-        {
           "name": "contactFieldMappings",
           "type": "mapping",
           "dataType": "Account",
