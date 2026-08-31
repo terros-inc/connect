@@ -1,11 +1,8 @@
+import { ghlApi, normalizeName, type GoHighLevelCustomField } from './util.ts'
+
 export type GoHighLevelContact = {
   id: string
   locationId: string
-}
-
-export type GoHighLevelCustomField = {
-  id: string
-  fieldValue: string | number | boolean
 }
 
 export type GoHighLevelContactInput = {
@@ -84,8 +81,6 @@ type GoHighLevelUser = {
   id: string
   email?: string
 }
-
-const baseUrl = 'https://services.leadconnectorhq.com'
 
 export async function getContact(apiKey: string, contactId: string): Promise<GoHighLevelContact> {
   const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, `/contacts/${contactId}`)
@@ -239,28 +234,4 @@ export async function updateAppointment(
     method: 'PUT',
     body: JSON.stringify(appointment),
   })
-}
-
-async function ghlApi<T>(apiKey: string, path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      Version: 'v3',
-      ...init.headers,
-    },
-  })
-
-  if (!response.ok) {
-    const body = (await response.text()).slice(0, 1000)
-    throw Error(`GoHighLevel request failed: ${response.status} ${response.statusText} ${body}`)
-  }
-
-  return response.json() as Promise<T>
-}
-
-function normalizeName(value: string): string {
-  return value.trim().toLocaleLowerCase()
 }

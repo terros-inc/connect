@@ -1,4 +1,4 @@
-import { type AccountWebhook, type AccountWebhookData, type CustomFieldId, wrapConnectHandler } from '@terros-inc/sdk'
+import { type AccountWebhook, type AccountWebhookData, wrapConnectHandler } from '@terros-inc/sdk'
 import {
   createOpportunity,
   findAssignedUserId,
@@ -8,22 +8,18 @@ import {
   getPipeline,
   type GoHighLevelContact,
   type GoHighLevelContactInput,
-  type GoHighLevelCustomField,
   type GoHighLevelOpportunityInput,
   updateContact,
   updateOpportunity,
   upsertContact,
 } from './gohighlevel.ts'
 import { resolveStageName, resolveTeamRoute } from './config.ts'
+import { readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
 
 type ScriptConfig = {
   teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
   contactFieldMappings: Record<string, string>
-}
-
-type AccountFieldSource = {
-  customFields?: AccountWebhookData['customFields']
 }
 
 export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
@@ -151,52 +147,4 @@ function toOpportunityInput(
     assignedTo,
   }
   return opportunity
-}
-
-export function toGoHighLevelCustomFields(
-  account: AccountFieldSource,
-  mappings: Record<string, string>
-): GoHighLevelCustomField[] {
-  const goHighLevelCustomFields: GoHighLevelCustomField[] = []
-
-  for (const [terrosAccountField, goHighLevelCustomFieldId] of Object.entries(mappings)) {
-    const fieldValue = getAccountFieldValue(account, terrosAccountField)
-    if (fieldValue === undefined || fieldValue === null) continue
-
-    switch (typeof fieldValue) {
-      case 'string':
-      case 'number':
-      case 'boolean':
-        goHighLevelCustomFields.push({ id: goHighLevelCustomFieldId, fieldValue })
-        break
-      default:
-        throw Error(`Cannot send non-primitive Terros field ${terrosAccountField} to a GoHighLevel custom field`)
-    }
-  }
-
-  return goHighLevelCustomFields
-}
-
-function getAccountFieldValue(account: AccountFieldSource, field: string): unknown {
-  if (isCustomFieldId(field)) return account.customFields?.[field]
-
-  const accountField = field.startsWith('account.') ? field.slice('account.'.length) : field
-  let fieldValue: unknown = account
-
-  for (const key of accountField.split('.')) {
-    if (typeof fieldValue !== 'object' || fieldValue === null) return
-    fieldValue = Reflect.get(fieldValue, key)
-  }
-
-  return fieldValue
-}
-
-function isCustomFieldId(field: string): field is CustomFieldId {
-  return field.startsWith('CF.')
-}
-
-function readTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== 'string') return
-  const trimmed = value.trim()
-  return trimmed || undefined
 }
