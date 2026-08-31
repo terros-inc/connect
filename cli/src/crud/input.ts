@@ -1,16 +1,18 @@
 import type { ParsedArgs } from 'minimist'
+import { getEndpointParameters } from './parameters'
 import type { Endpoint, EndpointParameter } from './endpoint'
 
 export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): object {
+  const parameters = getEndpointParameters(endpoint.properties, endpoint.components)
   const parsedParams = flattenParsedArgs(params)
   const providedParameterNames = Object.keys(parsedParams)
-  const knownParameterNames = new Set(endpoint.parameters.map((parameter) => parameter.name))
+  const knownParameterNames = new Set(parameters.map((parameter) => parameter.name))
   const unknownParameterNames = providedParameterNames.filter((name) => !knownParameterNames.has(name))
   if (unknownParameterNames.length > 0) {
     throw new Error(`Unknown parameter(s): ${unknownParameterNames.map((name) => `--${name}`).join(', ')}`)
   }
 
-  const missingParameters = endpoint.parameters.filter(
+  const missingParameters = parameters.filter(
     (parameter) => parameter.required && !Object.hasOwn(parsedParams, parameter.name)
   )
   if (missingParameters.length > 0) {
@@ -22,7 +24,7 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): obje
   const input: Record<string, unknown> = {}
   const prefix = getHiddenWrapperPrefix(endpoint)
 
-  for (const parameter of endpoint.parameters) {
+  for (const parameter of parameters) {
     if (!Object.hasOwn(parsedParams, parameter.name)) continue
 
     const value = parseParameterValue(parsedParams[parameter.name], parameter)

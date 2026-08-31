@@ -21,6 +21,12 @@ After installation, verify that the `terros` command is available:
 terros help
 ```
 
+Print the installed CLI version with:
+
+```sh
+terros -v
+```
+
 ## Sign In
 
 Authenticate before running Terros API commands:
@@ -62,6 +68,13 @@ Show parameters for a subcommand:
 
 ```sh
 terros <command> <subcommand> help
+```
+
+Use `--depth` to show additional nested object type detail. The default depth is
+one layer:
+
+```sh
+terros <command> <subcommand> help --depth 2
 ```
 
 ## Run a Command

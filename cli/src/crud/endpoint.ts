@@ -13,7 +13,6 @@ export type Endpoint = {
   description?: string
   properties: Schema
   components: Components
-  parameters: EndpointParameter[]
 }
 
 export type Endpoints = {
