@@ -8,13 +8,6 @@ describe('buildEndpointInput', () => {
     const endpoint: Endpoint = {
       path: '/user/profile',
       components: { schemas: {} },
-      parameters: [
-        {
-          name: 'userId',
-          type: 'string',
-          required: false,
-        },
-      ],
       properties: {
         type: 'object',
         properties: {
@@ -42,13 +35,6 @@ describe('buildEndpointInput', () => {
     const endpoint: Endpoint = {
       path: '/user/profile',
       components: { schemas: {} },
-      parameters: [
-        {
-          name: 'userId',
-          type: 'string',
-          required: false,
-        },
-      ],
       properties: {
         type: 'object',
         properties: {

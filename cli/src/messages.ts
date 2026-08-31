@@ -17,6 +17,7 @@ export function formatCommandsHelp(commands: string[]): string {
     ...commands.map((command) => `  ${command}`),
     '',
     `Run "terros <command> help" to see subcommands.`,
+    `Run "terros --version" to print the installed CLI version.`,
   ]
 
   return lines.join('\n')
@@ -39,7 +40,8 @@ export function formatSubcommandParametersHelp(
   command: string,
   subcommand: string,
   parameters: EndpointParameter[],
-  description?: string
+  description?: string,
+  showDepthHelp = false
 ): string {
   const lines = [`usage: terros ${command} ${subcommand} [parameters]`, '']
 
@@ -49,20 +51,21 @@ export function formatSubcommandParametersHelp(
 
   if (parameters.length === 0) {
     lines.push('  none')
-    return lines.join('\n')
+  } else {
+    const labelWidth = Math.max('type'.length, 'required'.length, 'description'.length)
+
+    parameters.forEach((parameter, index) => {
+      if (index > 0) lines.push('')
+      lines.push(
+        `  --${parameter.name}`,
+        `    ${'type'.padEnd(labelWidth)}  ${parameter.type}`,
+        `    ${'required'.padEnd(labelWidth)}  ${parameter.required ? 'yes' : 'no'}`
+      )
+      if (parameter.description) lines.push(`    ${'description'.padEnd(labelWidth)}  ${parameter.description}`)
+    })
   }
 
-  const labelWidth = Math.max('type'.length, 'required'.length, 'description'.length)
-
-  parameters.forEach((parameter, index) => {
-    if (index > 0) lines.push('')
-    lines.push(
-      `  --${parameter.name}`,
-      `    ${'type'.padEnd(labelWidth)}  ${parameter.type}`,
-      `    ${'required'.padEnd(labelWidth)}  ${parameter.required ? 'yes' : 'no'}`
-    )
-    if (parameter.description) lines.push(`    ${'description'.padEnd(labelWidth)}  ${parameter.description}`)
-  })
+  if (showDepthHelp) lines.push('', `Use "--depth <number>" to control nested object type detail.`)
 
   return lines.join('\n')
 }

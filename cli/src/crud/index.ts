@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { getPathParts } from './util'
 import type { OpenAPISchema } from './types'
-import { getEndpointParameters } from './parameters'
 import type { EndpointGroups } from './endpoint'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -31,7 +30,6 @@ export function loadEndpoints(): EndpointGroups {
       description: config.post.description ?? config.post.summary,
       properties: schema,
       components: data.components,
-      parameters: getEndpointParameters(schema, data.components),
     }
   })
 

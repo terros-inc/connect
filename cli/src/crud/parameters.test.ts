@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import type { Schema } from './types'
-import { getEndpointParameters } from './parameters'
+import { getEndpointParameters, type Components } from './parameters'
 
 describe('getEndpointParameters', () => {
   it('formats an OpenAPI 3.1 tuple defined with prefixItems', () => {
@@ -69,6 +69,49 @@ describe('getEndpointParameters', () => {
       {
         name: 'accumulator',
         type: '"total" | "average"',
+        required: false,
+      },
+    ])
+  })
+
+  it('limits recursive array item types to the requested depth', () => {
+    const schema: Schema = {
+      type: 'object',
+      properties: {
+        items: {
+          $ref: '#/components/schemas/RecursiveItems',
+        },
+      },
+    }
+
+    const components: Components = {
+      schemas: {
+        RecursiveItems: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              children: {
+                $ref: '#/components/schemas/RecursiveItems',
+              },
+            },
+          },
+        },
+      },
+    }
+
+    expect(getEndpointParameters(schema, components)).toEqual([
+      {
+        name: 'items',
+        type: '{ children?: object[] }[]',
+        required: false,
+      },
+    ])
+
+    expect(getEndpointParameters(schema, components, 2)).toEqual([
+      {
+        name: 'items',
+        type: '{ children?: { children?: object[] }[] }[]',
         required: false,
       },
     ])

@@ -1,18 +1,27 @@
 import minimist from 'minimist'
+import packageJson from '../package.json'
 import {
   formatCommandsHelp,
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
-import { getEndpointParameters } from './crud/parameters'
+import { DEFAULT_TYPE_DEPTH, getEndpointParameters } from './crud/parameters'
 import { buildEndpointInput } from './crud/input'
 import { loadEndpoints } from './crud'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
 import { buildTerrosClient } from './api/query'
 
 async function main(): Promise<void> {
-  const params = minimist(process.argv.slice(2))
+  const params = minimist(process.argv.slice(2), {
+    alias: { v: 'version' },
+    boolean: ['version'],
+  })
+  if (params.version) {
+    console.log(packageJson.version)
+    return
+  }
+
   const commands = params._
   if (commands.length === 0) {
     console.log(HELP_PARENT_MESSAGE)
@@ -26,7 +35,7 @@ async function main(): Promise<void> {
   }
 
   if (commands.at(-1) === 'help') {
-    showHelp(commands, requestedAlias)
+    showHelp(commands, requestedAlias, params.depth)
     return
   }
 
@@ -83,7 +92,7 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(response, null, 2))
 }
 
-function showHelp(commands: string[], requestedAlias: string): void {
+function showHelp(commands: string[], requestedAlias: string, requestedDepth: unknown): void {
   const commandGroup = getCommandGroup(requestedAlias)
   if (commandGroup) {
     const subcommand = commands.at(1)
@@ -103,9 +112,10 @@ function showHelp(commands: string[], requestedAlias: string): void {
     if (subcommand && commands.length >= 3) {
       const requestedSubcommand = endpoint[subcommand]
       if (requestedSubcommand) {
-        const parameters = getEndpointParameters(requestedSubcommand.properties, requestedSubcommand.components)
+        const depth = getHelpDepth(requestedDepth)
+        const parameters = getEndpointParameters(requestedSubcommand.properties, requestedSubcommand.components, depth)
         console.log(
-          formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedSubcommand.description)
+          formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedSubcommand.description, true)
         )
         return
       }
@@ -117,6 +127,15 @@ function showHelp(commands: string[], requestedAlias: string): void {
 
   const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
   console.log(formatCommandsHelp(commandList))
+}
+
+function getHelpDepth(requestedDepth: unknown): number {
+  if (requestedDepth === undefined) return DEFAULT_TYPE_DEPTH
+  if (typeof requestedDepth !== 'number' || !Number.isInteger(requestedDepth) || requestedDepth < 0) {
+    throw new Error('--depth must be a non-negative integer')
+  }
+
+  return requestedDepth
 }
 
 main().catch((error: unknown) => {
