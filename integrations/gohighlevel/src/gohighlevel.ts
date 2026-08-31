@@ -38,6 +38,8 @@ export type GoHighLevelOpportunity = {
   locationId: string
   pipelineId: string
   pipelineStageId?: string
+  name?: string
+  assignedTo?: string
 }
 
 export type GoHighLevelOpportunityInput = {
@@ -72,6 +74,12 @@ export type GoHighLevelAppointmentInput = {
   ignoreFreeSlotValidation: true
 }
 
+export type GoHighLevelAppointmentUpdate = Partial<
+  Omit<GoHighLevelAppointmentInput, 'locationId' | 'contactId' | 'appointmentStatus'>
+> & {
+  appointmentStatus?: 'confirmed' | 'cancelled'
+}
+
 type GoHighLevelLocation = {
   id: string
   companyId: string
@@ -82,13 +90,16 @@ type GoHighLevelUser = {
   email?: string
 }
 
-export async function getContact(apiKey: string, contactId: string): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, `/contacts/${contactId}`)
+export async function getContact(accessToken: string, contactId: string): Promise<GoHighLevelContact> {
+  const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${contactId}`)
   return response.contact
 }
 
-export async function upsertContact(apiKey: string, contact: GoHighLevelContactInput): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, '/contacts/upsert', {
+export async function upsertContact(
+  accessToken: string,
+  contact: GoHighLevelContactInput
+): Promise<GoHighLevelContact> {
+  const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, '/contacts/upsert', {
     method: 'POST',
     body: JSON.stringify(contact),
   })
@@ -96,11 +107,11 @@ export async function upsertContact(apiKey: string, contact: GoHighLevelContactI
 }
 
 export async function updateContact(
-  apiKey: string,
+  accessToken: string,
   contactId: string,
   contact: Omit<GoHighLevelContactInput, 'locationId'>
 ): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, `/contacts/${contactId}`, {
+  const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${contactId}`, {
     method: 'PUT',
     body: JSON.stringify(contact),
   })
@@ -108,32 +119,32 @@ export async function updateContact(
 }
 
 export async function getPipeline(
-  apiKey: string,
+  accessToken: string,
   locationId: string,
   pipelineId: string
 ): Promise<GoHighLevelPipeline> {
   const search = new URLSearchParams({ locationId })
-  const response = await ghlApi<{ pipelines: GoHighLevelPipeline[] }>(apiKey, `/opportunities/pipelines?${search}`)
+  const response = await ghlApi<{ pipelines: GoHighLevelPipeline[] }>(accessToken, `/opportunities/pipelines?${search}`)
   const pipeline = response.pipelines.find((candidate) => candidate.id === pipelineId)
   if (!pipeline) throw Error(`GoHighLevel pipeline ${pipelineId} was not found in location ${locationId}`)
   return pipeline
 }
 
 export async function findAssignedUserId(
-  apiKey: string,
+  accessToken: string,
   locationId: string,
   ownerEmail: string | undefined
 ): Promise<string | undefined> {
   if (!ownerEmail) return
 
-  const locationResponse = await ghlApi<{ location: GoHighLevelLocation }>(apiKey, `/locations/${locationId}`)
+  const locationResponse = await ghlApi<{ location: GoHighLevelLocation }>(accessToken, `/locations/${locationId}`)
   const search = new URLSearchParams({
     companyId: locationResponse.location.companyId,
     locationId,
     query: ownerEmail,
     limit: '2',
   })
-  const response = await ghlApi<{ users: GoHighLevelUser[] }>(apiKey, `/users/search?${search}`)
+  const response = await ghlApi<{ users: GoHighLevelUser[] }>(accessToken, `/users/search?${search}`)
   const normalizedOwnerEmail = normalizeName(ownerEmail)
   const matchingUsers = response.users.filter(
     (user) => user.email && normalizeName(user.email) === normalizedOwnerEmail
@@ -173,8 +184,17 @@ export function getPipelineStageName(pipeline: GoHighLevelPipeline, stageId: str
   return stage.name
 }
 
+export function opportunityNeedsUpdate(
+  opportunity: GoHighLevelOpportunity,
+  input: Pick<GoHighLevelOpportunityInput, 'pipelineStageId' | 'name' | 'assignedTo'>
+): boolean {
+  if (opportunity.pipelineStageId !== input.pipelineStageId) return true
+  if (opportunity.name !== input.name) return true
+  return input.assignedTo !== undefined && opportunity.assignedTo !== input.assignedTo
+}
+
 export async function findOpportunity(
-  apiKey: string,
+  accessToken: string,
   route: { locationId: string; pipelineId: string },
   contactId: string
 ): Promise<GoHighLevelOpportunity | undefined> {
@@ -185,7 +205,10 @@ export async function findOpportunity(
     status: 'all',
     limit: '2',
   })
-  const response = await ghlApi<{ opportunities: GoHighLevelOpportunity[] }>(apiKey, `/opportunities/search?${search}`)
+  const response = await ghlApi<{ opportunities: GoHighLevelOpportunity[] }>(
+    accessToken,
+    `/opportunities/search?${search}`
+  )
   if (response.opportunities.length > 1) {
     throw Error(`Multiple GoHighLevel opportunities found for contact ${contactId} in pipeline ${route.pipelineId}`)
   }
@@ -193,10 +216,10 @@ export async function findOpportunity(
 }
 
 export async function createOpportunity(
-  apiKey: string,
+  accessToken: string,
   opportunity: GoHighLevelOpportunityInput
 ): Promise<GoHighLevelOpportunity> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(apiKey, '/opportunities/', {
+  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
     method: 'POST',
     body: JSON.stringify(opportunity),
   })
@@ -204,33 +227,37 @@ export async function createOpportunity(
 }
 
 export async function updateOpportunity(
-  apiKey: string,
+  accessToken: string,
   opportunityId: string,
   opportunity: Pick<GoHighLevelOpportunityInput, 'pipelineId' | 'pipelineStageId' | 'name' | 'status' | 'assignedTo'>
 ): Promise<GoHighLevelOpportunity> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(apiKey, `/opportunities/${opportunityId}`, {
-    method: 'PUT',
-    body: JSON.stringify(opportunity),
-  })
+  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
+    accessToken,
+    `/opportunities/${opportunityId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(opportunity),
+    }
+  )
   return response.opportunity
 }
 
 export async function createAppointment(
-  apiKey: string,
+  accessToken: string,
   appointment: GoHighLevelAppointmentInput
 ): Promise<GoHighLevelAppointment> {
-  return await ghlApi<GoHighLevelAppointment>(apiKey, '/calendars/events/appointments', {
+  return await ghlApi<GoHighLevelAppointment>(accessToken, '/calendars/events/appointments', {
     method: 'POST',
     body: JSON.stringify(appointment),
   })
 }
 
 export async function updateAppointment(
-  apiKey: string,
+  accessToken: string,
   appointmentId: string,
-  appointment: Omit<GoHighLevelAppointmentInput, 'locationId' | 'contactId'>
+  appointment: GoHighLevelAppointmentUpdate
 ): Promise<GoHighLevelAppointment> {
-  return await ghlApi<GoHighLevelAppointment>(apiKey, `/calendars/events/appointments/${appointmentId}`, {
+  return await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${appointmentId}`, {
     method: 'PUT',
     body: JSON.stringify(appointment),
   })

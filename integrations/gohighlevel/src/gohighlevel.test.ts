@@ -1,4 +1,10 @@
-import { findPipelineStage, getPipelineStageName, type GoHighLevelPipeline } from './gohighlevel.ts'
+import {
+  findPipelineStage,
+  getPipelineStageName,
+  opportunityNeedsUpdate,
+  type GoHighLevelOpportunity,
+  type GoHighLevelPipeline,
+} from './gohighlevel.ts'
 
 describe('GoHighLevel pipeline stages', () => {
   const pipeline: GoHighLevelPipeline = {
@@ -20,5 +26,47 @@ describe('GoHighLevel pipeline stages', () => {
 
   test('rejects a missing stage', () => {
     expect(() => findPipelineStage(pipeline, 'Installed')).toThrow('Expected one stage named')
+  })
+})
+
+describe('GoHighLevel opportunities', () => {
+  const opportunity: GoHighLevelOpportunity = {
+    id: 'opportunity-1',
+    contactId: 'contact-1',
+    locationId: 'location-1',
+    pipelineId: 'pipeline-1',
+    pipelineStageId: 'stage-1',
+    name: 'Jane Homeowner',
+    assignedTo: 'user-1',
+  }
+
+  test('updates when the name changes without a stage change', () => {
+    expect(
+      opportunityNeedsUpdate(opportunity, {
+        pipelineStageId: 'stage-1',
+        name: 'Jane Customer',
+        assignedTo: 'user-1',
+      })
+    ).toBe(true)
+  })
+
+  test('updates when the owner changes without a stage change', () => {
+    expect(
+      opportunityNeedsUpdate(opportunity, {
+        pipelineStageId: 'stage-1',
+        name: 'Jane Homeowner',
+        assignedTo: 'user-2',
+      })
+    ).toBe(true)
+  })
+
+  test('skips an unchanged opportunity', () => {
+    expect(
+      opportunityNeedsUpdate(opportunity, {
+        pipelineStageId: 'stage-1',
+        name: 'Jane Homeowner',
+        assignedTo: 'user-1',
+      })
+    ).toBe(false)
   })
 })

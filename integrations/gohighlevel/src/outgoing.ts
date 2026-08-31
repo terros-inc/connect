@@ -1,4 +1,5 @@
 import { type AccountWebhook, type AccountWebhookData, wrapConnectHandler } from '@terros-inc/sdk'
+import { getLocationAccessToken, readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
 import {
   createOpportunity,
   findAssignedUserId,
@@ -6,6 +7,7 @@ import {
   findPipelineStage,
   getContact,
   getPipeline,
+  opportunityNeedsUpdate,
   type GoHighLevelContact,
   type GoHighLevelContactInput,
   type GoHighLevelOpportunityInput,
@@ -14,9 +16,9 @@ import {
   upsertContact,
 } from './gohighlevel.ts'
 import { resolveStageName, resolveTeamRoute } from './config.ts'
-import { readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
 
 type ScriptConfig = {
+  goHighLevelCompanyId: string
   teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
   contactFieldMappings: Record<string, string>
@@ -34,13 +36,18 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
   if (!account.workflowStageName) throw Error(`Terros account ${account.id} has no workflow stage name`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const apiKey = input.context.config.secrets.apiKey
-  if (!apiKey) throw Error('Missing GoHighLevel apiKey')
-
   const route = resolveTeamRoute(scriptConfig, account.teamId)
-  const assignedTo = await findAssignedUserId(apiKey, route.locationId, account.owner?.email)
+  const agencyAccessToken = input.context.config.secrets.agencyAccessToken
+  if (!agencyAccessToken) throw Error('Missing GoHighLevel agencyAccessToken')
+  if (!scriptConfig.goHighLevelCompanyId) throw Error('Missing goHighLevelCompanyId')
+  const accessToken = await getLocationAccessToken(
+    agencyAccessToken,
+    scriptConfig.goHighLevelCompanyId,
+    route.locationId
+  )
+  const assignedTo = await findAssignedUserId(accessToken, route.locationId, account.owner?.email)
   const contactInput = toContactInput(account, route.locationId, scriptConfig, assignedTo)
-  const contact = await syncContact(apiKey, account.externalLeadId, contactInput)
+  const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
 
   if (!account.externalLeadId) {
     await client.account.update({
@@ -54,41 +61,39 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
     )
   }
 
-  const pipeline = await getPipeline(apiKey, route.locationId, route.pipelineId)
+  const pipeline = await getPipeline(accessToken, route.locationId, route.pipelineId)
   const stageName = resolveStageName(account.workflowStageName)
   const stage = findPipelineStage(pipeline, stageName)
-  const existingOpportunity = await findOpportunity(apiKey, route, contact.id)
+  const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
   const opportunityInput = toOpportunityInput(account, route, contact.id, stage.id, assignedTo)
 
   if (!existingOpportunity) {
-    const createdOpportunity = await createOpportunity(apiKey, opportunityInput)
+    const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
     console.log(
       `Created GoHighLevel opportunity ${createdOpportunity.id} for Terros account ${account.id}, team ${account.teamId}, location ${route.locationId}, pipeline ${route.pipelineId}, and stage ${stage.name}`
     )
     return
   }
 
-  if (existingOpportunity.pipelineStageId === stage.id) {
-    console.log(
-      `Skipped GoHighLevel opportunity ${existingOpportunity.id} stage update for Terros account ${account.id}; already at ${stage.name}`
-    )
+  if (!opportunityNeedsUpdate(existingOpportunity, opportunityInput)) {
+    console.log(`Skipped unchanged GoHighLevel opportunity ${existingOpportunity.id} for Terros account ${account.id}`)
     return
   }
 
-  const updatedOpportunity = await updateOpportunity(apiKey, existingOpportunity.id, opportunityInput)
+  const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityInput)
   console.log(
     `Updated GoHighLevel opportunity ${updatedOpportunity.id} for Terros account ${account.id}, and stage ${stage.name}`
   )
 })
 
 async function syncContact(
-  apiKey: string,
+  accessToken: string,
   contactId: string | undefined,
   contactInput: GoHighLevelContactInput
 ): Promise<GoHighLevelContact> {
-  if (!contactId) return upsertContact(apiKey, contactInput)
+  if (!contactId) return upsertContact(accessToken, contactInput)
 
-  const existingContact = await getContact(apiKey, contactId)
+  const existingContact = await getContact(accessToken, contactId)
   if (existingContact.locationId !== contactInput.locationId) {
     throw Error(
       `GoHighLevel contact ${contactId} belongs to location ${existingContact.locationId}, expected ${contactInput.locationId}`
@@ -96,7 +101,7 @@ async function syncContact(
   }
 
   const { locationId: _locationId, ...updatedContact } = contactInput
-  return updateContact(apiKey, contactId, updatedContact)
+  return updateContact(accessToken, contactId, updatedContact)
 }
 
 function toContactInput(

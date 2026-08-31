@@ -4,6 +4,7 @@ import {
   type WebhookPayload,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
+import { getLocationAccessToken } from './util.ts'
 import {
   createAppointment,
   findAssignedUserId,
@@ -14,6 +15,7 @@ import {
 import { resolveCalendarRoute, type CalendarRoute } from './config.ts'
 
 type ScriptConfig = {
+  goHighLevelCompanyId: string
   teamLocations: Record<string, string>
   teamCalendars: Record<string, string>
 }
@@ -23,35 +25,52 @@ type AppointmentEvent = Pick<CalendarEventDataWithDetails, 'title' | 'eventDate'
 
 export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
   const payload = input.context.payload
-  if (payload.action === 'remove') {
-    console.log(`Skipping GoHighLevel appointment sync for removed Terros event ${payload.data}`)
-    return
-  }
+  const event =
+    payload.action === 'remove' ? (await client.calendar.event.get({ eventId: payload.data })).event : payload.data
 
-  const event = payload.data
   if (event.eventType !== 'Consultation') {
     console.log(`Skipping non-consultation Terros event ${event.eventId}`)
     return
   }
   if (!event.teamId) throw Error(`Terros event ${event.eventId} has no teamId`)
-  if (!event.accountId) throw Error(`Terros event ${event.eventId} has no accountId`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const route = resolveCalendarRoute(scriptConfig, event.teamId)
-  const apiKey = input.context.config.secrets.apiKey
-  if (!apiKey) throw Error('Missing GoHighLevel apiKey')
+  const agencyAccessToken = input.context.config.secrets.agencyAccessToken
+  if (!agencyAccessToken) throw Error('Missing GoHighLevel agencyAccessToken')
+  if (!scriptConfig.goHighLevelCompanyId) throw Error('Missing goHighLevelCompanyId')
+  const accessToken = await getLocationAccessToken(
+    agencyAccessToken,
+    scriptConfig.goHighLevelCompanyId,
+    route.locationId
+  )
 
+  if (payload.action === 'remove') {
+    if (!event.sourceId) {
+      console.log(`Skipping GoHighLevel cancellation for unsynced Terros event ${event.eventId}`)
+      return
+    }
+    await updateAppointment(accessToken, event.sourceId, { appointmentStatus: 'cancelled', toNotify: true })
+    console.log(`Cancelled GoHighLevel appointment ${event.sourceId} for removed Terros event ${event.eventId}`)
+    return
+  }
+
+  if (!event.accountId) throw Error(`Terros event ${event.eventId} has no accountId`)
   const { account } = await client.account.get({ accountId: event.accountId })
   if (!account.externalLeadId) {
     throw Error(`Terros account ${event.accountId} has no synced GoHighLevel contact ID`)
   }
 
-  const assignedUserId = await findAssignedUserId(apiKey, route.locationId, event.attendee?.email || event.owner?.email)
+  const assignedUserId = await findAssignedUserId(
+    accessToken,
+    route.locationId,
+    event.attendee?.email || event.owner?.email
+  )
   const appointmentInput = toAppointmentInput(event, route, account.externalLeadId, assignedUserId)
   const existingAppointmentId = await getExistingAppointmentId(client, event)
 
   if (existingAppointmentId) {
-    const updatedAppointment = await updateExistingAppointment(apiKey, existingAppointmentId, appointmentInput)
+    const updatedAppointment = await updateExistingAppointment(accessToken, existingAppointmentId, appointmentInput)
     if (!event.sourceId) {
       await client.calendar.event.update({
         event: {
@@ -64,7 +83,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     return
   }
 
-  const createdAppointment = await createAppointment(apiKey, appointmentInput)
+  const createdAppointment = await createAppointment(accessToken, appointmentInput)
   await client.calendar.event.update({
     event: {
       eventId: event.eventId,
@@ -111,10 +130,10 @@ async function getExistingAppointmentId(
 }
 
 async function updateExistingAppointment(
-  apiKey: string,
+  accessToken: string,
   appointmentId: string,
   appointment: GoHighLevelAppointmentInput
 ): Promise<GoHighLevelAppointment> {
   const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointment
-  return await updateAppointment(apiKey, appointmentId, appointmentUpdate)
+  return await updateAppointment(accessToken, appointmentId, appointmentUpdate)
 }
