@@ -1,8 +1,10 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
+import { getLocationAccessToken } from './util.ts'
 import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
 import { resolveIncomingTeamRoute, resolveStageName } from './config.ts'
 
 type ScriptConfig = {
+  goHighLevelCompanyId: string
   teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
 }
@@ -36,9 +38,11 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
     return
   }
 
-  const apiKey = input.context.config.secrets.apiKey
-  if (!apiKey) throw Error('Missing GoHighLevel apiKey')
-  const pipeline = await getPipeline(apiKey, locationId, pipelineId)
+  const agencyAccessToken = input.context.config.secrets.agencyAccessToken
+  if (!agencyAccessToken) throw Error('Missing GoHighLevel agencyAccessToken')
+  if (!scriptConfig.goHighLevelCompanyId) throw Error('Missing goHighLevelCompanyId')
+  const accessToken = await getLocationAccessToken(agencyAccessToken, scriptConfig.goHighLevelCompanyId, locationId)
+  const pipeline = await getPipeline(accessToken, locationId, pipelineId)
   const stageName = getPipelineStageName(pipeline, pipelineStageId)
   const workflowTarget = resolveStageName(stageName)
 

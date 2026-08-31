@@ -8,6 +8,11 @@
       "dataType": "Account",
       "configSchema": [
         {
+          "name": "goHighLevelCompanyId",
+          "type": "string",
+          "description": "GoHighLevel agency/company ID used to exchange the agency OAuth token for routed sub-account tokens"
+        },
+        {
           "name": "teamLocations",
           "type": "mapping",
           "dataType": "None",
@@ -27,7 +32,7 @@
         }
       ],
       "authSchema": {
-        "apiKey": "GoHighLevel admin API token"
+        "agencyAccessToken": "GoHighLevel agency OAuth access token"
       },
       "permissions": ["account:save"],
       "slug": "gohighlevel-account-sync"
@@ -37,6 +42,11 @@
       "entrypoint": "src/incoming.ts",
       "type": "incoming",
       "configSchema": [
+        {
+          "name": "goHighLevelCompanyId",
+          "type": "string",
+          "description": "GoHighLevel agency/company ID used to exchange the agency OAuth token for routed sub-account tokens"
+        },
         {
           "name": "teamLocations",
           "type": "mapping",
@@ -51,7 +61,7 @@
         }
       ],
       "authSchema": {
-        "apiKey": "GoHighLevel admin API token"
+        "agencyAccessToken": "GoHighLevel agency OAuth access token"
       },
       "permissions": ["account:list", "account:save"],
       "slug": "gohighlevel-opportunity-webhook"
@@ -62,6 +72,11 @@
       "type": "outgoing",
       "dataType": "Event",
       "configSchema": [
+        {
+          "name": "goHighLevelCompanyId",
+          "type": "string",
+          "description": "GoHighLevel agency/company ID used to exchange the agency OAuth token for routed sub-account tokens"
+        },
         {
           "name": "teamLocations",
           "type": "mapping",
@@ -76,7 +91,7 @@
         }
       ],
       "authSchema": {
-        "apiKey": "GoHighLevel admin API token"
+        "agencyAccessToken": "GoHighLevel agency OAuth access token"
       },
       "permissions": ["account:list", "event:read", "event:save"],
       "slug": "gohighlevel-appointment-sync"
