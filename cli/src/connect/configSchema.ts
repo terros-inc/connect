@@ -36,8 +36,6 @@ export const UnsavedScriptBase = z.object({
   entrypoint: z.string(),
   configSchema: ConfigSchema,
   authSchema: ScriptAuth,
-  mainScript: z.string().min(1).optional(),
-  runtime: z.string().optional(),
   permissions: z.array(ApiPermission),
   slug: z.string().optional().meta({
     description: 'Stable public key used in incoming webhook URLs. Generated on create when omitted.',

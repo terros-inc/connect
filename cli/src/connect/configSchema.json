@@ -67,13 +67,6 @@
                   "type": "string"
                 }
               },
-              "mainScript": {
-                "type": "string",
-                "minLength": 1
-              },
-              "runtime": {
-                "type": "string"
-              },
               "permissions": {
                 "type": "array",
                 "items": {
@@ -160,13 +153,6 @@
                 "additionalProperties": {
                   "type": "string"
                 }
-              },
-              "mainScript": {
-                "type": "string",
-                "minLength": 1
-              },
-              "runtime": {
-                "type": "string"
               },
               "permissions": {
                 "type": "array",
@@ -264,13 +250,6 @@
                 "additionalProperties": {
                   "type": "string"
                 }
-              },
-              "mainScript": {
-                "type": "string",
-                "minLength": 1
-              },
-              "runtime": {
-                "type": "string"
               },
               "permissions": {
                 "type": "array",
