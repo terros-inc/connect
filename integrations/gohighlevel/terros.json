@@ -1,0 +1,72 @@
+{
+  "appId": "App.REPLACE_WITH_GOHIGHLEVEL_APP_ID",
+  "scripts": [
+    {
+      "name": "GoHighLevel Account Sync",
+      "entrypoint": "src/outgoing.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "configSchema": [
+        {
+          "name": "teamLocations",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel location/sub-account ID"
+        },
+        {
+          "name": "teamPipelines",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+        },
+        {
+          "name": "userMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Optional mapping from Terros user ID to GoHighLevel user ID"
+        },
+        {
+          "name": "contactFieldMappings",
+          "type": "mapping",
+          "dataType": "Account",
+          "description": "Map a Terros account field to a GoHighLevel contact custom field ID"
+        }
+      ],
+      "authSchema": {
+        "apiKey": "GoHighLevel admin API token"
+      },
+      "permissions": ["account/update"],
+      "slug": "gohighlevel-account-sync"
+    },
+    {
+      "name": "GoHighLevel Opportunity Webhook",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "teamLocations",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel location/sub-account ID"
+        },
+        {
+          "name": "teamPipelines",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+        },
+        {
+          "name": "teamWorkflows",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its Terros workflow ID"
+        }
+      ],
+      "authSchema": {
+        "apiKey": "GoHighLevel admin API token"
+      },
+      "permissions": ["account/match", "account/upsert"],
+      "slug": "gohighlevel-opportunity-webhook"
+    }
+  ]
+}
