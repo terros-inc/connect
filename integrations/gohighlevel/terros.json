@@ -29,7 +29,7 @@
       "authSchema": {
         "apiKey": "GoHighLevel admin API token"
       },
-      "permissions": ["account/update"],
+      "permissions": ["account:save"],
       "slug": "gohighlevel-account-sync"
     },
     {
@@ -53,7 +53,7 @@
       "authSchema": {
         "apiKey": "GoHighLevel admin API token"
       },
-      "permissions": ["account/match", "account/upsert"],
+      "permissions": ["account:list", "account:save"],
       "slug": "gohighlevel-opportunity-webhook"
     },
     {
@@ -78,7 +78,7 @@
       "authSchema": {
         "apiKey": "GoHighLevel admin API token"
       },
-      "permissions": ["account/get", "calendar/event/get", "calendar/event/update"],
+      "permissions": ["account:list", "event:read", "event:save"],
       "slug": "gohighlevel-appointment-sync"
     }
   ]
