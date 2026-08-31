@@ -48,12 +48,6 @@
           "type": "mapping",
           "dataType": "None",
           "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
-        },
-        {
-          "name": "teamWorkflows",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its Terros workflow ID"
         }
       ],
       "authSchema": {

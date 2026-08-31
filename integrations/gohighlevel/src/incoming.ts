@@ -1,18 +1,10 @@
-import {
-  type AccountId,
-  type AccountUpsertSuccess,
-  type TeamId,
-  type TerrosClient,
-  type WorkflowId,
-  wrapConnectHandler,
-} from '@terros-inc/sdk'
+import { wrapConnectHandler } from '@terros-inc/sdk'
 import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
 import { resolveIncomingTeamRoute, resolveStageName } from './config.ts'
 
 type ScriptConfig = {
   teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
-  teamWorkflows: Record<string, string>
 }
 
 type OpportunityStageUpdate = {
@@ -61,40 +53,16 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
     )
   }
 
-  await updateTerrosAccount(client, {
-    accountId: account.accountId,
-    teamId: route.teamId,
-    workflowId: route.workflowId,
-    workflowTarget,
-    stageName,
-    contactId,
+  await client.account.upsert({
+    requestType: 'update',
+    account: {
+      accountId: account.accountId,
+      workflowTarget,
+      sourceStatus: stageName,
+      externalLeadId: contactId,
+      lastActionDate: Date.now(),
+    },
   })
 
   console.log(`Updated Terros account ${account.accountId} from GoHighLevel opportunity ${payload.id || '(missing)'}`)
 })
-
-// this function doesn't serve much purpose. additionally, we're passing in account id, we do not need to pass in team id, and most definitely not workflow id
-async function updateTerrosAccount(
-  client: TerrosClient,
-  input: {
-    accountId: AccountId
-    teamId: TeamId
-    workflowId: WorkflowId
-    workflowTarget: string
-    stageName: string
-    contactId: string
-  }
-): Promise<AccountUpsertSuccess> {
-  return await client.account.upsert({
-    requestType: 'update',
-    account: {
-      accountId: input.accountId,
-      teamId: input.teamId,
-      workflowId: input.workflowId,
-      workflowTarget: input.workflowTarget,
-      sourceStatus: input.stageName,
-      externalLeadId: input.contactId,
-      lastActionDate: Date.now(),
-    },
-  })
-}

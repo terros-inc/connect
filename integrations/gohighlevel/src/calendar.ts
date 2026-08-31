@@ -52,13 +52,25 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   if (existingAppointmentId) {
     const updatedAppointment = await updateExistingAppointment(apiKey, existingAppointmentId, appointmentInput)
-    if (!event.sourceId) await saveAppointmentId(client, event, updatedAppointment.id)
+    if (!event.sourceId) {
+      await client.calendar.event.update({
+        event: {
+          eventId: event.eventId,
+          sourceId: updatedAppointment.id,
+        },
+      })
+    }
     console.log(`Updated GoHighLevel appointment ${updatedAppointment.id} for Terros event ${event.eventId}`)
     return
   }
 
   const createdAppointment = await createAppointment(apiKey, appointmentInput)
-  await saveAppointmentId(client, event, createdAppointment.id)
+  await client.calendar.event.update({
+    event: {
+      eventId: event.eventId,
+      sourceId: createdAppointment.id,
+    },
+  })
   console.log(`Created GoHighLevel appointment ${createdAppointment.id} for Terros event ${event.eventId}`)
 })
 
@@ -96,19 +108,6 @@ async function getExistingAppointmentId(
 
   const { event: previousEvent } = await client.calendar.event.get({ eventId: event.previousEventId })
   return previousEvent.sourceId
-}
-
-async function saveAppointmentId(
-  client: TerrosClient,
-  event: CalendarEventDataWithDetails,
-  appointmentId: string
-): Promise<void> {
-  await client.calendar.event.update({
-    event: {
-      eventId: event.eventId,
-      sourceId: appointmentId,
-    },
-  })
 }
 
 async function updateExistingAppointment(

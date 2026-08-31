@@ -1,13 +1,9 @@
-import type { TeamId, WorkflowId } from '@terros-inc/sdk'
+import type { TeamId } from '@terros-inc/sdk'
 
 export type TeamRoute = {
   teamId: TeamId
   locationId: string
   pipelineId: string
-}
-
-export type IncomingTeamRoute = TeamRoute & {
-  workflowId: WorkflowId
 }
 
 export type CalendarRoute = {
@@ -33,11 +29,10 @@ export function resolveIncomingTeamRoute(
   config: {
     teamLocations: Record<string, string>
     teamPipelines: Record<string, string>
-    teamWorkflows: Record<string, string>
   },
   locationId: string,
   pipelineId: string
-): IncomingTeamRoute | undefined {
+): TeamRoute | undefined {
   const matchingTeamIds = Object.entries(config.teamLocations)
     .filter(([, configuredLocationId]) => configuredLocationId === locationId)
     .map(([teamId]) => teamId)
@@ -51,11 +46,7 @@ export function resolveIncomingTeamRoute(
   if (!teamId) return
   if (!isTeamId(teamId)) throw Error(`Invalid Terros team ID in routing config: ${teamId}`)
 
-  const workflowId = config.teamWorkflows[teamId]
-  if (!workflowId) throw Error(`Missing teamWorkflows mapping for team ${teamId}`)
-  if (!isWorkflowId(workflowId)) throw Error(`Invalid Terros workflow ID in routing config: ${workflowId}`)
-
-  return { teamId, locationId, pipelineId, workflowId }
+  return { teamId, locationId, pipelineId }
 }
 
 export function resolveCalendarRoute(
@@ -77,8 +68,4 @@ export function resolveStageName(sourceStageName: string): string {
 
 function isTeamId(value: string): value is TeamId {
   return value.startsWith('Team:') || value.startsWith('Team.')
-}
-
-function isWorkflowId(value: string): value is WorkflowId {
-  return value.startsWith('WF.')
 }
