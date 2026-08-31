@@ -37,7 +37,6 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
   if (!pipelineStageId) throw Error('GoHighLevel OpportunityStageUpdate is missing pipelineStageId')
   if (!contactId) throw Error('GoHighLevel OpportunityStageUpdate is missing contactId')
 
-  // there are several other integrations using mappings without using as unkown as Mapping types, can you see what those are doing differently?
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const route = resolveIncomingTeamRoute(scriptConfig, locationId, pipelineId)
   if (!route) {

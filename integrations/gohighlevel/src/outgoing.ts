@@ -1,4 +1,4 @@
-import { type AccountWebhook, type AccountWebhookData, wrapConnectHandler } from '@terros-inc/sdk'
+import { type AccountWebhook, type AccountWebhookData, type CustomFieldId, wrapConnectHandler } from '@terros-inc/sdk'
 import {
   createOpportunity,
   findAssignedUserId,
@@ -40,13 +40,6 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
   const assignedTo = await findAssignedUserId(apiKey, route.locationId, account.owner?.email)
   const contactInput = toContactInput(account, route.locationId, scriptConfig, assignedTo)
   const contact = await syncContact(apiKey, account.externalLeadId, contactInput)
-
-  // actually, looking at it, we looked it up by id, it should always be the same id right? this check should be redundant
-  if (account.externalLeadId && account.externalLeadId !== contact.id) {
-    throw Error(
-      `Terros account ${account.id} stores GoHighLevel contact ${account.externalLeadId}, but GoHighLevel returned ${contact.id}`
-    )
-  }
 
   if (!account.externalLeadId) {
     await client.account.update({
@@ -115,11 +108,11 @@ function toContactInput(
 
   const contact: GoHighLevelContactInput = {
     locationId,
-    firstName: readTrimmedString(getObjectValue(account.homeowner || {}, 'firstName')),
-    lastName: readTrimmedString(getObjectValue(account.homeowner || {}, 'lastName')),
-    name: readTrimmedString(getObjectValue(account.homeowner || {}, 'name')),
-    email: readTrimmedString(getObjectValue(account.homeowner || {}, 'email')),
-    phone: readTrimmedString(getObjectValue(account.homeowner || {}, 'phone')),
+    firstName: readTrimmedString(account.homeowner?.firstName),
+    lastName: readTrimmedString(account.homeowner?.lastName),
+    name: readTrimmedString(account.homeowner?.name),
+    email: readTrimmedString(account.homeowner?.email),
+    phone: readTrimmedString(account.homeowner?.phone),
     address1: account.location?.line1,
     city: account.location?.locality,
     state: account.location?.countrySubd,
@@ -128,7 +121,7 @@ function toContactInput(
     source: 'Terros',
     customFields: customFields.length ? customFields : undefined,
   }
-  return removeUndefinedValues(contact)
+  return contact
 }
 
 function toOpportunityInput(
@@ -138,16 +131,10 @@ function toOpportunityInput(
   pipelineStageId: string,
   assignedTo: string | undefined
 ): GoHighLevelOpportunityInput {
-  // this is ridiculous for just getting a name. also why is this an array? just `${firstName} ${lastName}` call it a day
+  const firstName = readTrimmedString(account.homeowner?.firstName) || ''
+  const lastName = readTrimmedString(account.homeowner?.lastName) || ''
   const name =
-    [
-      readTrimmedString(getObjectValue(account.homeowner || {}, 'firstName')),
-      readTrimmedString(getObjectValue(account.homeowner || {}, 'lastName')),
-    ]
-      .filter(Boolean)
-      .join(' ') ||
-    readTrimmedString(getObjectValue(account.homeowner || {}, 'name')) ||
-    `Terros Account ${account.id}`
+    `${firstName} ${lastName}`.trim() || readTrimmedString(account.homeowner?.name) || `Terros Account ${account.id}`
 
   const opportunity: GoHighLevelOpportunityInput = {
     locationId: route.locationId,
@@ -158,10 +145,19 @@ function toOpportunityInput(
     status: 'open',
     assignedTo,
   }
-  return removeUndefinedValues(opportunity)
+  return opportunity
 }
 
 // everything from here down needs explaining on what it's doing. it's impossible to read what it's doing and best I can tell it's just fancy useless code
+
+// Each configured entry maps a Terros account field path to a GoHighLevel custom-field ID. GHL expects those
+// resolved values as an array of { id, fieldValue } objects and accepts only primitive field values here.
+
+// in this case then why is it called "resolveCustomFields"? the code does not seem to have anything at all to do with custom fields.
+// the function names in no way relate to the explanation of the code you just gave, not to mention the horrible use of no less than 5 operators in a single if statement.
+// I'd even argue that making fieldValue unknown would be for the best as long as resolveAccountField can't return an array or object
+// rename it to something that explains that it's a GHL custom field not a terros custom field, that's the main source of confusion
+// and once again, explain why it's here. at least now I know it's GHL custom fields, but WHY do we need those? how do we know which ones we need?
 function resolveCustomFields(
   account: AccountWebhookData,
   mappings: Record<string, string>
@@ -174,26 +170,34 @@ function resolveCustomFields(
 }
 
 function resolveAccountField(account: AccountWebhookData, field: string): unknown {
-  if (field.startsWith('CF.')) {
-    return getObjectValue(account.customFields || {}, field)
+  // Terros custom-field keys include their CF. prefix and are stored directly in the customFields map.
+
+  // I like what you did here, doing to remove these comments on my next pass
+  if (isCustomFieldId(field)) {
+    return account.customFields?.[field]
   }
 
-  return field.split('.').reduce<unknown>((value, key) => {
-    return getObjectValue(value, key)
-  }, account)
+  // Other mapping keys are dotted account paths selected in Connect, such as homeowner.email.
+
+  // why? why do we need the paths like this?
+  // you've explained what, not why. I still have no reason to believe this code serves any purpose
+  let value: unknown = account
+  for (const key of field.split('.')) {
+    if (typeof value !== 'object' || value === null) {
+      throw Error(`Cannot read ${key} from non-object account field ${field}`)
+    }
+    value = Reflect.get(value, key)
+  }
+
+  return value
 }
 
-function getObjectValue(value: unknown, key: string): unknown {
-  if (typeof value !== 'object' || value === null) throw Error(`Cannot read ${key} from a non-object account field`)
-  return Reflect.get(value, key)
+function isCustomFieldId(field: string): field is CustomFieldId {
+  return field.startsWith('CF.')
 }
 
 function readTrimmedString(value: unknown): string | undefined {
   if (typeof value !== 'string') return
   const trimmed = value.trim()
   return trimmed || undefined
-}
-
-function removeUndefinedValues<T extends object>(value: T): T {
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T
 }

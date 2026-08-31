@@ -58,7 +58,7 @@ type GoHighLevelUser = {
   email?: string
 }
 
-const baseUrl = 'https://services.leadconnectorhq.com' // why do we have a base url here? this seems to be company specfic and should be config only in that case
+const baseUrl = 'https://services.leadconnectorhq.com'
 
 export async function getContact(apiKey: string, contactId: string): Promise<GoHighLevelContact> {
   const response = await ghlApi<{ contact: GoHighLevelContact }>(apiKey, `/contacts/${contactId}`)
