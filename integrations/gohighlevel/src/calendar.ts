@@ -49,25 +49,17 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const assignedUserId = await findAssignedUserId(apiKey, route.locationId, event.attendee?.email || event.owner?.email)
   const appointmentInput = toAppointmentInput(event, route, account.externalLeadId, assignedUserId)
   const existingAppointmentId = await getExistingAppointmentId(client, event)
-  const appointment = existingAppointmentId
-    ? await updateExistingAppointment(apiKey, existingAppointmentId, appointmentInput)
-    : await createAppointment(apiKey, appointmentInput)
 
-  // why is this check here? above this we have a check for if existingApointmentId exists and then create appointment off of that.
-  // it's probably better to just use one if statement, and run update only if a new one is created?
-  // would also simplify the console.log
-  if (event.sourceId !== appointment.id) {
-    await client.calendar.event.update({
-      event: {
-        eventId: event.eventId,
-        sourceId: appointment.id,
-      },
-    })
+  if (existingAppointmentId) {
+    const updatedAppointment = await updateExistingAppointment(apiKey, existingAppointmentId, appointmentInput)
+    if (!event.sourceId) await saveAppointmentId(client, event, updatedAppointment.id)
+    console.log(`Updated GoHighLevel appointment ${updatedAppointment.id} for Terros event ${event.eventId}`)
+    return
   }
 
-  console.log(
-    `${existingAppointmentId ? 'Updated' : 'Created'} GoHighLevel appointment ${appointment.id} for Terros event ${event.eventId}`
-  )
+  const createdAppointment = await createAppointment(apiKey, appointmentInput)
+  await saveAppointmentId(client, event, createdAppointment.id)
+  console.log(`Created GoHighLevel appointment ${createdAppointment.id} for Terros event ${event.eventId}`)
 })
 
 export function toAppointmentInput(
@@ -100,10 +92,23 @@ async function getExistingAppointmentId(
   event: CalendarEventDataWithDetails
 ): Promise<string | undefined> {
   if (event.sourceId) return event.sourceId
-  if (!event.previousEventId) return // why are we checking previous event id? not sure if this will ever manage to come up
+  if (!event.previousEventId) return
 
   const { event: previousEvent } = await client.calendar.event.get({ eventId: event.previousEventId })
   return previousEvent.sourceId
+}
+
+async function saveAppointmentId(
+  client: TerrosClient,
+  event: CalendarEventDataWithDetails,
+  appointmentId: string
+): Promise<void> {
+  await client.calendar.event.update({
+    event: {
+      eventId: event.eventId,
+      sourceId: appointmentId,
+    },
+  })
 }
 
 async function updateExistingAppointment(

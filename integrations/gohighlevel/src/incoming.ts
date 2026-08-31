@@ -73,6 +73,7 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
   console.log(`Updated Terros account ${account.accountId} from GoHighLevel opportunity ${payload.id || '(missing)'}`)
 })
 
+// this function doesn't serve much purpose. additionally, we're passing in account id, we do not need to pass in team id, and most definitely not workflow id
 async function updateTerrosAccount(
   client: TerrosClient,
   input: {
