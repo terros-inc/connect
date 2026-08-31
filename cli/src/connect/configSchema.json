@@ -70,9 +70,7 @@
               "permissions": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "pattern": "^[a-z]+\\/[a-z/]+$",
-                  "description": "Terros API endpoint permission"
+                  "type": "string"
                 }
               },
               "slug": {
@@ -157,9 +155,7 @@
               "permissions": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "pattern": "^[a-z]+\\/[a-z/]+$",
-                  "description": "Terros API endpoint permission"
+                  "type": "string"
                 }
               },
               "slug": {
@@ -254,9 +250,7 @@
               "permissions": {
                 "type": "array",
                 "items": {
-                  "type": "string",
-                  "pattern": "^[a-z]+\\/[a-z/]+$",
-                  "description": "Terros API endpoint permission"
+                  "type": "string"
                 }
               },
               "slug": {
