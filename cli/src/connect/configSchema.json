@@ -15,6 +15,10 @@
               "name": {
                 "type": "string"
               },
+              "description": {
+                "description": "Instructions on how to configure the script",
+                "type": "string"
+              },
               "entrypoint": {
                 "type": "string"
               },
@@ -63,6 +67,13 @@
                   "type": "string"
                 }
               },
+              "mainScript": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runtime": {
+                "type": "string"
+              },
               "permissions": {
                 "type": "array",
                 "items": {
@@ -72,7 +83,7 @@
                 }
               },
               "slug": {
-                "description": "Stable public key used in incoming webhook URLs.",
+                "description": "Stable public key used in incoming webhook URLs. Generated on create when omitted.",
                 "type": "string"
               },
               "type": {
@@ -98,6 +109,10 @@
               "name": {
                 "type": "string"
               },
+              "description": {
+                "description": "Instructions on how to configure the script",
+                "type": "string"
+              },
               "entrypoint": {
                 "type": "string"
               },
@@ -146,6 +161,13 @@
                   "type": "string"
                 }
               },
+              "mainScript": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runtime": {
+                "type": "string"
+              },
               "permissions": {
                 "type": "array",
                 "items": {
@@ -155,7 +177,7 @@
                 }
               },
               "slug": {
-                "description": "Stable public key used in incoming webhook URLs.",
+                "description": "Stable public key used in incoming webhook URLs. Generated on create when omitted.",
                 "type": "string"
               },
               "type": {
@@ -191,6 +213,10 @@
               "name": {
                 "type": "string"
               },
+              "description": {
+                "description": "Instructions on how to configure the script",
+                "type": "string"
+              },
               "entrypoint": {
                 "type": "string"
               },
@@ -239,6 +265,13 @@
                   "type": "string"
                 }
               },
+              "mainScript": {
+                "type": "string",
+                "minLength": 1
+              },
+              "runtime": {
+                "type": "string"
+              },
               "permissions": {
                 "type": "array",
                 "items": {
@@ -248,7 +281,7 @@
                 }
               },
               "slug": {
-                "description": "Stable public key used in incoming webhook URLs.",
+                "description": "Stable public key used in incoming webhook URLs. Generated on create when omitted.",
                 "type": "string"
               },
               "type": {
