@@ -23,7 +23,7 @@
           "name": "contactFieldMappings",
           "type": "mapping",
           "dataType": "Account",
-          "description": "Map a Terros account field to a GoHighLevel contact custom field ID"
+          "description": "Map any Terros account field to the GoHighLevel contact custom field ID that should receive its value; only configured mappings are sent"
         }
       ],
       "authSchema": {

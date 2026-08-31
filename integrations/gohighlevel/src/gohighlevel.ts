@@ -3,6 +3,11 @@ export type GoHighLevelContact = {
   locationId: string
 }
 
+export type GoHighLevelCustomField = {
+  id: string
+  fieldValue: string | number | boolean
+}
+
 export type GoHighLevelContactInput = {
   locationId: string
   firstName?: string
@@ -16,7 +21,7 @@ export type GoHighLevelContactInput = {
   postalCode?: string
   assignedTo?: string
   source?: string
-  customFields?: { id: string; fieldValue: string | number | boolean }[]
+  customFields?: GoHighLevelCustomField[]
 }
 
 export type GoHighLevelPipelineStage = {
