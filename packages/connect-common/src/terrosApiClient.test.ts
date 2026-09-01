@@ -71,7 +71,7 @@ describe('TerrosApiClient', () => {
     globalThis.fetch = vi.fn().mockRejectedValue(networkError) as unknown as typeof fetch
     const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
 
-    await expect(caller.call('user/get', {})).rejects.toThrow('Request to user/get failed')
+    await expect(caller.call('user/get', {})).rejects.toThrow('Request to user/get failed: fetch failed')
     await expect(caller.call('user/get', {})).rejects.toMatchObject({ cause: networkError })
   })
 
@@ -106,6 +106,15 @@ describe('TerrosApiClient', () => {
 
     it('falls back to the env var when no baseUrl is configured', async () => {
       process.env.TERROS_API_ENDPOINT = 'https://env.example.com'
+      const caller = new TerrosApiClient({ apiKey: 'test-key' })
+
+      await caller.call('user/get', {})
+
+      expect(globalThis.fetch).toHaveBeenCalledWith('https://env.example.com/user/get', expect.anything())
+    })
+
+    it('adds the HTTPS protocol when the env var contains a bare hostname', async () => {
+      process.env.TERROS_API_ENDPOINT = 'env.example.com'
       const caller = new TerrosApiClient({ apiKey: 'test-key' })
 
       await caller.call('user/get', {})

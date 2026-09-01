@@ -42,7 +42,8 @@ export class TerrosApiClient {
         body: JSON.stringify(input),
       })
     } catch (cause) {
-      throw new Error(`Request to ${route} failed`, { cause })
+      const causeMessage = cause instanceof Error ? `: ${cause.message}` : ''
+      throw new Error(`Request to ${route} failed${causeMessage}`, { cause })
     }
     if (!response.ok) throw new Error(response.statusText)
     const output: unknown = await response.json()
@@ -73,8 +74,9 @@ export class TerrosApiClient {
   private determineBaseUrl(config: Pick<TerrosClientConfig, 'baseUrl'>): string {
     if (config.baseUrl) return config.baseUrl
     const envEndpoint = readProcessEnv('TERROS_API_ENDPOINT')
-    if (envEndpoint) return envEndpoint
-    return PROD_BASE_URL
+    if (!envEndpoint) return PROD_BASE_URL
+    if (/^https?:\/\//i.test(envEndpoint)) return envEndpoint
+    return `https://${envEndpoint}`
   }
 }
 
