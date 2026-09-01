@@ -13,17 +13,14 @@ import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } f
 import { buildTerrosClient } from './api/query'
 
 async function main(): Promise<void> {
-  const params = minimist(process.argv.slice(2), {
-    alias: { v: 'version' },
-    boolean: ['version'],
-  })
-  if (params.version) {
-    console.log(packageJson.version)
-    return
-  }
-
+  const params = minimist(process.argv.slice(2))
   const commands = params._
   if (commands.length === 0) {
+    if (params.v === true || params.version === true) {
+      console.log(packageJson.version)
+      return
+    }
+
     console.log(HELP_PARENT_MESSAGE)
     return
   }
