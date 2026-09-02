@@ -73,8 +73,9 @@ export class TerrosApiClient {
   private determineBaseUrl(config: Pick<TerrosClientConfig, 'baseUrl'>): string {
     if (config.baseUrl) return config.baseUrl
     const envEndpoint = readProcessEnv('TERROS_API_ENDPOINT')
-    if (envEndpoint) return envEndpoint
-    return PROD_BASE_URL
+    if (!envEndpoint) return PROD_BASE_URL
+    if (/^https?:\/\//i.test(envEndpoint)) return envEndpoint
+    return `https://${envEndpoint}`
   }
 }
 

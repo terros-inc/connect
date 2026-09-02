@@ -113,6 +113,15 @@ describe('TerrosApiClient', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith('https://env.example.com/user/get', expect.anything())
     })
 
+    it('adds the HTTPS protocol when the env var contains a bare hostname', async () => {
+      process.env.TERROS_API_ENDPOINT = 'env.example.com'
+      const caller = new TerrosApiClient({ apiKey: 'test-key' })
+
+      await caller.call('user/get', {})
+
+      expect(globalThis.fetch).toHaveBeenCalledWith('https://env.example.com/user/get', expect.anything())
+    })
+
     it('falls back to the prod default when neither baseUrl nor env var is set', async () => {
       const caller = new TerrosApiClient({ apiKey: 'test-key' })
 
