@@ -22,15 +22,10 @@ export function resolveTeamRoute(config: { teamPipelines: Record<string, string>
   return { teamId: team.teamId, locationId, pipelineId }
 }
 
-export function validateIncomingTeamRoute(
-  config: { teamPipelines: Record<string, string> },
-  team: TinyTeam,
-  locationId: string,
-  pipelineId: string
-): void {
-  const route = resolveTeamRoute(config, team)
-  if (route.locationId !== locationId || route.pipelineId !== pipelineId) {
-    throw Error(`GoHighLevel location ${locationId} and pipeline ${pipelineId} do not match Terros team ${team.teamId}`)
+export function validateIncomingTeamLocation(team: TinyTeam, locationId: string): void {
+  if (!team.externalId) throw Error(`Terros team ${team.teamId} has no GoHighLevel location ID`)
+  if (team.externalId !== locationId) {
+    throw Error(`GoHighLevel location ${locationId} does not match Terros team ${team.teamId}`)
   }
 }
 

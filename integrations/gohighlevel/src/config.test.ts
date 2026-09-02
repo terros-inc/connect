@@ -3,7 +3,7 @@ import {
   resolveGoHighLevelStageName,
   resolveTeamRoute,
   resolveTerrosStageName,
-  validateIncomingTeamRoute,
+  validateIncomingTeamLocation,
 } from './config.ts'
 
 describe('GoHighLevel config', () => {
@@ -40,22 +40,12 @@ describe('GoHighLevel config', () => {
     })
   })
 
-  test('validates a matching incoming route', () => {
-    const config = {
-      teamPipelines: { [teamId]: 'pipeline-1' },
-    }
-
-    expect(() => validateIncomingTeamRoute(config, team, 'location-1', 'pipeline-1')).not.toThrow()
+  test('validates a matching incoming location', () => {
+    expect(() => validateIncomingTeamLocation(team, 'location-1')).not.toThrow()
   })
 
-  test('rejects an incoming route that does not match the account team', () => {
-    const config = {
-      teamPipelines: { [teamId]: 'pipeline-1' },
-    }
-
-    expect(() => validateIncomingTeamRoute(config, team, 'location-2', 'pipeline-1')).toThrow(
-      'do not match Terros team'
-    )
+  test('rejects an incoming location that does not match the account team', () => {
+    expect(() => validateIncomingTeamLocation(team, 'location-2')).toThrow('does not match Terros team')
   })
 
   test('maps a Terros stage to a GoHighLevel stage', () => {
