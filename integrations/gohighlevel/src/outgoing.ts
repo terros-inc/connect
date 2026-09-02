@@ -63,6 +63,8 @@ type AccountChangeWebhook =
 
 export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, client) => {
   const payload = input.context.payload
+  console.log(`Received Terros account ${payload.action} webhook for account ${payload.data.id}`)
+
   if (payload.action === 'remove') {
     console.log(`Skipping GoHighLevel sync for removed Terros account ${payload.data.id}`)
     return
@@ -75,12 +77,15 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const { team } = await client.team.get({ teamId })
+  console.log(`Found team ${team.teamId} for account ${account.id}`)
   const route = resolveTeamRoute(scriptConfig, team)
+  console.log(`Resolved team ${team.teamId} to GoHighLevel ${route.locationId} and ${route.pipelineId}`)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
   const assignedTo = await findAssignedUserId(accessToken, route.locationId, account.owner?.email)
   const contactInput = toContactInput(account, route.locationId, scriptConfig, assignedTo)
   const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
+  console.log(`Synced GoHighLevel contact ${contact.id} for account ${account.id}`)
 
   if (!account.externalLeadId) {
     await client.account.update({
@@ -97,6 +102,7 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const pipeline = await getPipeline(accessToken, route.locationId, route.pipelineId)
   const stageName = resolveGoHighLevelStageName(account.workflowState.stageName, scriptConfig.stageMappings)
   const stage = findPipelineStage(pipeline, stageName)
+  console.log(`Resolved ${account.workflowState.stageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
   const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
   const opportunityInput = toOpportunityInput(account, route, contact.id, stage.id, assignedTo)
 
