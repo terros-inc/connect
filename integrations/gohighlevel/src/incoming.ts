@@ -1,40 +1,36 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
-import { getPrivateIntegrationToken } from './util.ts'
-import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
-import { resolveTerrosStageName, validateIncomingTeamRoute } from './config.ts'
+import { resolveTerrosStageName, validateIncomingTeamLocation } from './config.ts'
 
 type ScriptConfig = {
-  teamPipelines: Record<string, string>
   stageMappings?: Record<string, string>
 }
 
-type Secrets = {
-  privateIntegrationTokens: Record<string, string>
-}
-
-type OpportunityStageUpdate = {
-  type?: string
-  locationId?: string
-  id?: string
-  contactId?: string
-  pipelineId?: string
-  pipelineStageId?: string
-}
-
-export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, client) => {
-  const payload = input.context.payload
-  console.log(`Received webhook ${payload.type || '(missing)'} for opportunity ${payload.id || '(missing)'}`)
-
-  if (payload.type !== 'OpportunityStageUpdate') {
-    console.log(`Skipping unsupported webhook type ${payload.type || '(missing)'}`)
-    return
+type OpportunityWorkflowWebhook = {
+  location?: {
+    id?: string
   }
+  contact_id?: string
+  customData?: {
+    pipeline_stage?: string
+  }
+}
 
-  const { locationId, pipelineId, pipelineStageId, contactId } = payload
-  if (!locationId) throw Error('OpportunityStageUpdate is missing locationId')
-  if (!pipelineId) throw Error('OpportunityStageUpdate is missing pipelineId')
-  if (!pipelineStageId) throw Error('OpportunityStageUpdate is missing pipelineStageId')
-  if (!contactId) throw Error('OpportunityStageUpdate is missing contactId')
+export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (input, client) => {
+  const payload = input.context.payload
+  const customDataFields =
+    Object.keys(payload.customData ?? {})
+      .sort()
+      .join(', ') || '(none)'
+  console.log(
+    `Received update for contact ${payload.contact_id || '(missing)'} with custom data fields ${customDataFields}`
+  )
+
+  const locationId = payload.location?.id
+  const contactId = payload.contact_id
+  const stageName = payload.customData?.pipeline_stage
+  if (!locationId) throw Error('GoHighLevel workflow webhook is missing location.id')
+  if (!contactId) throw Error('GoHighLevel workflow webhook is missing contact_id')
+  if (!stageName) throw Error('GoHighLevel workflow webhook is missing customData.pipeline_stage')
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const match = await client.account.match({ externalLeadId: contactId })
@@ -46,13 +42,9 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
 
   const { team } = await client.team.get({ teamId: account.teamId })
   console.log(`Found team ${team.teamId} for account ${account.accountId}`)
-  validateIncomingTeamRoute(scriptConfig, team, locationId, pipelineId)
-  const secrets = input.context.config.secrets as unknown as Secrets
-  const accessToken = getPrivateIntegrationToken(secrets, locationId)
-  const pipeline = await getPipeline(accessToken, locationId, pipelineId)
-  const stageName = getPipelineStageName(pipeline, pipelineStageId)
+  validateIncomingTeamLocation(team, locationId)
   const workflowTarget = resolveTerrosStageName(stageName, scriptConfig.stageMappings)
-  console.log(`Resolved stage ${stageName} (${pipelineStageId}) to workflow stage ${workflowTarget}`)
+  console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
 
   await client.account.upsert({
     requestType: 'update',
@@ -65,5 +57,5 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
     },
   })
 
-  console.log(`Updated ${account.accountId} from opportunity ${payload.id || '(missing)'}`)
+  console.log(`Updated ${account.accountId} from GoHighLevel pipeline stage ${stageName}`)
 })

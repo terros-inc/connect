@@ -41,24 +41,13 @@
       "type": "incoming",
       "configSchema": [
         {
-          "name": "teamPipelines",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
-        },
-        {
           "name": "stageMappings",
           "type": "mapping",
           "dataType": "None",
           "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
         }
       ],
-      "authSchema": {
-        "privateIntegrationTokens": {
-          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
-          "mapping": true
-        }
-      },
+      "authSchema": {},
       "permissions": ["account:list", "account:save", "team:list"],
       "slug": "gohighlevel-opportunity-webhook"
     },
