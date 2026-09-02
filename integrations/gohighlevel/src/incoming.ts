@@ -1,7 +1,7 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
 import { getPrivateIntegrationToken } from './util.ts'
 import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
-import { resolveIncomingTeamRoute, resolveStageName } from './config.ts'
+import { resolveStageName, validateIncomingTeamRoute } from './config.ts'
 
 type ScriptConfig = {
   teamPipelines: Record<string, string>
@@ -42,8 +42,7 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
   if (!account.teamId) throw Error(`Terros account ${account.accountId} has no teamId`)
 
   const { team } = await client.team.get({ teamId: account.teamId })
-  // this function isn't being used?
-  resolveIncomingTeamRoute(scriptConfig, team, locationId, pipelineId)
+  validateIncomingTeamRoute(scriptConfig, team, locationId, pipelineId)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, locationId)
   const pipeline = await getPipeline(accessToken, locationId, pipelineId)

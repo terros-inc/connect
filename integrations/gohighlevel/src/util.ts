@@ -27,7 +27,7 @@ export async function ghlApi<T>(accessToken: string, path: string, init: Request
       Accept: 'application/json',
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      Version: '2021-07-28', // why do we have a version here?
+      Version: '2021-07-28',
       ...init.headers,
     },
   })

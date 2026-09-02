@@ -22,18 +22,16 @@ export function resolveTeamRoute(config: { teamPipelines: Record<string, string>
   return { teamId: team.teamId, locationId, pipelineId }
 }
 
-export function resolveIncomingTeamRoute(
+export function validateIncomingTeamRoute(
   config: { teamPipelines: Record<string, string> },
   team: TinyTeam,
   locationId: string,
   pipelineId: string
-): TeamRoute {
+): void {
   const route = resolveTeamRoute(config, team)
   if (route.locationId !== locationId || route.pipelineId !== pipelineId) {
     throw Error(`GoHighLevel location ${locationId} and pipeline ${pipelineId} do not match Terros team ${team.teamId}`)
   }
-
-  return route
 }
 
 export function resolveCalendarRoute(config: { teamCalendars: Record<string, string> }, team: TinyTeam): CalendarRoute {
