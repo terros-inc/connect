@@ -1,4 +1,4 @@
-import { resolveCalendarRoute, resolveIncomingTeamRoute, resolveStageName, resolveTeamRoute } from './config.ts'
+import { resolveCalendarRoute, resolveStageName, resolveTeamRoute, validateIncomingTeamRoute } from './config.ts'
 
 describe('GoHighLevel config', () => {
   const teamId = 'Team.example' as const
@@ -34,16 +34,12 @@ describe('GoHighLevel config', () => {
     })
   })
 
-  test('reverse resolves a unique incoming route', () => {
+  test('validates a matching incoming route', () => {
     const config = {
       teamPipelines: { [teamId]: 'pipeline-1' },
     }
 
-    expect(resolveIncomingTeamRoute(config, team, 'location-1', 'pipeline-1')).toEqual({
-      teamId,
-      locationId: 'location-1',
-      pipelineId: 'pipeline-1',
-    })
+    expect(() => validateIncomingTeamRoute(config, team, 'location-1', 'pipeline-1')).not.toThrow()
   })
 
   test('rejects an incoming route that does not match the account team', () => {
@@ -51,7 +47,9 @@ describe('GoHighLevel config', () => {
       teamPipelines: { [teamId]: 'pipeline-1' },
     }
 
-    expect(() => resolveIncomingTeamRoute(config, team, 'location-2', 'pipeline-1')).toThrow('do not match Terros team')
+    expect(() => validateIncomingTeamRoute(config, team, 'location-2', 'pipeline-1')).toThrow(
+      'do not match Terros team'
+    )
   })
 
   test('trims a stage name', () => {
