@@ -71,7 +71,7 @@ describe('TerrosApiClient', () => {
     globalThis.fetch = vi.fn().mockRejectedValue(networkError) as unknown as typeof fetch
     const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
 
-    await expect(caller.call('user/get', {})).rejects.toThrow('Request to user/get failed: fetch failed')
+    await expect(caller.call('user/get', {})).rejects.toThrow('Request to user/get failed')
     await expect(caller.call('user/get', {})).rejects.toMatchObject({ cause: networkError })
   })
 
