@@ -42,8 +42,7 @@ export class TerrosApiClient {
         body: JSON.stringify(input),
       })
     } catch (cause) {
-      const causeMessage = cause instanceof Error ? `: ${cause.message}` : ''
-      throw new Error(`Request to ${route} failed${causeMessage}`, { cause })
+      throw new Error(`Request to ${route} failed`, { cause })
     }
     if (!response.ok) throw new Error(response.statusText)
     const output: unknown = await response.json()
