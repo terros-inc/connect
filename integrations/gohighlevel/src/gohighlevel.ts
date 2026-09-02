@@ -230,14 +230,15 @@ export async function createOpportunity(
 export async function updateOpportunity(
   accessToken: string,
   opportunityId: string,
-  opportunity: Pick<GoHighLevelOpportunityInput, 'pipelineId' | 'pipelineStageId' | 'name' | 'status' | 'assignedTo'>
+  opportunity: GoHighLevelOpportunityInput
 ): Promise<GoHighLevelOpportunity> {
+  const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunity
   const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
     `/opportunities/${opportunityId}`,
     {
       method: 'PUT',
-      body: JSON.stringify(opportunity),
+      body: JSON.stringify(opportunityUpdate),
     }
   )
   return response.opportunity
