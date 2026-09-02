@@ -85,14 +85,15 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
 
   if (!account.externalLeadId) {
-    const { account: updatedAccount } = await client.account.update({
+    const { account: updatedAccount } = await client.account.upsert({
+      requestType: 'update',
       account: {
         accountId: account.id,
         externalLeadId: contact.id,
       },
     })
-    if (updatedAccount.externalLeadId !== contact.id) {
-      throw Error(`Account update did not save contact ${contact.id} as externalLeadId on account ${account.id}`)
+    if (updatedAccount?.externalLeadId !== contact.id) {
+      throw Error(`Failed to save contact ${contact.id} as externalLeadId on account ${account.id}`)
     }
     console.log(`Saved contact ${contact.id} as externalLeadId on account ${account.id}`)
   }
