@@ -4,12 +4,18 @@ describe('GoHighLevel appointments', () => {
   test('builds a notifying appointment from a Terros calendar event', () => {
     const event = {
       title: 'Solar Consultation',
-      eventDate: Date.parse('2026-09-01T17:00:00.000Z'),
+      eventDate: '2026-09-01T17:00:00.000Z',
       duration: 90,
-      location: {
-        oneLine: '123 Main St, Victoria, BC',
-        latitude: 48.4284,
-        longitude: -123.3656,
+      address: {
+        line1: '123 Main St',
+        line2: '',
+        locality: 'Victoria',
+        countrySubd: 'BC',
+        postal1: '',
+        latlng: {
+          latitude: 48.4284,
+          longitude: -123.3656,
+        },
       },
     }
     const route = {
@@ -27,7 +33,7 @@ describe('GoHighLevel appointments', () => {
       endTime: '2026-09-01T18:30:00.000Z',
       appointmentStatus: 'confirmed',
       assignedUserId: 'ghl-user',
-      address: '123 Main St, Victoria, BC',
+      address: '123 Main St',
       toNotify: true,
       ignoreDateRange: true,
       ignoreFreeSlotValidation: true,

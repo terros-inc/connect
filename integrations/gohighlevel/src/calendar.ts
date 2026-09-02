@@ -1,7 +1,9 @@
 import {
-  type CalendarEventDataWithDetails,
-  type TerrosClient,
-  type WebhookPayload,
+  type AccountId,
+  type CalendarEventId,
+  type EventType,
+  type SmallAddress,
+  type TeamId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
 import { getPrivateIntegrationToken } from './util.ts'
@@ -22,40 +24,67 @@ type Secrets = {
   privateIntegrationTokens: Record<string, string>
 }
 
-type CalendarEventWebhook = WebhookPayload<'Event', CalendarEventDataWithDetails, 'eventId'>
-type AppointmentEvent = Pick<CalendarEventDataWithDetails, 'title' | 'eventDate' | 'duration' | 'location'>
+type CalendarEventWebhookData = {
+  id: CalendarEventId
+  owner?: {
+    email?: string
+    teamIds?: TeamId[]
+  }
+  eventDate: string
+  account?: {
+    accountId: AccountId
+    externalLeadId?: string
+  }
+  duration: number
+  title: string
+  eventType: EventType
+  address?: SmallAddress
+  attendee?: {
+    email?: string
+  }
+  sourceId?: string
+}
+
+type CalendarEventWebhook =
+  | {
+      entity: 'Event'
+      action: 'add' | 'update'
+      data: CalendarEventWebhookData
+    }
+  | {
+      entity: 'Event'
+      action: 'remove'
+      data: { id: CalendarEventId }
+    }
+
+type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration' | 'address'>
 
 export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
   const payload = input.context.payload
-  const event =
-    payload.action === 'remove' ? (await client.calendar.event.get({ eventId: payload.data })).event : payload.data
 
-  if (event.eventType !== 'Consultation') {
-    console.log(`Skipping non-consultation Terros event ${event.eventId}`)
+  if (payload.action === 'remove') {
+    console.log(`Skipping GoHighLevel sync for removed Terros event ${payload.data.id}`)
     return
   }
-  if (!event.teamId) throw Error(`Terros event ${event.eventId} has no teamId`)
+
+  const event = payload.data
+
+  if (event.eventType !== 'Consultation') {
+    console.log(`Skipping non-consultation Terros event ${event.id}`)
+    return
+  }
+  const teamId = event.owner?.teamIds?.[0]
+  if (!teamId) throw Error(`Terros event ${event.id} owner has no teamId`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const { team } = await client.team.get({ teamId: event.teamId })
+  const { team } = await client.team.get({ teamId })
   const route = resolveCalendarRoute(scriptConfig, team)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
 
-  if (payload.action === 'remove') {
-    if (!event.sourceId) {
-      console.log(`Skipping GoHighLevel cancellation for unsynced Terros event ${event.eventId}`)
-      return
-    }
-    await updateAppointment(accessToken, event.sourceId, { appointmentStatus: 'cancelled', toNotify: true })
-    console.log(`Cancelled GoHighLevel appointment ${event.sourceId} for removed Terros event ${event.eventId}`)
-    return
-  }
-
-  if (!event.accountId) throw Error(`Terros event ${event.eventId} has no accountId`)
-  const { account } = await client.account.get({ accountId: event.accountId })
-  if (!account.externalLeadId) {
-    throw Error(`Terros account ${event.accountId} has no synced GoHighLevel contact ID`)
+  if (!event.account) throw Error(`Terros event ${event.id} has no account`)
+  if (!event.account.externalLeadId) {
+    throw Error(`Terros account ${event.account.accountId} has no synced GoHighLevel contact ID`)
   }
 
   const assignedUserId = await findAssignedUserId(
@@ -63,31 +92,22 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     route.locationId,
     event.attendee?.email || event.owner?.email
   )
-  const appointmentInput = toAppointmentInput(event, route, account.externalLeadId, assignedUserId)
-  const existingAppointmentId = await getExistingAppointmentId(client, event)
+  const appointmentInput = toAppointmentInput(event, route, event.account.externalLeadId, assignedUserId)
 
-  if (existingAppointmentId) {
-    const updatedAppointment = await updateExistingAppointment(accessToken, existingAppointmentId, appointmentInput)
-    if (!event.sourceId) {
-      await client.calendar.event.update({
-        event: {
-          eventId: event.eventId,
-          sourceId: updatedAppointment.id,
-        },
-      })
-    }
-    console.log(`Updated GoHighLevel appointment ${updatedAppointment.id} for Terros event ${event.eventId}`)
+  if (event.sourceId) {
+    const updatedAppointment = await updateExistingAppointment(accessToken, event.sourceId, appointmentInput)
+    console.log(`Updated GoHighLevel appointment ${updatedAppointment.id} for Terros event ${event.id}`)
     return
   }
 
   const createdAppointment = await createAppointment(accessToken, appointmentInput)
   await client.calendar.event.update({
     event: {
-      eventId: event.eventId,
+      eventId: event.id,
       sourceId: createdAppointment.id,
     },
   })
-  console.log(`Created GoHighLevel appointment ${createdAppointment.id} for Terros event ${event.eventId}`)
+  console.log(`Created GoHighLevel appointment ${createdAppointment.id} for Terros event ${event.id}`)
 })
 
 export function toAppointmentInput(
@@ -97,7 +117,7 @@ export function toAppointmentInput(
   assignedUserId: string | undefined
 ): GoHighLevelAppointmentInput {
   const startTime = new Date(event.eventDate)
-  const endTime = new Date(event.eventDate + event.duration * 60_000)
+  const endTime = new Date(startTime.getTime() + event.duration * 60_000)
 
   return {
     calendarId: route.calendarId,
@@ -108,22 +128,11 @@ export function toAppointmentInput(
     endTime: endTime.toISOString(),
     appointmentStatus: 'confirmed',
     assignedUserId,
-    address: event.location?.oneLine,
+    address: event.address?.line1,
     toNotify: true,
     ignoreDateRange: true,
     ignoreFreeSlotValidation: true,
   }
-}
-
-async function getExistingAppointmentId(
-  client: TerrosClient,
-  event: CalendarEventDataWithDetails
-): Promise<string | undefined> {
-  if (event.sourceId) return event.sourceId
-  if (!event.previousEventId) return
-
-  const { event: previousEvent } = await client.calendar.event.get({ eventId: event.previousEventId })
-  return previousEvent.sourceId
 }
 
 async function updateExistingAppointment(

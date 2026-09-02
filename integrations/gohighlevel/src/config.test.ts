@@ -1,4 +1,10 @@
-import { resolveCalendarRoute, resolveStageName, resolveTeamRoute, validateIncomingTeamRoute } from './config.ts'
+import {
+  resolveCalendarRoute,
+  resolveGoHighLevelStageName,
+  resolveTeamRoute,
+  resolveTerrosStageName,
+  validateIncomingTeamRoute,
+} from './config.ts'
 
 describe('GoHighLevel config', () => {
   const teamId = 'Team.example' as const
@@ -52,7 +58,16 @@ describe('GoHighLevel config', () => {
     )
   })
 
-  test('trims a stage name', () => {
-    expect(resolveStageName(' Appointment Set ')).toBe('Appointment Set')
+  test('maps a Terros stage to a GoHighLevel stage', () => {
+    expect(resolveGoHighLevelStageName(' Activity ', { activity: 'Lead' })).toBe('Lead')
+  })
+
+  test('maps a GoHighLevel stage back to a Terros stage', () => {
+    expect(resolveTerrosStageName(' lead ', { Activity: 'Lead' })).toBe('Activity')
+  })
+
+  test('uses the same trimmed stage name when no mapping is configured', () => {
+    expect(resolveGoHighLevelStageName(' Appointment Set ')).toBe('Appointment Set')
+    expect(resolveTerrosStageName(' Appointment Set ')).toBe('Appointment Set')
   })
 })
