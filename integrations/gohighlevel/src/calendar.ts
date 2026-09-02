@@ -78,7 +78,9 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const { team } = await client.team.get({ teamId })
+  console.log(`Using team ${team.teamId}`)
   const route = resolveCalendarRoute(scriptConfig, team)
+  console.log(`Resolved ${team.teamId} to ${route.locationId} and ${route.calendarId}`)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
 
@@ -86,6 +88,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   if (!event.account.externalLeadId) {
     throw Error(`Terros account ${event.account.accountId} has no synced GoHighLevel contact ID`)
   }
+  console.log(`Using contact ${event.account.externalLeadId} from ${event.account.accountId} for ${event.id}`)
 
   const assignedUserId = await findAssignedUserId(
     accessToken,

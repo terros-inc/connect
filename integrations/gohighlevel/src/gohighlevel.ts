@@ -199,9 +199,9 @@ export async function findOpportunity(
   contactId: string
 ): Promise<GoHighLevelOpportunity | undefined> {
   const search = new URLSearchParams({
-    locationId: route.locationId,
-    pipelineId: route.pipelineId,
-    contactId,
+    location_id: route.locationId,
+    pipeline_id: route.pipelineId,
+    contact_id: contactId,
     status: 'all',
     limit: '2',
   })
