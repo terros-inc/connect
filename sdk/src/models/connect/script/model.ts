@@ -7,13 +7,20 @@ export type ConfigSchemaField = {
   dataType?: 'None' | 'Account' | 'User' | 'Event'
 }
 
+export type AuthSchemaField =
+  | string
+  | {
+      description: string
+      mapping?: boolean
+    }
+
 export type ScriptBase = {
   appId: AppId
   appVersion: string
   name: string
   description?: string
   configSchema: ConfigSchemaField[]
-  authSchema: Record<string, string>
+  authSchema: Record<string, AuthSchemaField>
   scriptStorage?: 'inline' | 'blob'
   permissions: string[]
   slug?: string

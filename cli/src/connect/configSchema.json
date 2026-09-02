@@ -32,29 +32,17 @@
                     },
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "string",
-                        "number",
-                        "mapping"
-                      ]
+                      "enum": ["string", "number", "mapping"]
                     },
                     "description": {
                       "type": "string"
                     },
                     "dataType": {
                       "type": "string",
-                      "enum": [
-                        "None",
-                        "Account",
-                        "User",
-                        "Event"
-                      ]
+                      "enum": ["None", "Account", "User", "Event"]
                     }
                   },
-                  "required": [
-                    "name",
-                    "type"
-                  ],
+                  "required": ["name", "type"],
                   "additionalProperties": false
                 }
               },
@@ -64,7 +52,24 @@
                   "type": "string"
                 },
                 "additionalProperties": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "mapping": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["description"],
+                      "additionalProperties": false
+                    }
+                  ]
                 }
               },
               "permissions": {
@@ -79,19 +84,10 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "incoming"
-                ]
+                "enum": ["incoming"]
               }
             },
-            "required": [
-              "name",
-              "entrypoint",
-              "configSchema",
-              "authSchema",
-              "permissions",
-              "type"
-            ],
+            "required": ["name", "entrypoint", "configSchema", "authSchema", "permissions", "type"],
             "additionalProperties": false
           },
           {
@@ -117,29 +113,17 @@
                     },
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "string",
-                        "number",
-                        "mapping"
-                      ]
+                      "enum": ["string", "number", "mapping"]
                     },
                     "description": {
                       "type": "string"
                     },
                     "dataType": {
                       "type": "string",
-                      "enum": [
-                        "None",
-                        "Account",
-                        "User",
-                        "Event"
-                      ]
+                      "enum": ["None", "Account", "User", "Event"]
                     }
                   },
-                  "required": [
-                    "name",
-                    "type"
-                  ],
+                  "required": ["name", "type"],
                   "additionalProperties": false
                 }
               },
@@ -149,7 +133,24 @@
                   "type": "string"
                 },
                 "additionalProperties": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "mapping": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["description"],
+                      "additionalProperties": false
+                    }
+                  ]
                 }
               },
               "permissions": {
@@ -164,29 +165,14 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "outgoing"
-                ]
+                "enum": ["outgoing"]
               },
               "dataType": {
                 "type": "string",
-                "enum": [
-                  "Account",
-                  "Company",
-                  "User",
-                  "Event"
-                ]
+                "enum": ["Account", "Company", "User", "Event"]
               }
             },
-            "required": [
-              "name",
-              "entrypoint",
-              "configSchema",
-              "authSchema",
-              "permissions",
-              "type",
-              "dataType"
-            ],
+            "required": ["name", "entrypoint", "configSchema", "authSchema", "permissions", "type", "dataType"],
             "additionalProperties": false
           },
           {
@@ -212,29 +198,17 @@
                     },
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "string",
-                        "number",
-                        "mapping"
-                      ]
+                      "enum": ["string", "number", "mapping"]
                     },
                     "description": {
                       "type": "string"
                     },
                     "dataType": {
                       "type": "string",
-                      "enum": [
-                        "None",
-                        "Account",
-                        "User",
-                        "Event"
-                      ]
+                      "enum": ["None", "Account", "User", "Event"]
                     }
                   },
-                  "required": [
-                    "name",
-                    "type"
-                  ],
+                  "required": ["name", "type"],
                   "additionalProperties": false
                 }
               },
@@ -244,7 +218,24 @@
                   "type": "string"
                 },
                 "additionalProperties": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string"
+                        },
+                        "mapping": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": ["description"],
+                      "additionalProperties": false
+                    }
+                  ]
                 }
               },
               "permissions": {
@@ -259,32 +250,19 @@
               },
               "type": {
                 "type": "string",
-                "enum": [
-                  "scheduled"
-                ]
+                "enum": ["scheduled"]
               },
               "cron": {
                 "type": "string"
               }
             },
-            "required": [
-              "name",
-              "entrypoint",
-              "configSchema",
-              "authSchema",
-              "permissions",
-              "type",
-              "cron"
-            ],
+            "required": ["name", "entrypoint", "configSchema", "authSchema", "permissions", "type", "cron"],
             "additionalProperties": false
           }
         ]
       }
     }
   },
-  "required": [
-    "appId",
-    "scripts"
-  ],
+  "required": ["appId", "scripts"],
   "additionalProperties": false
 }

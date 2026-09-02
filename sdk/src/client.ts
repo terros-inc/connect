@@ -1,6 +1,14 @@
 import { TerrosApiClient, type TerrosClientConfig } from '@terros-inc/connect-common'
 import packageJson from '../package.json'
-import { UserClient, AccountClient, AreaClient, CalendarClient, CompanyClient, ConnectClient } from './clients'
+import {
+  UserClient,
+  AccountClient,
+  AreaClient,
+  CalendarClient,
+  CompanyClient,
+  ConnectClient,
+  TeamClient,
+} from './clients'
 
 export class TerrosClient {
   readonly account: AccountClient
@@ -8,6 +16,7 @@ export class TerrosClient {
   readonly calendar: CalendarClient
   readonly company: CompanyClient
   readonly connect: ConnectClient
+  readonly team: TeamClient
   readonly user: UserClient
 
   constructor(config: TerrosClientConfig = {}) {
@@ -22,6 +31,7 @@ export class TerrosClient {
     this.calendar = new CalendarClient(api)
     this.company = new CompanyClient(api)
     this.connect = new ConnectClient(api)
+    this.team = new TeamClient(api)
     this.user = new UserClient(api)
   }
 }
