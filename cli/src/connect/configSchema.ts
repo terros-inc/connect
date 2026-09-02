@@ -21,7 +21,16 @@ export const ConfigSchemaField = z.object({
 
 export const ConfigSchema = z.array(ConfigSchemaField)
 
-export const ScriptAuth = z.record(z.string(), z.string())
+export const ScriptAuth = z.record(
+  z.string(),
+  z.union([
+    z.string(),
+    z.object({
+      description: z.string(),
+      mapping: z.boolean().optional(),
+    }),
+  ])
+)
 
 export const UnsavedScriptBase = z.object({
   name: z.string(),
