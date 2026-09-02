@@ -1,10 +1,11 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
 import { getPrivateIntegrationToken } from './util.ts'
 import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
-import { resolveStageName, validateIncomingTeamRoute } from './config.ts'
+import { resolveTerrosStageName, validateIncomingTeamRoute } from './config.ts'
 
 type ScriptConfig = {
   teamPipelines: Record<string, string>
+  stageMappings?: Record<string, string>
 }
 
 type Secrets = {
@@ -47,7 +48,7 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
   const accessToken = getPrivateIntegrationToken(secrets, locationId)
   const pipeline = await getPipeline(accessToken, locationId, pipelineId)
   const stageName = getPipelineStageName(pipeline, pipelineStageId)
-  const workflowTarget = resolveStageName(stageName)
+  const workflowTarget = resolveTerrosStageName(stageName, scriptConfig.stageMappings)
 
   await client.account.upsert({
     requestType: 'update',

@@ -1,4 +1,11 @@
-import { type AccountWebhook, type AccountWebhookData, wrapConnectHandler } from '@terros-inc/sdk'
+import {
+  type AccountId,
+  type CustomFieldMap,
+  type SmallAddress,
+  type TeamId,
+  type TinyResidentData,
+  wrapConnectHandler,
+} from '@terros-inc/sdk'
 import { getPrivateIntegrationToken, readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
 import {
   createOpportunity,
@@ -15,30 +22,59 @@ import {
   updateOpportunity,
   upsertContact,
 } from './gohighlevel.ts'
-import { resolveStageName, resolveTeamRoute } from './config.ts'
+import { resolveGoHighLevelStageName, resolveTeamRoute } from './config.ts'
 
 type ScriptConfig = {
   teamPipelines: Record<string, string>
-  contactFieldMappings: Record<string, string>
+  stageMappings?: Record<string, string>
+  contactFieldMappings?: Record<string, string>
 }
 
 type Secrets = {
   privateIntegrationTokens: Record<string, string>
 }
 
-export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
+type AccountChangeData = {
+  id: AccountId
+  workflowState?: {
+    stageName?: string
+  }
+  owner?: {
+    email?: string
+    teamIds?: TeamId[]
+  }
+  address?: SmallAddress
+  resident?: TinyResidentData
+  externalLeadId?: string
+  customFieldMap?: CustomFieldMap
+}
+
+type AccountChangeWebhook =
+  | {
+      entity: 'Account'
+      action: 'add' | 'update'
+      data: AccountChangeData
+    }
+  | {
+      entity: 'Account'
+      action: 'remove'
+      data: { id: AccountId }
+    }
+
+export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, client) => {
   const payload = input.context.payload
   if (payload.action === 'remove') {
-    console.log(`Skipping GoHighLevel sync for removed Terros account ${payload.data}`)
+    console.log(`Skipping GoHighLevel sync for removed Terros account ${payload.data.id}`)
     return
   }
 
+  const teamId = payload.data.owner?.teamIds?.[0]
+  if (!teamId) throw Error(`Terros account ${payload.data.id} owner has no teamId`)
   const account = payload.data
-  if (!account.teamId) throw Error(`Terros account ${account.id} has no teamId`)
-  if (!account.workflowStageName) throw Error(`Terros account ${account.id} has no workflow stage name`)
+  if (!account.workflowState?.stageName) throw Error(`Terros account ${account.id} has no workflow stage name`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const { team } = await client.team.get({ teamId: account.teamId })
+  const { team } = await client.team.get({ teamId })
   const route = resolveTeamRoute(scriptConfig, team)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
@@ -54,21 +90,19 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
       },
     })
     console.log(
-      `Saved GoHighLevel contact ${contact.id} on Terros account ${account.id} for team ${account.teamId} and location ${route.locationId}`
+      `Saved GoHighLevel contact ${contact.id} on Terros account ${account.id} for team ${teamId} and location ${route.locationId}`
     )
   }
 
   const pipeline = await getPipeline(accessToken, route.locationId, route.pipelineId)
-  const stageName = resolveStageName(account.workflowStageName)
+  const stageName = resolveGoHighLevelStageName(account.workflowState.stageName, scriptConfig.stageMappings)
   const stage = findPipelineStage(pipeline, stageName)
   const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
   const opportunityInput = toOpportunityInput(account, route, contact.id, stage.id, assignedTo)
 
   if (!existingOpportunity) {
     const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
-    console.log(
-      `Created GoHighLevel opportunity ${createdOpportunity.id} for Terros account ${account.id}, team ${account.teamId}, location ${route.locationId}, pipeline ${route.pipelineId}, and stage ${stage.name}`
-    )
+    console.log(`Created GoHighLevel opportunity ${createdOpportunity.id} for Terros account ${account.id}`)
     return
   }
 
@@ -102,7 +136,7 @@ async function syncContact(
 }
 
 function toContactInput(
-  account: AccountWebhookData,
+  account: AccountChangeData,
   locationId: string,
   config: ScriptConfig,
   assignedTo: string | undefined
@@ -111,15 +145,15 @@ function toContactInput(
 
   const contact: GoHighLevelContactInput = {
     locationId,
-    firstName: readTrimmedString(account.homeowner?.firstName),
-    lastName: readTrimmedString(account.homeowner?.lastName),
-    name: readTrimmedString(account.homeowner?.name),
-    email: readTrimmedString(account.homeowner?.email),
-    phone: readTrimmedString(account.homeowner?.phone),
-    address1: account.location?.line1,
-    city: account.location?.locality,
-    state: account.location?.countrySubd,
-    postalCode: account.location?.postal1,
+    firstName: readTrimmedString(account.resident?.firstName),
+    lastName: readTrimmedString(account.resident?.lastName),
+    name: readTrimmedString(account.resident?.name),
+    email: readTrimmedString(account.resident?.email),
+    phone: readTrimmedString(account.resident?.phone),
+    address1: account.address?.line1,
+    city: account.address?.locality,
+    state: account.address?.countrySubd,
+    postalCode: account.address?.postal1,
     assignedTo,
     source: 'Terros',
     customFields: goHighLevelCustomFields,
@@ -128,16 +162,16 @@ function toContactInput(
 }
 
 function toOpportunityInput(
-  account: AccountWebhookData,
+  account: AccountChangeData,
   route: { locationId: string; pipelineId: string },
   contactId: string,
   pipelineStageId: string,
   assignedTo: string | undefined
 ): GoHighLevelOpportunityInput {
-  const firstName = readTrimmedString(account.homeowner?.firstName) || ''
-  const lastName = readTrimmedString(account.homeowner?.lastName) || ''
+  const firstName = readTrimmedString(account.resident?.firstName) || ''
+  const lastName = readTrimmedString(account.resident?.lastName) || ''
   const name =
-    `${firstName} ${lastName}`.trim() || readTrimmedString(account.homeowner?.name) || `Terros Account ${account.id}`
+    `${firstName} ${lastName}`.trim() || readTrimmedString(account.resident?.name) || `Terros Account ${account.id}`
 
   const opportunity: GoHighLevelOpportunityInput = {
     locationId: route.locationId,

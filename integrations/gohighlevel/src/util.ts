@@ -1,4 +1,4 @@
-import type { AccountWebhookData, CustomFieldId } from '@terros-inc/sdk'
+import type { CustomFieldId, CustomFieldMap } from '@terros-inc/sdk'
 
 export type GoHighLevelCustomField = {
   id: string
@@ -6,7 +6,7 @@ export type GoHighLevelCustomField = {
 }
 
 type AccountFieldSource = {
-  customFields?: AccountWebhookData['customFields']
+  customFieldMap?: CustomFieldMap
 }
 
 const baseUrl = 'https://services.leadconnectorhq.com'
@@ -52,11 +52,11 @@ export function readTrimmedString(value: unknown): string | undefined {
 
 export function toGoHighLevelCustomFields(
   account: AccountFieldSource,
-  mappings: Record<string, string>
+  mappings?: Record<string, string> | null
 ): GoHighLevelCustomField[] {
   const goHighLevelCustomFields: GoHighLevelCustomField[] = []
 
-  for (const [terrosAccountField, goHighLevelCustomFieldId] of Object.entries(mappings)) {
+  for (const [terrosAccountField, goHighLevelCustomFieldId] of Object.entries(mappings ?? {})) {
     const fieldValue = getAccountFieldValue(account, terrosAccountField)
     if (fieldValue === undefined || fieldValue === null) continue
 
@@ -75,7 +75,7 @@ export function toGoHighLevelCustomFields(
 }
 
 function getAccountFieldValue(account: AccountFieldSource, field: string): unknown {
-  if (isCustomFieldId(field)) return account.customFields?.[field]
+  if (isCustomFieldId(field)) return account.customFieldMap?.[field]
 
   const accountField = field.startsWith('account.') ? field.slice('account.'.length) : field
   let fieldValue: unknown = account
