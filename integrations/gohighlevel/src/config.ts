@@ -1,4 +1,4 @@
-import type { TeamId } from '@terros-inc/sdk'
+import type { TeamId, TinyTeam } from '@terros-inc/sdk'
 
 export type TeamRoute = {
   teamId: TeamId
@@ -12,60 +12,40 @@ export type CalendarRoute = {
   calendarId: string
 }
 
-export function resolveTeamRoute(
-  config: { teamLocations: Record<string, string>; teamPipelines: Record<string, string> },
-  teamId: TeamId
-): TeamRoute {
-  const locationId = config.teamLocations[teamId]
-  const pipelineId = config.teamPipelines[teamId]
+export function resolveTeamRoute(config: { teamPipelines: Record<string, string> }, team: TinyTeam): TeamRoute {
+  const locationId = team.externalId
+  const pipelineId = config.teamPipelines[team.teamId]
 
-  if (!locationId) throw Error(`Missing teamLocations mapping for team ${teamId}`)
-  if (!pipelineId) throw Error(`Missing teamPipelines mapping for team ${teamId}`)
+  if (!locationId) throw Error(`Terros team ${team.teamId} has no GoHighLevel location ID`)
+  if (!pipelineId) throw Error(`Missing teamPipelines mapping for team ${team.teamId}`)
 
-  return { teamId, locationId, pipelineId }
+  return { teamId: team.teamId, locationId, pipelineId }
 }
 
 export function resolveIncomingTeamRoute(
-  config: {
-    teamLocations: Record<string, string>
-    teamPipelines: Record<string, string>
-  },
+  config: { teamPipelines: Record<string, string> },
+  team: TinyTeam,
   locationId: string,
   pipelineId: string
-): TeamRoute | undefined {
-  const matchingTeamIds = Object.entries(config.teamLocations)
-    .filter(([, configuredLocationId]) => configuredLocationId === locationId)
-    .map(([teamId]) => teamId)
-    .filter((teamId) => config.teamPipelines[teamId] === pipelineId)
-
-  if (matchingTeamIds.length > 1) {
-    throw Error(`Multiple Terros teams map to GoHighLevel location ${locationId} and pipeline ${pipelineId}`)
+): TeamRoute {
+  const route = resolveTeamRoute(config, team)
+  if (route.locationId !== locationId || route.pipelineId !== pipelineId) {
+    throw Error(`GoHighLevel location ${locationId} and pipeline ${pipelineId} do not match Terros team ${team.teamId}`)
   }
 
-  const teamId = matchingTeamIds[0]
-  if (!teamId) return
-  if (!isTeamId(teamId)) throw Error(`Invalid Terros team ID in routing config: ${teamId}`)
-
-  return { teamId, locationId, pipelineId }
+  return route
 }
 
-export function resolveCalendarRoute(
-  config: { teamLocations: Record<string, string>; teamCalendars: Record<string, string> },
-  teamId: TeamId
-): CalendarRoute {
-  const locationId = config.teamLocations[teamId]
-  const calendarId = config.teamCalendars[teamId]
+export function resolveCalendarRoute(config: { teamCalendars: Record<string, string> }, team: TinyTeam): CalendarRoute {
+  const locationId = team.externalId
+  const calendarId = config.teamCalendars[team.teamId]
 
-  if (!locationId) throw Error(`Missing teamLocations mapping for team ${teamId}`)
-  if (!calendarId) throw Error(`Missing teamCalendars mapping for team ${teamId}`)
+  if (!locationId) throw Error(`Terros team ${team.teamId} has no GoHighLevel location ID`)
+  if (!calendarId) throw Error(`Missing teamCalendars mapping for team ${team.teamId}`)
 
-  return { teamId, locationId, calendarId }
+  return { teamId: team.teamId, locationId, calendarId }
 }
 
 export function resolveStageName(sourceStageName: string): string {
   return sourceStageName.trim()
-}
-
-function isTeamId(value: string): value is TeamId {
-  return value.startsWith('Team:') || value.startsWith('Team.')
 }

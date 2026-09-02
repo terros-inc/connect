@@ -8,17 +8,6 @@
       "dataType": "Account",
       "configSchema": [
         {
-          "name": "goHighLevelCompanyId",
-          "type": "string",
-          "description": "GoHighLevel agency/company ID used to exchange the agency OAuth token for routed sub-account tokens"
-        },
-        {
-          "name": "teamLocations",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its GoHighLevel location/sub-account ID"
-        },
-        {
           "name": "teamPipelines",
           "type": "mapping",
           "dataType": "None",
@@ -32,9 +21,12 @@
         }
       ],
       "authSchema": {
-        "agencyAccessToken": "GoHighLevel agency OAuth access token"
+        "privateIntegrationTokens": {
+          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
+          "mapping": true
+        }
       },
-      "permissions": ["account:save"],
+      "permissions": ["account:save", "team:list"],
       "slug": "gohighlevel-account-sync"
     },
     {
@@ -43,17 +35,6 @@
       "type": "incoming",
       "configSchema": [
         {
-          "name": "goHighLevelCompanyId",
-          "type": "string",
-          "description": "GoHighLevel agency/company ID used to exchange the agency OAuth token for routed sub-account tokens"
-        },
-        {
-          "name": "teamLocations",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its GoHighLevel location/sub-account ID"
-        },
-        {
           "name": "teamPipelines",
           "type": "mapping",
           "dataType": "None",
@@ -61,9 +42,12 @@
         }
       ],
       "authSchema": {
-        "agencyAccessToken": "GoHighLevel agency OAuth access token"
+        "privateIntegrationTokens": {
+          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
+          "mapping": true
+        }
       },
-      "permissions": ["account:list", "account:save"],
+      "permissions": ["account:list", "account:save", "team:list"],
       "slug": "gohighlevel-opportunity-webhook"
     },
     {
@@ -73,17 +57,6 @@
       "dataType": "Event",
       "configSchema": [
         {
-          "name": "goHighLevelCompanyId",
-          "type": "string",
-          "description": "GoHighLevel agency/company ID used to exchange the agency OAuth token for routed sub-account tokens"
-        },
-        {
-          "name": "teamLocations",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its GoHighLevel location/sub-account ID"
-        },
-        {
           "name": "teamCalendars",
           "type": "mapping",
           "dataType": "None",
@@ -91,9 +64,12 @@
         }
       ],
       "authSchema": {
-        "agencyAccessToken": "GoHighLevel agency OAuth access token"
+        "privateIntegrationTokens": {
+          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
+          "mapping": true
+        }
       },
-      "permissions": ["account:list", "event:read", "event:save"],
+      "permissions": ["account:list", "event:read", "event:save", "team:list"],
       "slug": "gohighlevel-appointment-sync"
     }
   ]

@@ -11,17 +11,13 @@ type AccountFieldSource = {
 
 const baseUrl = 'https://services.leadconnectorhq.com'
 
-export async function getLocationAccessToken(
-  agencyAccessToken: string,
-  goHighLevelCompanyId: string,
+export function getPrivateIntegrationToken(
+  secrets: { privateIntegrationTokens: Record<string, string> },
   locationId: string
-): Promise<string> {
-  const response = await ghlApi<{ access_token: string }>(agencyAccessToken, '/oauth/location-token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ companyId: goHighLevelCompanyId, locationId }),
-  })
-  return response.access_token
+): string {
+  const accessToken = secrets.privateIntegrationTokens[locationId]
+  if (!accessToken) throw Error(`Missing GoHighLevel private integration token for location ${locationId}`)
+  return accessToken
 }
 
 export async function ghlApi<T>(accessToken: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -31,7 +27,7 @@ export async function ghlApi<T>(accessToken: string, path: string, init: Request
       Accept: 'application/json',
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      Version: 'v3',
+      Version: '2021-07-28', // why do we have a version here?
       ...init.headers,
     },
   })
