@@ -23,28 +23,26 @@ type OpportunityStageUpdate = {
 
 export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, client) => {
   const payload = input.context.payload
-  console.log(
-    `Received GoHighLevel webhook ${payload.type || '(missing)'} for opportunity ${payload.id || '(missing)'}`
-  )
+  console.log(`Received webhook ${payload.type || '(missing)'} for opportunity ${payload.id || '(missing)'}`)
 
   if (payload.type !== 'OpportunityStageUpdate') {
-    console.log(`Skipping unsupported GoHighLevel webhook type ${payload.type || '(missing)'}`)
+    console.log(`Skipping unsupported webhook type ${payload.type || '(missing)'}`)
     return
   }
 
   const { locationId, pipelineId, pipelineStageId, contactId } = payload
-  if (!locationId) throw Error('GoHighLevel OpportunityStageUpdate is missing locationId')
-  if (!pipelineId) throw Error('GoHighLevel OpportunityStageUpdate is missing pipelineId')
-  if (!pipelineStageId) throw Error('GoHighLevel OpportunityStageUpdate is missing pipelineStageId')
-  if (!contactId) throw Error('GoHighLevel OpportunityStageUpdate is missing contactId')
+  if (!locationId) throw Error('OpportunityStageUpdate is missing locationId')
+  if (!pipelineId) throw Error('OpportunityStageUpdate is missing pipelineId')
+  if (!pipelineStageId) throw Error('OpportunityStageUpdate is missing pipelineStageId')
+  if (!contactId) throw Error('OpportunityStageUpdate is missing contactId')
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const match = await client.account.match({ externalLeadId: contactId })
   const account = match.account
   if (!account) {
-    throw Error(`No Terros account matched GoHighLevel contact ${contactId} at location ${locationId}`)
+    throw Error(`No account matched contact ${contactId} at location ${locationId}`)
   }
-  if (!account.teamId) throw Error(`Terros account ${account.accountId} has no teamId`)
+  if (!account.teamId) throw Error(`Account ${account.accountId} has no teamId`)
 
   const { team } = await client.team.get({ teamId: account.teamId })
   console.log(`Found team ${team.teamId} for account ${account.accountId}`)
@@ -54,7 +52,7 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
   const pipeline = await getPipeline(accessToken, locationId, pipelineId)
   const stageName = getPipelineStageName(pipeline, pipelineStageId)
   const workflowTarget = resolveTerrosStageName(stageName, scriptConfig.stageMappings)
-  console.log(`Resolved GoHighLevel stage ${stageName} (${pipelineStageId}) to workflow stage ${workflowTarget}`)
+  console.log(`Resolved stage ${stageName} (${pipelineStageId}) to workflow stage ${workflowTarget}`)
 
   await client.account.upsert({
     requestType: 'update',
@@ -67,5 +65,5 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
     },
   })
 
-  console.log(`Updated Terros account ${account.accountId} from GoHighLevel opportunity ${payload.id || '(missing)'}`)
+  console.log(`Updated ${account.accountId} from opportunity ${payload.id || '(missing)'}`)
 })

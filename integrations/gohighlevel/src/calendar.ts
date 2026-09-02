@@ -86,7 +86,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   if (!event.account) throw Error(`Terros event ${event.id} has no account`)
   if (!event.account.externalLeadId) {
-    throw Error(`Terros account ${event.account.accountId} has no synced GoHighLevel contact ID`)
+    throw Error(`Account ${event.account.accountId} has no synced contact ID`)
   }
   console.log(`Using contact ${event.account.externalLeadId} from ${event.account.accountId} for ${event.id}`)
 
@@ -99,7 +99,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   if (event.sourceId) {
     const updatedAppointment = await updateExistingAppointment(accessToken, event.sourceId, appointmentInput)
-    console.log(`Updated GoHighLevel appointment ${updatedAppointment.id} for Terros event ${event.id}`)
+    console.log(`Updated appointment ${updatedAppointment.id} for event ${event.id}`)
     return
   }
 
@@ -110,7 +110,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       sourceId: createdAppointment.id,
     },
   })
-  console.log(`Created GoHighLevel appointment ${createdAppointment.id} for Terros event ${event.id}`)
+  console.log(`Created appointment ${createdAppointment.id} for ${event.id}`)
 })
 
 export function toAppointmentInput(

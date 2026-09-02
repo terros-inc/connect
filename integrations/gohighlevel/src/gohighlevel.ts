@@ -115,6 +115,7 @@ export async function updateContact(
     method: 'PUT',
     body: JSON.stringify(contact),
   })
+  console.log(`Updated contact ${contactId}`)
   return response.contact
 }
 

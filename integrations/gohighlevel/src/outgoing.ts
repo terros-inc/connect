@@ -63,10 +63,10 @@ type AccountChangeWebhook =
 
 export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, client) => {
   const payload = input.context.payload
-  console.log(`Received Terros account ${payload.action} webhook for account ${payload.data.id}`)
+  console.log(`Received account ${payload.action} for ${payload.data.id}`)
 
   if (payload.action === 'remove') {
-    console.log(`Skipping GoHighLevel sync for removed Terros account ${payload.data.id}`)
+    console.log(`Skipping sync for removed Terros account ${payload.data.id}`)
     return
   }
 
@@ -77,15 +77,12 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const { team } = await client.team.get({ teamId })
-  console.log(`Found team ${team.teamId} for account ${account.id}`)
   const route = resolveTeamRoute(scriptConfig, team)
-  console.log(`Resolved team ${team.teamId} to GoHighLevel ${route.locationId} and ${route.pipelineId}`)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
   const assignedTo = await findAssignedUserId(accessToken, route.locationId, account.owner?.email)
   const contactInput = toContactInput(account, route.locationId, scriptConfig, assignedTo)
   const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
-  console.log(`Synced GoHighLevel contact ${contact.id} for account ${account.id}`)
 
   if (!account.externalLeadId) {
     await client.account.update({
@@ -94,9 +91,7 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
         externalLeadId: contact.id,
       },
     })
-    console.log(
-      `Saved GoHighLevel contact ${contact.id} on Terros account ${account.id} for team ${teamId} and location ${route.locationId}`
-    )
+    console.log(`Saved contact ${contact.id} to account ${account.id}`)
   }
 
   const pipeline = await getPipeline(accessToken, route.locationId, route.pipelineId)
@@ -108,19 +103,17 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
 
   if (!existingOpportunity) {
     const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
-    console.log(`Created GoHighLevel opportunity ${createdOpportunity.id} for Terros account ${account.id}`)
+    console.log(`Created opportunity ${createdOpportunity.id} for Terros account ${account.id}`)
     return
   }
 
   if (!opportunityNeedsUpdate(existingOpportunity, opportunityInput)) {
-    console.log(`Skipped unchanged GoHighLevel opportunity ${existingOpportunity.id} for Terros account ${account.id}`)
+    console.log(`Skipped unchanged opportunity ${existingOpportunity.id} for Terros account ${account.id}`)
     return
   }
 
   const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityInput)
-  console.log(
-    `Updated GoHighLevel opportunity ${updatedOpportunity.id} for Terros account ${account.id}, and stage ${stage.name}`
-  )
+  console.log(`Updated opportunity ${updatedOpportunity.id} for ${account.id}, and stage ${stage.name}`)
 })
 
 async function syncContact(
@@ -133,7 +126,7 @@ async function syncContact(
   const existingContact = await getContact(accessToken, contactId)
   if (existingContact.locationId !== contactInput.locationId) {
     throw Error(
-      `GoHighLevel contact ${contactId} belongs to location ${existingContact.locationId}, expected ${contactInput.locationId}`
+      `Contact ${contactId} belongs to location ${existingContact.locationId}, expected ${contactInput.locationId}`
     )
   }
 
