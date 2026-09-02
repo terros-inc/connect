@@ -1,12 +1,14 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
-import { getLocationAccessToken } from './util.ts'
+import { getPrivateIntegrationToken } from './util.ts'
 import { getPipeline, getPipelineStageName } from './gohighlevel.ts'
 import { resolveIncomingTeamRoute, resolveStageName } from './config.ts'
 
 type ScriptConfig = {
-  goHighLevelCompanyId: string
-  teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
+}
+
+type Secrets = {
+  privateIntegrationTokens: Record<string, string>
 }
 
 type OpportunityStageUpdate = {
@@ -32,30 +34,21 @@ export const handler = wrapConnectHandler<OpportunityStageUpdate>(async (input, 
   if (!contactId) throw Error('GoHighLevel OpportunityStageUpdate is missing contactId')
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const route = resolveIncomingTeamRoute(scriptConfig, locationId, pipelineId)
-  if (!route) {
-    console.log(`Skipping unconfigured GoHighLevel location ${locationId} and pipeline ${pipelineId}`)
-    return
-  }
-
-  const agencyAccessToken = input.context.config.secrets.agencyAccessToken
-  if (!agencyAccessToken) throw Error('Missing GoHighLevel agencyAccessToken')
-  if (!scriptConfig.goHighLevelCompanyId) throw Error('Missing goHighLevelCompanyId')
-  const accessToken = await getLocationAccessToken(agencyAccessToken, scriptConfig.goHighLevelCompanyId, locationId)
-  const pipeline = await getPipeline(accessToken, locationId, pipelineId)
-  const stageName = getPipelineStageName(pipeline, pipelineStageId)
-  const workflowTarget = resolveStageName(stageName)
-
   const match = await client.account.match({ externalLeadId: contactId })
   const account = match.account
   if (!account) {
     throw Error(`No Terros account matched GoHighLevel contact ${contactId} at location ${locationId}`)
   }
-  if (account.teamId !== route.teamId) {
-    throw Error(
-      `Terros account ${account.accountId} belongs to team ${account.teamId || '(missing)'}, expected ${route.teamId}`
-    )
-  }
+  if (!account.teamId) throw Error(`Terros account ${account.accountId} has no teamId`)
+
+  const { team } = await client.team.get({ teamId: account.teamId })
+  // this function isn't being used?
+  resolveIncomingTeamRoute(scriptConfig, team, locationId, pipelineId)
+  const secrets = input.context.config.secrets as unknown as Secrets
+  const accessToken = getPrivateIntegrationToken(secrets, locationId)
+  const pipeline = await getPipeline(accessToken, locationId, pipelineId)
+  const stageName = getPipelineStageName(pipeline, pipelineStageId)
+  const workflowTarget = resolveStageName(stageName)
 
   await client.account.upsert({
     requestType: 'update',

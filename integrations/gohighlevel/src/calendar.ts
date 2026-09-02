@@ -4,7 +4,7 @@ import {
   type WebhookPayload,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { getLocationAccessToken } from './util.ts'
+import { getPrivateIntegrationToken } from './util.ts'
 import {
   createAppointment,
   findAssignedUserId,
@@ -15,9 +15,11 @@ import {
 import { resolveCalendarRoute, type CalendarRoute } from './config.ts'
 
 type ScriptConfig = {
-  goHighLevelCompanyId: string
-  teamLocations: Record<string, string>
   teamCalendars: Record<string, string>
+}
+
+type Secrets = {
+  privateIntegrationTokens: Record<string, string>
 }
 
 type CalendarEventWebhook = WebhookPayload<'Event', CalendarEventDataWithDetails, 'eventId'>
@@ -35,15 +37,10 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   if (!event.teamId) throw Error(`Terros event ${event.eventId} has no teamId`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const route = resolveCalendarRoute(scriptConfig, event.teamId)
-  const agencyAccessToken = input.context.config.secrets.agencyAccessToken
-  if (!agencyAccessToken) throw Error('Missing GoHighLevel agencyAccessToken')
-  if (!scriptConfig.goHighLevelCompanyId) throw Error('Missing goHighLevelCompanyId')
-  const accessToken = await getLocationAccessToken(
-    agencyAccessToken,
-    scriptConfig.goHighLevelCompanyId,
-    route.locationId
-  )
+  const { team } = await client.team.get({ teamId: event.teamId })
+  const route = resolveCalendarRoute(scriptConfig, team)
+  const secrets = input.context.config.secrets as unknown as Secrets
+  const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
 
   if (payload.action === 'remove') {
     if (!event.sourceId) {

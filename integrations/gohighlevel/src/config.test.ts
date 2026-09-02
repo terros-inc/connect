@@ -2,14 +2,14 @@ import { resolveCalendarRoute, resolveIncomingTeamRoute, resolveStageName, resol
 
 describe('GoHighLevel config', () => {
   const teamId = 'Team.example' as const
+  const team = { teamId, name: 'Example', externalId: 'location-1', level: 1 }
 
   test('resolves an outgoing team route', () => {
     const config = {
-      teamLocations: { [teamId]: 'location-1' },
       teamPipelines: { [teamId]: 'pipeline-1' },
     }
 
-    expect(resolveTeamRoute(config, teamId)).toEqual({
+    expect(resolveTeamRoute(config, team)).toEqual({
       teamId,
       locationId: 'location-1',
       pipelineId: 'pipeline-1',
@@ -17,18 +17,17 @@ describe('GoHighLevel config', () => {
   })
 
   test('rejects an incomplete outgoing route', () => {
-    const config = { teamLocations: { [teamId]: 'location-1' }, teamPipelines: {} }
+    const config = { teamPipelines: {} }
 
-    expect(() => resolveTeamRoute(config, teamId)).toThrow('Missing teamPipelines mapping')
+    expect(() => resolveTeamRoute(config, team)).toThrow('Missing teamPipelines mapping')
   })
 
   test('resolves a calendar route for a team', () => {
     const config = {
-      teamLocations: { [teamId]: 'location-1' },
       teamCalendars: { [teamId]: 'calendar-1' },
     }
 
-    expect(resolveCalendarRoute(config, teamId)).toEqual({
+    expect(resolveCalendarRoute(config, team)).toEqual({
       teamId,
       locationId: 'location-1',
       calendarId: 'calendar-1',
@@ -37,24 +36,22 @@ describe('GoHighLevel config', () => {
 
   test('reverse resolves a unique incoming route', () => {
     const config = {
-      teamLocations: { [teamId]: 'location-1' },
       teamPipelines: { [teamId]: 'pipeline-1' },
     }
 
-    expect(resolveIncomingTeamRoute(config, 'location-1', 'pipeline-1')).toEqual({
+    expect(resolveIncomingTeamRoute(config, team, 'location-1', 'pipeline-1')).toEqual({
       teamId,
       locationId: 'location-1',
       pipelineId: 'pipeline-1',
     })
   })
 
-  test('rejects duplicate incoming routes', () => {
+  test('rejects an incoming route that does not match the account team', () => {
     const config = {
-      teamLocations: { 'Team.one': 'location-1', 'Team.two': 'location-1' },
-      teamPipelines: { 'Team.one': 'pipeline-1', 'Team.two': 'pipeline-1' },
+      teamPipelines: { [teamId]: 'pipeline-1' },
     }
 
-    expect(() => resolveIncomingTeamRoute(config, 'location-1', 'pipeline-1')).toThrow('Multiple Terros teams map')
+    expect(() => resolveIncomingTeamRoute(config, team, 'location-2', 'pipeline-1')).toThrow('do not match Terros team')
   })
 
   test('trims a stage name', () => {

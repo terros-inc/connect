@@ -1,5 +1,5 @@
 import { type AccountWebhook, type AccountWebhookData, wrapConnectHandler } from '@terros-inc/sdk'
-import { getLocationAccessToken, readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
+import { getPrivateIntegrationToken, readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
 import {
   createOpportunity,
   findAssignedUserId,
@@ -18,10 +18,12 @@ import {
 import { resolveStageName, resolveTeamRoute } from './config.ts'
 
 type ScriptConfig = {
-  goHighLevelCompanyId: string
-  teamLocations: Record<string, string>
   teamPipelines: Record<string, string>
   contactFieldMappings: Record<string, string>
+}
+
+type Secrets = {
+  privateIntegrationTokens: Record<string, string>
 }
 
 export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
@@ -36,15 +38,10 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) 
   if (!account.workflowStageName) throw Error(`Terros account ${account.id} has no workflow stage name`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const route = resolveTeamRoute(scriptConfig, account.teamId)
-  const agencyAccessToken = input.context.config.secrets.agencyAccessToken
-  if (!agencyAccessToken) throw Error('Missing GoHighLevel agencyAccessToken')
-  if (!scriptConfig.goHighLevelCompanyId) throw Error('Missing goHighLevelCompanyId')
-  const accessToken = await getLocationAccessToken(
-    agencyAccessToken,
-    scriptConfig.goHighLevelCompanyId,
-    route.locationId
-  )
+  const { team } = await client.team.get({ teamId: account.teamId })
+  const route = resolveTeamRoute(scriptConfig, team)
+  const secrets = input.context.config.secrets as unknown as Secrets
+  const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
   const assignedTo = await findAssignedUserId(accessToken, route.locationId, account.owner?.email)
   const contactInput = toContactInput(account, route.locationId, scriptConfig, assignedTo)
   const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
