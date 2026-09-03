@@ -11,7 +11,7 @@ import {
   getPrivateIntegrationToken,
   readTrimmedString,
   resolveGoHighLevelTeam,
-  toGoHighLevelContactFieldValues,
+  toContactFieldValues as toContactFieldValues,
 } from './util.ts'
 import {
   findAssignedUserId,
@@ -151,7 +151,7 @@ function toContactInput(
   config: ScriptConfig,
   assignedTo: string | undefined
 ): GoHighLevelContactInput {
-  const mappedFields = toGoHighLevelContactFieldValues(account, config.contactFieldMappings)
+  const customFields = toContactFieldValues(account, config.contactFieldMappings)
 
   const contact: GoHighLevelContactInput = {
     locationId,
@@ -166,8 +166,7 @@ function toContactInput(
     postalCode: account.address?.postal1,
     assignedTo,
     source: 'Terros',
-    ...mappedFields.standardFields,
-    customFields: mappedFields.customFields,
+    customFields,
   }
   return contact
 }
