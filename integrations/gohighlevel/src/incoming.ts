@@ -38,10 +38,14 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
   if (!account) {
     throw Error(`No account matched contact ${contactId} at location ${locationId}`)
   }
-  if (!account.teamId) throw Error(`Account ${account.accountId} has no teamId`)
+  if (!account.ownerId) throw Error(`${account.accountId} has no owner`)
 
-  const { team } = await client.team.get({ teamId: account.teamId })
-  console.log(`Found team ${team.teamId} for account ${account.accountId}`)
+  const { user } = await client.user.get({ userId: account.ownerId })
+  const teamId = user.primaryTeam?.teamId ?? user.teams?.directMemberOf[0]?.teamId
+  if (!teamId) throw Error(`${account.accountId} owner has no teamId`)
+
+  const { team } = await client.team.get({ teamId })
+  console.log(`Using ${team.teamId} for ${account.accountId}`)
   validateIncomingTeamLocation(team, locationId)
   const workflowTarget = resolveTerrosStageName(stageName, scriptConfig.stageMappings)
   console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
