@@ -1,26 +1,8 @@
 import type { CustomFieldId, CustomFieldMap, TeamId, TerrosClient, TinyTeam, UserId } from '@terros-inc/sdk'
 
 export type GoHighLevelCustomField = {
-  id: string
+  key: string
   fieldValue: string | number | boolean
-}
-
-export type GoHighLevelStandardContactField =
-  | 'firstName'
-  | 'lastName'
-  | 'name'
-  | 'email'
-  | 'phone'
-  | 'address1'
-  | 'city'
-  | 'state'
-  | 'postalCode'
-  | 'assignedTo'
-  | 'source'
-
-export type GoHighLevelContactFieldValues = {
-  standardFields: Partial<Record<GoHighLevelStandardContactField, string>>
-  customFields: GoHighLevelCustomField[]
 }
 
 type AccountFieldSource = {
@@ -91,37 +73,26 @@ export function readTrimmedString(value: unknown): string | undefined {
   return trimmed || undefined
 }
 
-export function toGoHighLevelContactFieldValues(
+export function toContactFieldValues(
   account: AccountFieldSource,
   mappings?: Record<string, string> | null
-): GoHighLevelContactFieldValues {
-  const standardFields: Partial<Record<GoHighLevelStandardContactField, string>> = {}
+): GoHighLevelCustomField[] {
   const customFields: GoHighLevelCustomField[] = []
 
-  for (const [terrosAccountField, goHighLevelContactField] of Object.entries(mappings ?? {})) {
+  for (const [terrosAccountField, goHighLevelMergeField] of Object.entries(mappings ?? {})) {
     const fieldValue = getAccountFieldValue(account, terrosAccountField)
     if (fieldValue === undefined || fieldValue === null) continue
 
-    if (isGoHighLevelStandardContactField(goHighLevelContactField)) {
-      if (typeof fieldValue !== 'string') {
-        throw Error(`Cannot send non-string Terros field ${terrosAccountField} to ${goHighLevelContactField}`)
-      }
-      standardFields[goHighLevelContactField] = fieldValue
-      continue
-    }
+    const fieldKey = parseContactMergeField(goHighLevelMergeField)
+    if (!fieldKey) continue
 
-    switch (typeof fieldValue) {
-      case 'string':
-      case 'number':
-      case 'boolean':
-        customFields.push({ id: goHighLevelContactField, fieldValue })
-        break
-      default:
-        throw Error(`Cannot send non-primitive Terros field ${terrosAccountField} to a GoHighLevel custom field`)
+    if (typeof fieldValue !== 'string' && typeof fieldValue !== 'number' && typeof fieldValue !== 'boolean') {
+      throw Error(`Cannot send non-primitive Terros field ${terrosAccountField} to a GoHighLevel custom field`)
     }
+    customFields.push({ key: fieldKey, fieldValue })
   }
 
-  return { standardFields, customFields }
+  return customFields
 }
 
 function getAccountFieldValue(account: AccountFieldSource, field: string): unknown {
@@ -142,21 +113,9 @@ function isCustomFieldId(field: string): field is CustomFieldId {
   return field.startsWith('CF.')
 }
 
-function isGoHighLevelStandardContactField(field: string): field is GoHighLevelStandardContactField {
-  switch (field) {
-    case 'firstName':
-    case 'lastName':
-    case 'name':
-    case 'email':
-    case 'phone':
-    case 'address1':
-    case 'city':
-    case 'state':
-    case 'postalCode':
-    case 'assignedTo':
-    case 'source':
-      return true
-    default:
-      return false
-  }
+function parseContactMergeField(mergeField: string): string | undefined {
+  const match = /^\{\{\s*(contact\.[^{}\s]+)\s*\}\}$/.exec(mergeField)
+  const fieldKey = match?.[1]
+  if (!fieldKey) console.warn(`Invalid GoHighLevel contact merge field ${mergeField}`)
+  return fieldKey
 }

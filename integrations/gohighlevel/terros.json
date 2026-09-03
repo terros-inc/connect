@@ -23,7 +23,7 @@
           "name": "contactFieldMappings",
           "type": "mapping",
           "dataType": "Account",
-          "description": "Map any Terros account field to a GoHighLevel custom field ID or one of: firstName, lastName, name, email, phone, address1, city, state, postalCode, assignedTo, source"
+          "description": "Map an account field to a GHL custom contact field using merge-field key"
         }
       ],
       "authSchema": {
