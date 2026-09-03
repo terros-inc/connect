@@ -51,6 +51,7 @@ type CalendarEventWebhookData = {
   address?: SmallAddress
   attendee?: {
     email?: string
+    teamIds?: TeamId[]
   }
   sourceId?: string
 }
@@ -84,8 +85,12 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     console.log(`Skipping non-consultation Terros event ${event.id}`)
     return
   }
-  const teamId = event.owner?.teamIds?.[0]
-  if (!teamId) throw Error(`Terros event ${event.id} owner has no teamId`)
+
+  if (!event.account) throw Error(`Terros event ${event.id} has no account`)
+  const { account } = await client.account.get({ accountId: event.account.accountId })
+  const assignedTerrosUser = event.attendee ?? event.owner
+  const teamId = assignedTerrosUser?.teamIds?.[0]
+  if (!teamId) throw Error(`Terros event ${event.id} attendee or owner has no teamId`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const { team } = await client.team.get({ teamId })
@@ -95,19 +100,13 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
 
-  if (!event.account) throw Error(`Terros event ${event.id} has no account`)
-  const { account } = await client.account.get({ accountId: event.account.accountId })
   if (!account.externalLeadId) {
     throw Error(`${account.accountId} has no contact ID`)
   }
   if (!account.workflowStageName) throw Error(`${account.accountId} has no workflow stage name`)
   console.log(`Using ${account.externalLeadId} for ${event.id}`)
 
-  const assignedUserId = await findAssignedUserId(
-    accessToken,
-    route.locationId,
-    event.attendee?.email || event.owner?.email
-  )
+  const assignedUserId = await findAssignedUserId(accessToken, route.locationId, assignedTerrosUser.email)
   const appointmentInput = toAppointmentInput(event, route, account.externalLeadId, assignedUserId)
 
   if (event.sourceId) {
