@@ -1,4 +1,5 @@
 import {
+  type AccountData,
   type AccountId,
   type CalendarEventId,
   type EventType,
@@ -6,18 +7,27 @@ import {
   type TeamId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { getPrivateIntegrationToken } from './util.ts'
+import { getPrivateIntegrationToken, readTrimmedString } from './util.ts'
 import {
   createAppointment,
+  createOpportunity,
   findAssignedUserId,
+  findOpportunity,
+  findPipelineStage,
+  getPipeline,
   type GoHighLevelAppointment,
   type GoHighLevelAppointmentInput,
+  type GoHighLevelOpportunityInput,
+  opportunityNeedsUpdate,
   updateAppointment,
+  updateOpportunity,
 } from './gohighlevel.ts'
-import { resolveCalendarRoute, type CalendarRoute } from './config.ts'
+import { resolveCalendarRoute, resolveGoHighLevelStageName, type CalendarRoute } from './config.ts'
 
 type ScriptConfig = {
   teamCalendars: Record<string, string>
+  teamPipelines: Record<string, string>
+  stageMappings?: Record<string, string>
 }
 
 type Secrets = {
@@ -58,6 +68,7 @@ type CalendarEventWebhook =
     }
 
 type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration' | 'address'>
+type OpportunityAccount = Pick<AccountData, 'accountId' | 'resident' | 'workflowStageName'>
 
 export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
   const payload = input.context.payload
@@ -85,32 +96,54 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const accessToken = getPrivateIntegrationToken(secrets, route.locationId)
 
   if (!event.account) throw Error(`Terros event ${event.id} has no account`)
-  if (!event.account.externalLeadId) {
-    throw Error(`Account ${event.account.accountId} has no synced contact ID`)
+  const { account } = await client.account.get({ accountId: event.account.accountId })
+  if (!account.externalLeadId) {
+    throw Error(`${account.accountId} has no contact ID`)
   }
-  console.log(`Using contact ${event.account.externalLeadId} from ${event.account.accountId} for ${event.id}`)
+  if (!account.workflowStageName) throw Error(`${account.accountId} has no workflow stage name`)
+  console.log(`Using ${account.externalLeadId} for ${event.id}`)
 
   const assignedUserId = await findAssignedUserId(
     accessToken,
     route.locationId,
     event.attendee?.email || event.owner?.email
   )
-  const appointmentInput = toAppointmentInput(event, route, event.account.externalLeadId, assignedUserId)
+  const appointmentInput = toAppointmentInput(event, route, account.externalLeadId, assignedUserId)
 
   if (event.sourceId) {
     const updatedAppointment = await updateExistingAppointment(accessToken, event.sourceId, appointmentInput)
     console.log(`Updated appointment ${updatedAppointment.id} for event ${event.id}`)
+  } else {
+    const createdAppointment = await createAppointment(accessToken, appointmentInput)
+    await client.calendar.event.update({
+      event: {
+        eventId: event.id,
+        sourceId: createdAppointment.id,
+      },
+    })
+    console.log(`Created appointment ${createdAppointment.id} for ${event.id}`)
+  }
+
+  const pipeline = await getPipeline(accessToken, route.locationId, route.pipelineId)
+  const stageName = resolveGoHighLevelStageName(account.workflowStageName, scriptConfig.stageMappings)
+  const stage = findPipelineStage(pipeline, stageName)
+  console.log(`Resolved ${account.workflowStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
+  const existingOpportunity = await findOpportunity(accessToken, route, account.externalLeadId)
+  const opportunityInput = toOpportunityInput(account, route, account.externalLeadId, stage.id, assignedUserId)
+
+  if (!existingOpportunity) {
+    const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
+    console.log(`Created ${createdOpportunity.id} for ${account.accountId}`)
     return
   }
 
-  const createdAppointment = await createAppointment(accessToken, appointmentInput)
-  await client.calendar.event.update({
-    event: {
-      eventId: event.id,
-      sourceId: createdAppointment.id,
-    },
-  })
-  console.log(`Created appointment ${createdAppointment.id} for ${event.id}`)
+  if (!opportunityNeedsUpdate(existingOpportunity, opportunityInput)) {
+    console.log(`Skipped ${existingOpportunity.id} for ${account.accountId}`)
+    return
+  }
+
+  const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityInput)
+  console.log(`Updated ${updatedOpportunity.id} for ${account.accountId}, and stage ${stage.name}`)
 })
 
 export function toAppointmentInput(
@@ -135,6 +168,31 @@ export function toAppointmentInput(
     toNotify: true,
     ignoreDateRange: true,
     ignoreFreeSlotValidation: true,
+  }
+}
+
+export function toOpportunityInput(
+  account: OpportunityAccount,
+  route: CalendarRoute,
+  contactId: string,
+  pipelineStageId: string,
+  assignedTo: string | undefined
+): GoHighLevelOpportunityInput {
+  const firstName = readTrimmedString(account.resident?.firstName) || ''
+  const lastName = readTrimmedString(account.resident?.lastName) || ''
+  const name =
+    `${firstName} ${lastName}`.trim() ||
+    readTrimmedString(account.resident?.name) ||
+    `Terros Account ${account.accountId}`
+
+  return {
+    locationId: route.locationId,
+    pipelineId: route.pipelineId,
+    pipelineStageId,
+    contactId,
+    name,
+    status: 'open',
+    assignedTo,
   }
 }
 
