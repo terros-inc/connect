@@ -4,19 +4,32 @@ import {
   type SmallAddress,
   type TeamId,
   type TinyResidentData,
+  type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { getPrivateIntegrationToken, readTrimmedString, toGoHighLevelCustomFields } from './util.ts'
+import {
+  getPrivateIntegrationToken,
+  readTrimmedString,
+  resolveGoHighLevelTeam,
+  toGoHighLevelContactFieldValues,
+} from './util.ts'
 import {
   findAssignedUserId,
+  findOpportunity,
+  findPipelineStage,
   getContact,
+  getPipeline,
   type GoHighLevelContact,
   type GoHighLevelContactInput,
   updateContact,
+  updateOpportunityStage,
   upsertContact,
 } from './gohighlevel.ts'
+import { resolveGoHighLevelStageName } from './config.ts'
 
 type ScriptConfig = {
+  teamPipelines: Record<string, string>
+  stageMappings?: Record<string, string>
   contactFieldMappings?: Record<string, string>
 }
 
@@ -26,9 +39,18 @@ type Secrets = {
 
 type AccountChangeData = {
   id: AccountId
+  workflowState?: {
+    stageName?: string
+  }
   owner?: {
     email?: string
     teamIds?: TeamId[]
+    userId?: UserId
+  }
+  closer?: {
+    email?: string
+    teamIds?: TeamId[]
+    userId?: UserId
   }
   address?: SmallAddress
   resident?: TinyResidentData
@@ -57,17 +79,19 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
     return
   }
 
-  const teamId = payload.data.owner?.teamIds?.[0]
-  if (!teamId) throw Error(`Terros account ${payload.data.id} owner has no teamId`)
   const account = payload.data
+  const assignedTerrosUser = account.closer ?? account.owner
+  if (!assignedTerrosUser) throw Error(`${account.id} has no closer or owner`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const { team } = await client.team.get({ teamId })
+  const team = await resolveGoHighLevelTeam(client, assignedTerrosUser)
   const locationId = team.externalId
-  if (!locationId) throw Error(`Terros team ${team.teamId} has no location ID`)
+  if (!locationId) throw Error(`${team.teamId} has no location ID`)
+  const pipelineId = scriptConfig.teamPipelines[team.teamId]
+  if (!pipelineId) throw Error(`Missing teamPipelines for ${team.teamId}`)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, locationId)
-  const assignedTo = await findAssignedUserId(accessToken, locationId, account.owner?.email)
+  const assignedTo = await findAssignedUserId(accessToken, locationId, assignedTerrosUser.email)
   const contactInput = toContactInput(account, locationId, scriptConfig, assignedTo)
   const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
 
@@ -84,6 +108,23 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
     }
     console.log(`Saved contact ${contact.id} to ${account.id}`)
   }
+
+  const route = { locationId, pipelineId }
+  const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
+  if (!existingOpportunity) return
+
+  const workflowStageName = account.workflowState?.stageName
+  if (!workflowStageName) throw Error(`${account.id} has no workflow stage name`)
+  const pipeline = await getPipeline(accessToken, locationId, pipelineId)
+  const stageName = resolveGoHighLevelStageName(workflowStageName, scriptConfig.stageMappings)
+  const stage = findPipelineStage(pipeline, stageName)
+  if (existingOpportunity.pipelineStageId === stage.id) {
+    console.log(`Skipped unchanged opportunity stage ${stage.name} for ${account.id}`)
+    return
+  }
+
+  const updatedOpportunity = await updateOpportunityStage(accessToken, existingOpportunity.id, stage.id)
+  console.log(`Updated ${updatedOpportunity.id} to stage ${stage.name}`)
 })
 
 async function syncContact(
@@ -110,7 +151,7 @@ function toContactInput(
   config: ScriptConfig,
   assignedTo: string | undefined
 ): GoHighLevelContactInput {
-  const goHighLevelCustomFields = toGoHighLevelCustomFields(account, config.contactFieldMappings)
+  const mappedFields = toGoHighLevelContactFieldValues(account, config.contactFieldMappings)
 
   const contact: GoHighLevelContactInput = {
     locationId,
@@ -125,7 +166,8 @@ function toContactInput(
     postalCode: account.address?.postal1,
     assignedTo,
     source: 'Terros',
-    customFields: goHighLevelCustomFields,
+    ...mappedFields.standardFields,
+    customFields: mappedFields.customFields,
   }
   return contact
 }

@@ -5,9 +5,10 @@ import {
   type EventType,
   type SmallAddress,
   type TeamId,
+  type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { getPrivateIntegrationToken, readTrimmedString } from './util.ts'
+import { getPrivateIntegrationToken, readTrimmedString, resolveGoHighLevelTeam } from './util.ts'
 import {
   createAppointment,
   createOpportunity,
@@ -39,6 +40,7 @@ type CalendarEventWebhookData = {
   owner?: {
     email?: string
     teamIds?: TeamId[]
+    userId?: UserId
   }
   eventDate: string
   account?: {
@@ -52,6 +54,7 @@ type CalendarEventWebhookData = {
   attendee?: {
     email?: string
     teamIds?: TeamId[]
+    userId?: UserId
   }
   sourceId?: string
 }
@@ -89,11 +92,10 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   if (!event.account) throw Error(`Terros event ${event.id} has no account`)
   const { account } = await client.account.get({ accountId: event.account.accountId })
   const assignedTerrosUser = event.attendee ?? event.owner
-  const teamId = assignedTerrosUser?.teamIds?.[0]
-  if (!teamId) throw Error(`Terros event ${event.id} attendee or owner has no teamId`)
+  if (!assignedTerrosUser) throw Error(`Terros event ${event.id} has no attendee or owner`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const { team } = await client.team.get({ teamId })
+  const team = await resolveGoHighLevelTeam(client, assignedTerrosUser)
   console.log(`Using team ${team.teamId}`)
   const route = resolveCalendarRoute(scriptConfig, team)
   console.log(`Resolved ${team.teamId} to ${route.locationId} and ${route.calendarId}`)

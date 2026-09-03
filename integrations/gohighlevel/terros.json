@@ -8,10 +8,22 @@
       "dataType": "Account",
       "configSchema": [
         {
+          "name": "teamPipelines",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+        },
+        {
+          "name": "stageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+        },
+        {
           "name": "contactFieldMappings",
           "type": "mapping",
           "dataType": "Account",
-          "description": "Map any Terros account field to the GoHighLevel contact custom field ID that should receive its value; only configured mappings are sent"
+          "description": "Map any Terros account field to a GoHighLevel custom field ID or one of: firstName, lastName, name, email, phone, address1, city, state, postalCode, assignedTo, source"
         }
       ],
       "authSchema": {
@@ -20,7 +32,7 @@
           "mapping": true
         }
       },
-      "permissions": ["account:save", "team:list"],
+      "permissions": ["account:save", "team:list", "user:list"],
       "slug": "gohighlevel-account-sync"
     },
     {
@@ -70,7 +82,7 @@
           "mapping": true
         }
       },
-      "permissions": ["account:list", "event:save", "team:list"],
+      "permissions": ["account:list", "event:save", "team:list", "user:list"],
       "slug": "gohighlevel-appointment-sync"
     }
   ]
