@@ -4,6 +4,7 @@ import {
   opportunityNeedsUpdate,
   type GoHighLevelOpportunity,
   type GoHighLevelPipeline,
+  updateOpportunityStage,
 } from './gohighlevel.ts'
 
 describe('GoHighLevel pipeline stages', () => {
@@ -68,5 +69,23 @@ describe('GoHighLevel opportunities', () => {
         assignedTo: 'user-1',
       })
     ).toBe(false)
+  })
+
+  test('updates only the opportunity stage', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ opportunity: { ...opportunity, pipelineStageId: 'stage-2' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+
+    await updateOpportunityStage('token', opportunity.id, 'stage-2')
+
+    const request = fetchMock.mock.calls[0]
+    expect(request?.[1]).toMatchObject({
+      method: 'PUT',
+      body: JSON.stringify({ pipelineStageId: 'stage-2' }),
+    })
+    fetchMock.mockRestore()
   })
 })

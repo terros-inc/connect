@@ -244,6 +244,22 @@ export async function updateOpportunity(
   return response.opportunity
 }
 
+export async function updateOpportunityStage(
+  accessToken: string,
+  opportunityId: string,
+  pipelineStageId: string
+): Promise<GoHighLevelOpportunity> {
+  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
+    accessToken,
+    `/opportunities/${opportunityId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ pipelineStageId }),
+    }
+  )
+  return response.opportunity
+}
+
 export async function createAppointment(
   accessToken: string,
   appointment: GoHighLevelAppointmentInput
