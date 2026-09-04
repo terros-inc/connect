@@ -93,7 +93,22 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const accessToken = getPrivateIntegrationToken(secrets, locationId)
   const assignedTo = await findAssignedUserId(accessToken, locationId, assignedTerrosUser.email)
   const contactInput = toContactInput(account, locationId, scriptConfig, assignedTo)
-  const contactResponse = await syncContact(accessToken, account.externalLeadId, contactInput)
+  let contactResponse: ContactResponse
+  if (account.externalLeadId) {
+    const existingContact = await getContact(accessToken, account.externalLeadId)
+    if (existingContact.locationId !== contactInput.locationId) {
+      throw Error(
+        `Contact ${account.externalLeadId} belongs to location ${existingContact.locationId}, expected ${contactInput.locationId}`
+      )
+    }
+
+    const { locationId: _locationId, ...contactUpdate } = contactInput
+    console.log('Contact update:', contactUpdate)
+    contactResponse = await updateContact(accessToken, account.externalLeadId, contactUpdate)
+  } else {
+    console.log('Upsert Contact:', contactInput)
+    contactResponse = await upsertContact(accessToken, contactInput)
+  }
   console.log(contactResponse)
   const contact = contactResponse.contact
 
@@ -125,27 +140,11 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
     return
   }
 
-  const updatedOpportunity = await updateOpportunityStage(accessToken, existingOpportunity.id, stage.id)
+  const opportunityUpdate = { pipelineStageId: stage.id }
+  console.log('Opportunity update:', opportunityUpdate)
+  const updatedOpportunity = await updateOpportunityStage(accessToken, existingOpportunity.id, opportunityUpdate)
   console.log(updatedOpportunity)
 })
-
-async function syncContact(
-  accessToken: string,
-  contactId: string | undefined,
-  contactInput: GoHighLevelContactInput
-): Promise<ContactResponse> {
-  if (!contactId) return upsertContact(accessToken, contactInput)
-
-  const existingContact = await getContact(accessToken, contactId)
-  if (existingContact.locationId !== contactInput.locationId) {
-    throw Error(
-      `Contact ${contactId} belongs to location ${existingContact.locationId}, expected ${contactInput.locationId}`
-    )
-  }
-
-  const { locationId: _locationId, ...updatedContact } = contactInput
-  return updateContact(accessToken, contactId, updatedContact)
-}
 
 function toContactInput(
   account: AccountChangeData,

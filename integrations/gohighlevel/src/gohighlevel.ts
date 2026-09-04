@@ -60,6 +60,9 @@ export type GoHighLevelOpportunityInput = {
   assignedTo?: string
 }
 
+export type GoHighLevelOpportunityUpdate = Omit<GoHighLevelOpportunityInput, 'locationId' | 'contactId'>
+export type GoHighLevelOpportunityStageUpdate = Pick<GoHighLevelOpportunityInput, 'pipelineStageId'>
+
 export type GoHighLevelAppointment = {
   id: string
   calendarId: string
@@ -235,15 +238,14 @@ export async function createOpportunity(
 export async function updateOpportunity(
   accessToken: string,
   opportunityId: string,
-  opportunity: GoHighLevelOpportunityInput
+  opportunity: GoHighLevelOpportunityUpdate
 ): Promise<OpportunityResponse> {
-  const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunity
   const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
     `/opportunities/${opportunityId}`,
     {
       method: 'PUT',
-      body: JSON.stringify(opportunityUpdate),
+      body: JSON.stringify(opportunity),
     }
   )
   return response
@@ -252,14 +254,14 @@ export async function updateOpportunity(
 export async function updateOpportunityStage(
   accessToken: string,
   opportunityId: string,
-  pipelineStageId: string
+  opportunity: GoHighLevelOpportunityStageUpdate
 ): Promise<OpportunityResponse> {
   const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
     `/opportunities/${opportunityId}`,
     {
       method: 'PUT',
-      body: JSON.stringify({ pipelineStageId }),
+      body: JSON.stringify(opportunity),
     }
   )
   return response
