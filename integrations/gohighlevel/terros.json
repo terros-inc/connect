@@ -1,0 +1,89 @@
+{
+  "appId": "App.e8sApZ32j4u_H_OMJUYAn",
+  "scripts": [
+    {
+      "name": "GoHighLevel Account Sync",
+      "entrypoint": "src/outgoing.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "configSchema": [
+        {
+          "name": "teamPipelines",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+        },
+        {
+          "name": "stageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+        },
+        {
+          "name": "contactFieldMappings",
+          "type": "mapping",
+          "dataType": "Account",
+          "description": "Map an account field to a GHL custom contact field using merge-field key"
+        }
+      ],
+      "authSchema": {
+        "privateIntegrationTokens": {
+          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
+          "mapping": true
+        }
+      },
+      "permissions": ["account:save", "team:list", "user:list"],
+      "slug": "gohighlevel-account-sync"
+    },
+    {
+      "name": "GoHighLevel Opportunity Webhook",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "stageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+        }
+      ],
+      "authSchema": {},
+      "permissions": ["account:list", "account:save", "team:list", "user:list"],
+      "slug": "gohighlevel-opportunity-webhook"
+    },
+    {
+      "name": "GoHighLevel Appointment Sync",
+      "entrypoint": "src/calendar.ts",
+      "type": "outgoing",
+      "dataType": "Event",
+      "configSchema": [
+        {
+          "name": "teamCalendars",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to that sub-account's calendar ID"
+        },
+        {
+          "name": "teamPipelines",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+        },
+        {
+          "name": "stageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+        }
+      ],
+      "authSchema": {
+        "privateIntegrationTokens": {
+          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
+          "mapping": true
+        }
+      },
+      "permissions": ["account:list", "event:save", "team:list", "user:list"],
+      "slug": "gohighlevel-appointment-sync"
+    }
+  ]
+}
