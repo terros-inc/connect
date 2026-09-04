@@ -42,11 +42,6 @@ type AccountChangeData = {
   workflowState?: {
     stageName?: string
   }
-  owner?: {
-    email?: string
-    teamIds?: TeamId[]
-    userId?: UserId
-  }
   closer?: {
     email?: string
     teamIds?: TeamId[]
@@ -80,18 +75,18 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const account = payload.data
-  const assignedTerrosUser = account.closer ?? account.owner
-  if (!assignedTerrosUser) throw Error(`${account.id} has no closer or owner`)
+  const closer = account.closer
+  if (!closer) throw Error(`${account.id} has no closer`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const team = await resolveGoHighLevelTeam(client, assignedTerrosUser)
+  const team = await resolveGoHighLevelTeam(client, closer)
   const locationId = team.externalId
   if (!locationId) throw Error(`${team.teamId} has no location ID`)
   const pipelineId = scriptConfig.teamPipelines[team.teamId]
   if (!pipelineId) throw Error(`Missing teamPipelines for ${team.teamId}`)
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = getPrivateIntegrationToken(secrets, locationId)
-  const assignedTo = await findAssignedUserId(accessToken, locationId, assignedTerrosUser.email)
+  const assignedTo = await findAssignedUserId(accessToken, locationId, closer.email)
   const contactInput = toContactInput(account, locationId, scriptConfig, assignedTo)
   let contactResponse: ContactResponse
   if (account.externalLeadId) {
