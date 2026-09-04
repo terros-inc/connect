@@ -5,6 +5,10 @@ export type GoHighLevelContact = {
   locationId: string
 }
 
+export type ContactResponse = {
+  contact: GoHighLevelContact
+}
+
 export type GoHighLevelContactInput = {
   locationId: string
   firstName?: string
@@ -40,6 +44,10 @@ export type GoHighLevelOpportunity = {
   pipelineStageId?: string
   name?: string
   assignedTo?: string
+}
+
+export type OpportunityResponse = {
+  opportunity: GoHighLevelOpportunity
 }
 
 export type GoHighLevelOpportunityInput = {
@@ -95,28 +103,25 @@ export async function getContact(accessToken: string, contactId: string): Promis
   return response.contact
 }
 
-export async function upsertContact(
-  accessToken: string,
-  contact: GoHighLevelContactInput
-): Promise<GoHighLevelContact> {
+export async function upsertContact(accessToken: string, contact: GoHighLevelContactInput): Promise<ContactResponse> {
   const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, '/contacts/upsert', {
     method: 'POST',
     body: JSON.stringify(contact),
   })
-  return response.contact
+  return response
 }
 
 export async function updateContact(
   accessToken: string,
   contactId: string,
   contact: Omit<GoHighLevelContactInput, 'locationId'>
-): Promise<GoHighLevelContact> {
+): Promise<ContactResponse> {
   const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${contactId}`, {
     method: 'PUT',
     body: JSON.stringify(contact),
   })
   console.log(`Updated contact ${contactId}`)
-  return response.contact
+  return response
 }
 
 export async function getPipeline(
@@ -219,19 +224,19 @@ export async function findOpportunity(
 export async function createOpportunity(
   accessToken: string,
   opportunity: GoHighLevelOpportunityInput
-): Promise<GoHighLevelOpportunity> {
+): Promise<OpportunityResponse> {
   const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
     method: 'POST',
     body: JSON.stringify(opportunity),
   })
-  return response.opportunity
+  return response
 }
 
 export async function updateOpportunity(
   accessToken: string,
   opportunityId: string,
   opportunity: GoHighLevelOpportunityInput
-): Promise<GoHighLevelOpportunity> {
+): Promise<OpportunityResponse> {
   const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunity
   const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
@@ -241,14 +246,14 @@ export async function updateOpportunity(
       body: JSON.stringify(opportunityUpdate),
     }
   )
-  return response.opportunity
+  return response
 }
 
 export async function updateOpportunityStage(
   accessToken: string,
   opportunityId: string,
   pipelineStageId: string
-): Promise<GoHighLevelOpportunity> {
+): Promise<OpportunityResponse> {
   const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
     `/opportunities/${opportunityId}`,
@@ -257,7 +262,7 @@ export async function updateOpportunityStage(
       body: JSON.stringify({ pipelineStageId }),
     }
   )
-  return response.opportunity
+  return response
 }
 
 export async function createAppointment(

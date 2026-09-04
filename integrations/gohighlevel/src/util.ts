@@ -57,7 +57,7 @@ export async function ghlApi<T>(accessToken: string, path: string, init: Request
 
   if (!response.ok) {
     const body = (await response.text()).slice(0, 1000)
-    throw Error(`GoHighLevel request failed: ${response.status} ${response.statusText} ${body}`)
+    throw Error(`GHL request failed: ${response.status} ${response.statusText} ${body}`)
   }
 
   return response.json() as Promise<T>
