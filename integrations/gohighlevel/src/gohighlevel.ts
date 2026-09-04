@@ -184,15 +184,6 @@ export function findPipelineStage(pipeline: GoHighLevelPipeline, stageName: stri
   return stage
 }
 
-export function getPipelineStageName(pipeline: GoHighLevelPipeline, stageId: string): string {
-  const stages = pipeline.stages.filter((stage) => stage.id === stageId)
-  const stage = stages[0]
-  if (stages.length !== 1 || !stage) {
-    throw Error(`Expected one stage ${stageId} in GoHighLevel pipeline ${pipeline.id}, found ${stages.length}`)
-  }
-  return stage.name
-}
-
 export function opportunityNeedsUpdate(
   opportunity: GoHighLevelOpportunity,
   input: Pick<GoHighLevelOpportunityInput, 'pipelineStageId' | 'name' | 'assignedTo'>
