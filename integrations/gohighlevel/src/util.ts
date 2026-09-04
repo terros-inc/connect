@@ -1,4 +1,4 @@
-import type { CustomFieldId, CustomFieldMap, TeamId, TerrosClient, TinyTeam, UserId } from '@terros-inc/sdk'
+import type { CustomFieldId, CustomFieldMap, TerrosClient, TinyTeam, UserId } from '@terros-inc/sdk'
 
 export type GoHighLevelCustomField = {
   key: string
@@ -11,7 +11,6 @@ type AccountFieldSource = {
 
 export type RoutedUser = {
   userId?: UserId
-  teamIds?: TeamId[]
 }
 
 const baseUrl = 'https://services.leadconnectorhq.com'
@@ -26,19 +25,11 @@ export function getPrivateIntegrationToken(
 }
 
 export async function resolveGoHighLevelTeam(client: TerrosClient, user: RoutedUser): Promise<TinyTeam> {
-  const firstTeamId = user.teamIds?.[0]
-  const firstTeam = firstTeamId ? (await client.team.get({ teamId: firstTeamId })).team : undefined
-  if (firstTeam?.externalId) return firstTeam
+  if (!user.userId) throw Error('No userId found')
 
   const { user: fullUser } = await client.user.get({ userId: user.userId })
   const primaryTeamId = fullUser.primaryTeam?.teamId
-  if (!primaryTeamId) {
-    if (firstTeam) return firstTeam
-    throw Error(`Terros user ${user.userId} has no primary teamId`)
-  }
-  if (primaryTeamId === firstTeamId) {
-    throw Error(`${primaryTeamId} has no GoHighLevel location ID`)
-  }
+  if (!primaryTeamId) throw Error(`User ${user.userId} has no primary teamId`)
 
   return (await client.team.get({ teamId: primaryTeamId })).team
 }
