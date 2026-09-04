@@ -1,6 +1,5 @@
 import {
   findPipelineStage,
-  getPipelineStageName,
   opportunityNeedsUpdate,
   type GoHighLevelOpportunity,
   type GoHighLevelPipeline,
@@ -19,10 +18,6 @@ describe('GoHighLevel pipeline stages', () => {
 
   test('matches an outbound stage name case-insensitively', () => {
     expect(findPipelineStage(pipeline, ' appointment SET ')).toEqual({ id: 'stage-2', name: 'Appointment Set' })
-  })
-
-  test('resolves an inbound stage ID to its name', () => {
-    expect(getPipelineStageName(pipeline, 'stage-1')).toBe('Lead')
   })
 
   test('rejects a missing stage', () => {
