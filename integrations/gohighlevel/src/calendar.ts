@@ -113,16 +113,16 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   if (event.sourceId) {
     const updatedAppointment = await updateExistingAppointment(accessToken, event.sourceId, appointmentInput)
-    console.log(`Updated appointment ${updatedAppointment.id} for event ${event.id}`)
+    console.log(updatedAppointment)
   } else {
     const createdAppointment = await createAppointment(accessToken, appointmentInput)
+    console.log(createdAppointment)
     await client.calendar.event.update({
       event: {
         eventId: event.id,
         sourceId: createdAppointment.id,
       },
     })
-    console.log(`Created appointment ${createdAppointment.id} for ${event.id}`)
   }
 
   const pipeline = await getPipeline(accessToken, route.locationId, route.pipelineId)
@@ -134,7 +134,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   if (!existingOpportunity) {
     const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
-    console.log(`Created ${createdOpportunity.id} for ${account.accountId}`)
+    console.log(createdOpportunity)
     return
   }
 
@@ -144,7 +144,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityInput)
-  console.log(`Updated ${updatedOpportunity.id} for ${account.accountId}, and stage ${stage.name}`)
+  console.log(updatedOpportunity)
 })
 
 export function toAppointmentInput(

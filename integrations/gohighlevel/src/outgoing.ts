@@ -19,7 +19,7 @@ import {
   findPipelineStage,
   getContact,
   getPipeline,
-  type GoHighLevelContact,
+  type ContactResponse,
   type GoHighLevelContactInput,
   updateContact,
   updateOpportunityStage,
@@ -93,7 +93,9 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const accessToken = getPrivateIntegrationToken(secrets, locationId)
   const assignedTo = await findAssignedUserId(accessToken, locationId, assignedTerrosUser.email)
   const contactInput = toContactInput(account, locationId, scriptConfig, assignedTo)
-  const contact = await syncContact(accessToken, account.externalLeadId, contactInput)
+  const contactResponse = await syncContact(accessToken, account.externalLeadId, contactInput)
+  console.log(contactResponse)
+  const contact = contactResponse.contact
 
   if (!account.externalLeadId) {
     const { account: updatedAccount } = await client.account.upsert({
@@ -124,14 +126,14 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const updatedOpportunity = await updateOpportunityStage(accessToken, existingOpportunity.id, stage.id)
-  console.log(`Updated ${updatedOpportunity.id} to stage ${stage.name}`)
+  console.log(updatedOpportunity)
 })
 
 async function syncContact(
   accessToken: string,
   contactId: string | undefined,
   contactInput: GoHighLevelContactInput
-): Promise<GoHighLevelContact> {
+): Promise<ContactResponse> {
   if (!contactId) return upsertContact(accessToken, contactInput)
 
   const existingContact = await getContact(accessToken, contactId)
