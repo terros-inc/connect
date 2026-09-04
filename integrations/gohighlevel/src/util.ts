@@ -114,7 +114,7 @@ function isCustomFieldId(field: string): field is CustomFieldId {
 }
 
 function parseContactMergeField(mergeField: string): string | undefined {
-  const match = /^\{\{\s*(contact\.[^{}\s]+)\s*\}\}$/.exec(mergeField)
+  const match = /^\{\{\s*contact\.([^{}\s]+)\s*\}\}$/.exec(mergeField)
   const fieldKey = match?.[1]
   if (!fieldKey) console.warn(`Invalid GoHighLevel contact merge field ${mergeField}`)
   return fieldKey
