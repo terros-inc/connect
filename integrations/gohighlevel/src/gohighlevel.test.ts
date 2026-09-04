@@ -79,7 +79,7 @@ describe('GoHighLevel opportunities', () => {
       })
     )
 
-    await updateOpportunityStage('token', opportunity.id, 'stage-2')
+    await updateOpportunityStage('token', opportunity.id, { pipelineStageId: 'stage-2' })
 
     const request = fetchMock.mock.calls[0]
     expect(request?.[1]).toMatchObject({

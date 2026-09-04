@@ -16,7 +16,6 @@ import {
   findOpportunity,
   findPipelineStage,
   getPipeline,
-  type GoHighLevelAppointment,
   type GoHighLevelAppointmentInput,
   type GoHighLevelOpportunityInput,
   opportunityNeedsUpdate,
@@ -112,9 +111,12 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const appointmentInput = toAppointmentInput(event, route, account.externalLeadId, assignedUserId)
 
   if (event.sourceId) {
-    const updatedAppointment = await updateExistingAppointment(accessToken, event.sourceId, appointmentInput)
+    const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointmentInput
+    console.log('Appointment update:', appointmentUpdate)
+    const updatedAppointment = await updateAppointment(accessToken, event.sourceId, appointmentUpdate)
     console.log(updatedAppointment)
   } else {
+    console.log('Create appointment:', appointmentInput)
     const createdAppointment = await createAppointment(accessToken, appointmentInput)
     console.log(createdAppointment)
     await client.calendar.event.update({
@@ -133,6 +135,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const opportunityInput = toOpportunityInput(account, route, account.externalLeadId, stage.id, assignedUserId)
 
   if (!existingOpportunity) {
+    console.log('Create opportunity:', opportunityInput)
     const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
     console.log(createdOpportunity)
     return
@@ -143,7 +146,9 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     return
   }
 
-  const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityInput)
+  const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunityInput
+  console.log('Opportunity update:', opportunityUpdate)
+  const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityUpdate)
   console.log(updatedOpportunity)
 })
 
@@ -195,13 +200,4 @@ export function toOpportunityInput(
     status: 'open',
     assignedTo,
   }
-}
-
-async function updateExistingAppointment(
-  accessToken: string,
-  appointmentId: string,
-  appointment: GoHighLevelAppointmentInput
-): Promise<GoHighLevelAppointment> {
-  const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointment
-  return await updateAppointment(accessToken, appointmentId, appointmentUpdate)
 }
