@@ -3,9 +3,19 @@ import { type AccountWebhook, type AccountWebhookData, type CustomFieldMap, wrap
 
 type EnvelopeResult = { envelopeId: string; status: string }
 
+type DocusignScriptConfig = {
+  ccRoleName?: string
+  dsAccountId?: string
+  dsAuthServer?: string
+  dsBaseUri?: string
+  fieldMappings?: Record<string, string>
+  signerRoleName?: string
+  templateId?: string
+}
+
 export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async (input) => {
   const payload = input.context.payload
-  const scriptConfig = input.context.config.scriptConfig || {}
+  const scriptConfig: DocusignScriptConfig = input.context.config.scriptConfig || {}
   const secrets = input.context.config.secrets || {}
 
   if (payload.action === 'remove') {
@@ -37,13 +47,7 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
     throw Error('Missing account id')
   }
 
-  // fieldMappings is a Connect "mapping" config field (install UI "Add Mapping" rows).
-  //   key   = Terros account field ref (CF.* or a dotted path like account.resident.email)
-  //   value = Docusign target: reserved tokens signer.email / signer.name / cc.email / cc.name,
-  //           OR a template tab Data Label
-  // Everything inferred from the account flows through this one editor.
-  const fieldMappings: Record<string, string> =
-    (scriptConfig as { fieldMappings?: Record<string, string> }).fieldMappings || {}
+  const fieldMappings = scriptConfig.fieldMappings || {}
   const recipient: Record<string, string | undefined> = {}
   const textTabs: { tabLabel: string; value: string; locked: string }[] = []
   for (const [fieldRef, target] of Object.entries(fieldMappings)) {
@@ -79,7 +83,7 @@ export const handler = wrapConnectHandler<AccountWebhook, EnvelopeResult>(async 
     })
   }
 
-  const assertion = buildJwt(scriptConfig, dsIntegrationKey, dsUserId, dsPrivateKey)
+  const assertion = buildJwt(dsAuthServer, dsIntegrationKey, dsUserId, dsPrivateKey)
   const tokenUrl = `https://${dsAuthServer.replace(/\/+$/, '')}/oauth/token`
   const tokenBody = new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion })
 
@@ -143,12 +147,7 @@ function removePayloadPrefix(source: string): string {
   return source
 }
 
-function buildJwt(
-  scriptConfig: Record<string, string>,
-  dsIntegrationKey: string,
-  dsUserId: string,
-  dsPrivateKey: string
-): string {
+function buildJwt(dsAuthServer: string, dsIntegrationKey: string, dsUserId: string, dsPrivateKey: string): string {
   const b64url = (b: Buffer): string => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   const now = Math.floor(Date.now() / 1000)
   const head = b64url(Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })))
@@ -157,7 +156,7 @@ function buildJwt(
       JSON.stringify({
         iss: dsIntegrationKey,
         sub: dsUserId,
-        aud: scriptConfig.dsAuthServer?.replace(/\/+$/, ''),
+        aud: dsAuthServer.replace(/\/+$/, ''),
         iat: now,
         exp: now + 3600,
         scope: 'signature impersonation',
@@ -166,10 +165,6 @@ function buildJwt(
   )
   const s = createSign('RSA-SHA256')
   s.update(`${head}.${claims}`)
-  // Normalize the PEM: if the secret was stored JSON-escaped and the platform
-  // handed back literal "\n" text instead of real newlines, convert them.
-  // Also strips any surrounding quotes/whitespace. Without this, OpenSSL throws
-  // ERR_OSSL_UNSUPPORTED because it can't decode a single-line blob.
   const pem = normalizePem(dsPrivateKey)
   return `${head}.${claims}.${b64url(s.sign(pem))}`
 }

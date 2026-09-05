@@ -22,9 +22,14 @@ type WebhookAccountData = WebhookAuditProps &
   }
 type WebhookAccount = WebhookPayload<'Account', WebhookAccountData, 'id'>
 
+type SalesforceScriptConfig = {
+  leadType?: string
+}
+
 export const handler = wrapConnectHandler<WebhookAccount>(async (input, client) => {
   const { payload, config } = input.context
-  const { secrets, scriptConfig } = config
+  const scriptConfig: SalesforceScriptConfig = config.scriptConfig
+  const { secrets } = config
   const { clientId, clientSecret, url } = secrets
 
   if (payload.action === 'remove') {
