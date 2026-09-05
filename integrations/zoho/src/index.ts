@@ -5,11 +5,11 @@ import {
   wrapConnectHandler,
 } from '@terros-inc/sdk'
 
-type ZohoLeadPayload = {
-  data: Record<string, unknown>
-}
+type ZohoLeadData = Record<string, unknown>
 
-type ZohoLeadData = ZohoLeadPayload['data']
+type ZohoLeadPayload = {
+  data: ZohoLeadData
+}
 
 type ZohoScriptConfig = {
   workflowId?: string
@@ -20,7 +20,7 @@ type ZohoScriptConfig = {
 
 export const handler = wrapConnectHandler<ZohoLeadPayload>(async (input, client) => {
   const { payload, config } = input.context
-  const scriptConfig = config.scriptConfig as unknown as ZohoScriptConfig
+  const scriptConfig: ZohoScriptConfig = config.scriptConfig
   const { data } = payload
 
   const sourceId = String(data.id ?? data.Id ?? data.ID ?? '').trim()
