@@ -7,7 +7,6 @@ blockExoticSubdeps: true
 catalogMode: strict
 cleanupUnusedCatalogs: true
 minimumReleaseAge: 10080
-packageManagerStrictVersion: true
 trustPolicy: no-downgrade
 updateNotifier: false
 verifyDepsBeforeRun: warn
