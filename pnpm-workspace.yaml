@@ -8,11 +8,12 @@ catalogMode: strict
 cleanupUnusedCatalogs: true
 minimumReleaseAge: 10080
 trustPolicy: no-downgrade
+pmOnFail: error
 updateNotifier: false
 verifyDepsBeforeRun: warn
 catalog:
-  "@types/luxon": ^3.7.1
-  "@types/minimist": ^1.2.5
+  '@types/luxon': ^3.7.1
+  '@types/minimist': ^1.2.5
   '@types/node': ^24.13.2
   luxon: ^3.7.2
   minimist: ^1.2.8
