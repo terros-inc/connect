@@ -31,7 +31,7 @@ permissions:
 jobs:
   publish:
     name: Publish ${{ inputs.integration }}
-    runs-on: ubuntu-latest
+    runs-on: "runs-on=${{ github.run_id }}/runner=build-medium-arm64"
     environment: terros
     timeout-minutes: 15
     steps:
