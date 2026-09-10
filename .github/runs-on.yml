@@ -1,1 +1,10 @@
 _extends: .github-private
+
+runners:
+  build-medium-arm64:
+    image: ubuntu26-full-arm64
+    cpu: 2
+    ram: 4
+    family: ["c8g"]
+    extras: ["s3-cache"]
+    spot: true
