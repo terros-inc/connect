@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   code-review:
-    runs-on: runs-on=${{ github.run_id }},cpu=2,ram=4,family=c8g,image=ubuntu24-full-arm64,extras=s3-cache,spot=true
+    runs-on: "runs-on=${{ github.run_id }}/pool=review-small-arm64"
     if: |
       (github.event_name == 'pull_request_target' && github.event.pull_request.draft == false) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/open-code-review')) ||
