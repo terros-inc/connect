@@ -16,9 +16,15 @@ type JobNimbusJobPayload = {
   owners?: JobNimbusOwner[]
 }
 
+type JobNimbusScriptConfig = {
+  accountSource?: string
+  requestType?: string
+  workflowId?: string
+}
+
 export const handler = wrapConnectHandler<JobNimbusJobPayload>(async (input, client) => {
   const payload = input.context.payload || {}
-  const scriptConfig = input.context.config.scriptConfig || {}
+  const scriptConfig: JobNimbusScriptConfig = input.context.config.scriptConfig || {}
 
   const workflowId = scriptConfig.workflowId
   if (!workflowId) {
@@ -69,7 +75,9 @@ export const handler = wrapConnectHandler<JobNimbusJobPayload>(async (input, cli
 
   const requestType = getRequestType(scriptConfig.requestType)
 
-  console.log(`Upserting Terros account for JobNimbus job ${jobId} with status ${statusName} (requestType: ${requestType})`)
+  console.log(
+    `Upserting Terros account for JobNimbus job ${jobId} with status ${statusName} (requestType: ${requestType})`
+  )
 
   const result = await client.account.upsert({
     requestType,

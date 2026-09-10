@@ -1,10 +1,16 @@
 import { type AccountWebhook, wrapConnectHandler } from '@terros-inc/sdk'
-import { createJobNimbusRecord, getSalesRepId, toJobNimbusRecord, updateJobNimbusRecord } from './jobnimbus.ts'
+import {
+  createJobNimbusRecord,
+  getSalesRepId,
+  type JobNimbusScriptConfig,
+  toJobNimbusRecord,
+  updateJobNimbusRecord,
+} from './jobnimbus.ts'
 import { maskEmail } from './util.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook>(async (input, client) => {
   const payload = input.context.payload
-  const scriptConfig = input.context.config.scriptConfig || {}
+  const scriptConfig: JobNimbusScriptConfig = input.context.config.scriptConfig || {}
   const secrets = input.context.config.secrets || {}
 
   if (payload.action === 'remove') {

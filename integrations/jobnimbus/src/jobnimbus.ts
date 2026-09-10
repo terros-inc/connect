@@ -3,6 +3,14 @@ import { findFirstMappedValue, maskEmail, normalizeEmail, removeUndefinedValues 
 
 export type JobNimbusUser = { id: string; email?: string }
 export type JobNimbusRecordResponse = { jnid?: string; [key: string]: unknown }
+export type JobNimbusScriptConfig = {
+  defaultCompanyName?: string
+  defaultStatus?: string
+  jobNimbusRecord?: string
+  statusFields?: Record<string, string>
+  statusValues?: Record<string, string>
+  workflowType?: string
+}
 
 const baseUrl: string = 'https://app.jobnimbus.com/api1'
 
@@ -24,7 +32,7 @@ export async function getSalesRepId(owner: AccountWebhookData['owner'], apiKey: 
 export function toJobNimbusRecord(
   account: AccountWebhookData,
   salesRepId: string,
-  scriptConfig: Record<string, string>,
+  scriptConfig: JobNimbusScriptConfig,
   jobNimbusRecord: string
 ): Record<string, unknown> | undefined {
   if (jobNimbusRecord === 'contact') return toJobNimbusContact(account, salesRepId, scriptConfig)
@@ -35,7 +43,7 @@ export function toJobNimbusRecord(
 function toJobNimbusContact(
   account: AccountWebhookData,
   salesRepId: string,
-  scriptConfig: Record<string, string>
+  scriptConfig: JobNimbusScriptConfig
 ): Record<string, unknown> | undefined {
   const resident = (account.homeowner || {}) as Record<string, string | undefined>
   const address = account.location
@@ -67,7 +75,7 @@ function toJobNimbusContact(
 function toJobNimbusJob(
   account: AccountWebhookData,
   salesRepId: string,
-  scriptConfig: Record<string, string>
+  scriptConfig: JobNimbusScriptConfig
 ): Record<string, unknown> | undefined {
   const resident = (account.homeowner || {}) as Record<string, string | undefined>
   const address = account.location
@@ -94,9 +102,9 @@ function toJobNimbusJob(
   })
 }
 
-function getStatusName(account: AccountWebhookData, scriptConfig: Record<string, string>): string | undefined {
-  const statusFields = (scriptConfig as { statusFields?: Record<string, string> }).statusFields || {}
-  const statusValues = (scriptConfig as { statusValues?: Record<string, string> }).statusValues || {}
+function getStatusName(account: AccountWebhookData, scriptConfig: JobNimbusScriptConfig): string | undefined {
+  const statusFields = scriptConfig.statusFields || {}
+  const statusValues = scriptConfig.statusValues || {}
   const statusName = findFirstMappedValue(account as Record<string, unknown>, statusFields, statusValues)
   if (statusName) return statusName
 
