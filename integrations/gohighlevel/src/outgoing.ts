@@ -2,17 +2,10 @@ import {
   type AccountId,
   type CustomFieldMap,
   type SmallAddress,
-  type TeamId,
   type TinyResidentData,
-  type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import {
-  getPrivateIntegrationToken,
-  readTrimmedString,
-  resolveGoHighLevelTeam,
-  toContactFieldValues as toContactFieldValues,
-} from './util.ts'
+import { readTrimmedString, toContactFieldValues as toContactFieldValues } from './util.ts'
 import {
   findAssignedUserId,
   findOpportunity,
@@ -28,13 +21,14 @@ import {
 import { resolveGoHighLevelStageName } from './config.ts'
 
 type ScriptConfig = {
-  teamPipelines: Record<string, string>
+  locationId: string
+  pipelineId: string
   stageMappings?: Record<string, string>
   contactFieldMappings?: Record<string, string>
 }
 
 type Secrets = {
-  privateIntegrationTokens: Record<string, string>
+  privateIntegrationToken: string
 }
 
 type AccountChangeData = {
@@ -44,8 +38,6 @@ type AccountChangeData = {
   }
   closer?: {
     email?: string
-    teamIds?: TeamId[]
-    userId?: UserId
   }
   address?: SmallAddress
   resident?: TinyResidentData
@@ -79,13 +71,9 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   if (!closer) throw Error(`${account.id} has no closer`)
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const team = await resolveGoHighLevelTeam(client, closer)
-  const locationId = team.externalId
-  if (!locationId) throw Error(`${team.teamId} has no location ID`)
-  const pipelineId = scriptConfig.teamPipelines[team.teamId]
-  if (!pipelineId) throw Error(`Missing teamPipelines for ${team.teamId}`)
+  const { locationId, pipelineId } = scriptConfig
   const secrets = input.context.config.secrets as unknown as Secrets
-  const accessToken = getPrivateIntegrationToken(secrets, locationId)
+  const accessToken = secrets.privateIntegrationToken
   const assignedTo = await findAssignedUserId(accessToken, locationId, closer.email)
   const contactInput = toContactInput(account, locationId, scriptConfig, assignedTo)
   let contactResponse: ContactResponse

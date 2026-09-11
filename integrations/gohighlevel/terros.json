@@ -8,10 +8,14 @@
       "dataType": "Account",
       "configSchema": [
         {
-          "name": "teamPipelines",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+          "name": "locationId",
+          "type": "string",
+          "description": "GoHighLevel location/sub-account ID"
+        },
+        {
+          "name": "pipelineId",
+          "type": "string",
+          "description": "GoHighLevel pipeline ID"
         },
         {
           "name": "stageMappings",
@@ -27,12 +31,9 @@
         }
       ],
       "authSchema": {
-        "privateIntegrationTokens": {
-          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
-          "mapping": true
-        }
+        "privateIntegrationToken": "GoHighLevel private integration token"
       },
-      "permissions": ["account:save", "team:list", "user:list"],
+      "permissions": ["account:save"],
       "slug": "gohighlevel-account-sync"
     },
     {
@@ -41,6 +42,11 @@
       "type": "incoming",
       "configSchema": [
         {
+          "name": "locationId",
+          "type": "string",
+          "description": "GoHighLevel location/sub-account ID"
+        },
+        {
           "name": "stageMappings",
           "type": "mapping",
           "dataType": "None",
@@ -48,7 +54,7 @@
         }
       ],
       "authSchema": {},
-      "permissions": ["account:list", "account:save", "team:list", "user:list"],
+      "permissions": ["account:list", "account:save"],
       "slug": "gohighlevel-opportunity-webhook"
     },
     {
@@ -58,16 +64,19 @@
       "dataType": "Event",
       "configSchema": [
         {
-          "name": "teamCalendars",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to that sub-account's calendar ID"
+          "name": "locationId",
+          "type": "string",
+          "description": "GoHighLevel location/sub-account ID"
         },
         {
-          "name": "teamPipelines",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map each Terros team ID to its GoHighLevel pipeline ID"
+          "name": "calendarId",
+          "type": "string",
+          "description": "GoHighLevel calendar ID"
+        },
+        {
+          "name": "pipelineId",
+          "type": "string",
+          "description": "GoHighLevel pipeline ID"
         },
         {
           "name": "stageMappings",
@@ -77,12 +86,9 @@
         }
       ],
       "authSchema": {
-        "privateIntegrationTokens": {
-          "description": "Map each GoHighLevel location/sub-account ID to its private integration token",
-          "mapping": true
-        }
+        "privateIntegrationToken": "GoHighLevel private integration token"
       },
-      "permissions": ["account:list", "event:save", "team:list", "user:list"],
+      "permissions": ["account:list", "event:save"],
       "slug": "gohighlevel-appointment-sync"
     }
   ]

@@ -1,7 +1,8 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
-import { resolveTerrosStageName, validateIncomingTeamLocation } from './config.ts'
+import { resolveTerrosStageName } from './config.ts'
 
 type ScriptConfig = {
+  locationId: string
   stageMappings?: Record<string, string>
 }
 
@@ -33,20 +34,15 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
   if (!stageName) throw Error('GoHighLevel workflow webhook is missing customData.pipeline_stage')
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  if (locationId !== scriptConfig.locationId) {
+    throw Error(`GoHighLevel location ${locationId} does not match configured location ${scriptConfig.locationId}`)
+  }
+
   const match = await client.account.match({ externalLeadId: contactId })
   const account = match.account
   if (!account) {
     throw Error(`No account matched contact ${contactId} at location ${locationId}`)
   }
-  if (!account.ownerId) throw Error(`${account.accountId} has no owner`)
-
-  const { user } = await client.user.get({ userId: account.ownerId })
-  const teamId = user.primaryTeam?.teamId ?? user.teams?.directMemberOf[0]?.teamId
-  if (!teamId) throw Error(`${account.accountId} owner has no teamId`)
-
-  const { team } = await client.team.get({ teamId })
-  console.log(`Using ${team.teamId} for ${account.accountId}`)
-  validateIncomingTeamLocation(team, locationId)
   const workflowTarget = resolveTerrosStageName(stageName, scriptConfig.stageMappings)
   console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
 

@@ -1,4 +1,4 @@
-import type { CustomFieldId, CustomFieldMap, TerrosClient, TinyTeam, UserId } from '@terros-inc/sdk'
+import type { CustomFieldId, CustomFieldMap } from '@terros-inc/sdk'
 
 export type GoHighLevelCustomField = {
   key: string
@@ -9,30 +9,7 @@ type AccountFieldSource = {
   customFieldMap?: CustomFieldMap
 }
 
-export type RoutedUser = {
-  userId?: UserId
-}
-
 const baseUrl = 'https://services.leadconnectorhq.com'
-
-export function getPrivateIntegrationToken(
-  secrets: { privateIntegrationTokens: Record<string, string> },
-  locationId: string
-): string {
-  const accessToken = secrets.privateIntegrationTokens[locationId]
-  if (!accessToken) throw Error(`Missing GoHighLevel private integration token for location ${locationId}`)
-  return accessToken
-}
-
-export async function resolveGoHighLevelTeam(client: TerrosClient, user: RoutedUser): Promise<TinyTeam> {
-  if (!user.userId) throw Error('No userId found')
-
-  const { user: fullUser } = await client.user.get({ userId: user.userId })
-  const primaryTeamId = fullUser.primaryTeam?.teamId
-  if (!primaryTeamId) throw Error(`User ${user.userId} has no primary teamId`)
-
-  return (await client.team.get({ teamId: primaryTeamId })).team
-}
 
 export async function ghlApi<T>(accessToken: string, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {

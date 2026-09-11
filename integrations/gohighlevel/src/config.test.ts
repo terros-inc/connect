@@ -1,45 +1,6 @@
-import {
-  resolveCalendarRoute,
-  resolveGoHighLevelStageName,
-  resolveTerrosStageName,
-  validateIncomingTeamLocation,
-} from './config.ts'
+import { resolveGoHighLevelStageName, resolveTerrosStageName } from './config.ts'
 
 describe('GoHighLevel config', () => {
-  const teamId = 'Team.example' as const
-  const team = { teamId, name: 'Example', externalId: 'location-1', level: 1 }
-
-  test('resolves a calendar route for a team', () => {
-    const config = {
-      teamCalendars: { [teamId]: 'calendar-1' },
-      teamPipelines: { [teamId]: 'pipeline-1' },
-    }
-
-    expect(resolveCalendarRoute(config, team)).toEqual({
-      teamId,
-      locationId: 'location-1',
-      calendarId: 'calendar-1',
-      pipelineId: 'pipeline-1',
-    })
-  })
-
-  test('rejects a calendar route without a pipeline', () => {
-    const config = {
-      teamCalendars: { [teamId]: 'calendar-1' },
-      teamPipelines: {},
-    }
-
-    expect(() => resolveCalendarRoute(config, team)).toThrow('Missing teamPipelines mapping')
-  })
-
-  test('validates a matching incoming location', () => {
-    expect(() => validateIncomingTeamLocation(team, 'location-1')).not.toThrow()
-  })
-
-  test('rejects an incoming location that does not match the account team', () => {
-    expect(() => validateIncomingTeamLocation(team, 'location-2')).toThrow('does not match Terros team')
-  })
-
   test('maps a Terros stage to a GoHighLevel stage', () => {
     expect(resolveGoHighLevelStageName(' Activity ', { activity: 'Lead' })).toBe('Lead')
   })

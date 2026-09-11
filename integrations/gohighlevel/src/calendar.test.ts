@@ -18,14 +18,13 @@ describe('GoHighLevel appointments', () => {
         },
       },
     }
-    const route = {
-      teamId: 'Team.victoria' as const,
+    const config = {
       locationId: 'ghl-location',
       calendarId: 'ghl-calendar',
       pipelineId: 'ghl-pipeline',
     }
 
-    expect(toAppointmentInput(event, route, 'ghl-contact', 'ghl-user')).toEqual({
+    expect(toAppointmentInput(event, config, 'ghl-contact', 'ghl-user')).toEqual({
       calendarId: 'ghl-calendar',
       locationId: 'ghl-location',
       contactId: 'ghl-contact',
@@ -39,7 +38,7 @@ describe('GoHighLevel appointments', () => {
       ignoreDateRange: true,
       ignoreFreeSlotValidation: true,
     })
-    expect(toAppointmentInput(event, route, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
+    expect(toAppointmentInput(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
   })
 
   test('builds an opportunity for the consultation account', () => {
@@ -51,14 +50,13 @@ describe('GoHighLevel appointments', () => {
       },
       workflowStageName: 'Appointment Set',
     }
-    const route = {
-      teamId: 'Team.victoria' as const,
+    const config = {
       locationId: 'ghl-location',
       calendarId: 'ghl-calendar',
       pipelineId: 'ghl-pipeline',
     }
 
-    expect(toOpportunityInput(account, route, 'ghl-contact', 'ghl-stage', 'ghl-user')).toEqual({
+    expect(toOpportunityInput(account, config, 'ghl-contact', 'ghl-stage', 'ghl-user')).toEqual({
       locationId: 'ghl-location',
       pipelineId: 'ghl-pipeline',
       pipelineStageId: 'ghl-stage',
