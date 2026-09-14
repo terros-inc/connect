@@ -1,11 +1,13 @@
 {
   "author": "Terros Inc.",
   "dependencies": {
-    "@terros-inc/sdk": "workspace:"
+    "@terros-inc/sdk": "workspace:",
+    "html-to-text": "catalog:"
   },
   "description": "GoHighLevel contact and opportunity integration",
   "devDependencies": {
     "@terros-inc/cli": "workspace:",
+    "@types/html-to-text": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -21,5 +23,5 @@
     "publish": "terros connect publish"
   },
   "type": "module",
-  "version": "1.1.3"
+  "version": "1.1.5"
 }

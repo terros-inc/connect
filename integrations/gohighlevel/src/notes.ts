@@ -1,3 +1,4 @@
+import { convert } from 'html-to-text'
 import {
   type AccountData,
   type AccountNote,
@@ -19,6 +20,16 @@ export type GoHighLevelNote = {
 
 export type GoHighLevelNoteInput = {
   body: string
+}
+
+export function toText(html: string): string {
+  return convert(html, {
+    wordwrap: false,
+    selectors: [
+      { selector: 'a', options: { ignoreHref: true } },
+      { selector: 'img', format: 'skip' },
+    ],
+  })
 }
 
 type NoteChanges = {
@@ -69,7 +80,7 @@ export function getChanges(
 
     const userId = author?.email ? usersByEmail.get(normalizeText(author.email))?.userId : undefined
     return {
-      text: formatNote(getUserName(author), 'GHL', note.id, note.body),
+      text: formatNote(getUserName(author), 'GHL', note.id, toText(note.body)),
       timestamp,
       userId: userId ?? requireUserId(fallbackUserId),
     }

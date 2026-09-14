@@ -1,8 +1,23 @@
 import { type AccountData, type SmallUser } from '@terros-inc/sdk'
-import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
+import {
+  getChanges,
+  getIncomingUserIds,
+  getMissingUserIds,
+  getUserInput,
+  toText,
+  type GoHighLevelNote,
+} from './notes.ts'
 import { type GoHighLevelUser } from './gohighlevel.ts'
 
 describe('GoHighLevel note sync', () => {
+  test('converts GHL note HTML to text', () => {
+    expect(
+      toText(
+        '<p style="margin:0px; padding-left: 0px!important;">Very &amp; important</p><p>Next<br>line</p>'
+      )
+    ).toBe('Very & important\n\nNext\nline')
+  })
+
   test('selects the smallest user list needed for note sync', () => {
     expect(getUserInput([], [])).toBeUndefined()
     expect(getUserInput(['U.terros'], [])).toEqual({ showArchived: 'all', userIds: ['U.terros'] })
