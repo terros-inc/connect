@@ -1,4 +1,5 @@
-import { ghlApi, normalizeName, readTrimmedString, type GoHighLevelCustomField } from './util.ts'
+import type { CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
+import { ghlApi, normalizeName, readTrimmedString, toContactFieldValues, type GoHighLevelCustomField } from './util.ts'
 
 export type GoHighLevelContact = {
   id: string
@@ -23,6 +24,12 @@ export type GoHighLevelContactInput = {
   assignedTo?: string
   source?: string
   customFields?: GoHighLevelCustomField[]
+}
+
+type ContactAccount = {
+  address?: SmallAddress
+  resident?: Record<string, unknown>
+  customFieldMap?: CustomFieldMap
 }
 
 export type GoHighLevelPipelineStage = {
@@ -109,6 +116,29 @@ type GoHighLevelUser = {
 export async function getContact(accessToken: string, contactId: string): Promise<GoHighLevelContact> {
   const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${contactId}`)
   return response.contact
+}
+
+export function toContactInput(
+  account: ContactAccount,
+  locationId: string,
+  contactFieldMappings: Record<string, string> | undefined,
+  assignedTo: string | undefined
+): GoHighLevelContactInput {
+  return {
+    locationId,
+    firstName: readTrimmedString(account.resident?.firstName),
+    lastName: readTrimmedString(account.resident?.lastName),
+    name: readTrimmedString(account.resident?.name),
+    email: readTrimmedString(account.resident?.email),
+    phone: readTrimmedString(account.resident?.phone),
+    address1: account.address?.line1,
+    city: account.address?.locality,
+    state: account.address?.countrySubd,
+    postalCode: account.address?.postal1,
+    assignedTo,
+    source: 'Terros',
+    customFields: toContactFieldValues(account, contactFieldMappings),
+  }
 }
 
 export async function upsertContact(accessToken: string, contact: GoHighLevelContactInput): Promise<ContactResponse> {

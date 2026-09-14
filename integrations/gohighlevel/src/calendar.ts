@@ -13,9 +13,11 @@ import {
   getPipeline,
   type GoHighLevelAppointmentInput,
   opportunityNeedsUpdate,
+  toContactInput,
   toOpportunityInput,
   updateAppointment,
   updateOpportunity,
+  upsertContact,
 } from './gohighlevel.ts'
 import { resolveGoHighLevelStageName } from './config.ts'
 
@@ -85,14 +87,36 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = secrets.privateIntegrationToken
 
-  if (!account.externalLeadId) {
-    throw Error(`${account.accountId} has no contact ID`)
-  }
   if (!account.workflowStageName) throw Error(`${account.accountId} has no workflow stage name`)
-  console.log(`Using ${account.externalLeadId} for ${event.id}`)
 
   const assignedUserId = await findAssignedUserId(accessToken, scriptConfig.locationId, closer.email)
-  const appointmentInput = toAppointmentInput(event, scriptConfig, account.externalLeadId, assignedUserId)
+  let contactId = account.externalLeadId
+  if (!contactId) {
+    const contactInput = toContactInput(
+      {
+        address: account.location,
+        resident: account.resident,
+      },
+      scriptConfig.locationId,
+      undefined,
+      assignedUserId
+    )
+    const contactResponse = await upsertContact(accessToken, contactInput)
+    console.log('Created contact: ', contactResponse)
+    contactId = contactResponse.contact.id
+
+    const updated = await client.account.upsert({
+      requestType: 'update',
+      account: {
+        accountId: account.accountId,
+        externalLeadId: contactId,
+      },
+    })
+    console.log(`Saved contact ${contactId} to ${account.accountId}`)
+  }
+  console.log(`Using ${contactId} for ${event.id}`)
+
+  const appointmentInput = toAppointmentInput(event, scriptConfig, contactId, assignedUserId)
 
   if (event.sourceId) {
     const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointmentInput
@@ -115,14 +139,14 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const stageName = resolveGoHighLevelStageName(account.workflowStageName, scriptConfig.stageMappings)
   const stage = findPipelineStage(pipeline, stageName)
   console.log(`Resolved ${account.workflowStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
-  const existingOpportunity = await findOpportunity(accessToken, scriptConfig, account.externalLeadId)
+  const existingOpportunity = await findOpportunity(accessToken, scriptConfig, contactId)
 
   if (!existingOpportunity) {
     console.log(`Skipped opportunity update for ${account.accountId} because no opportunity exists`)
     return
   }
 
-  const opportunityInput = toOpportunityInput(account, scriptConfig, account.externalLeadId, stage.id, assignedUserId)
+  const opportunityInput = toOpportunityInput(account, scriptConfig, contactId, stage.id, assignedUserId)
   if (!opportunityNeedsUpdate(existingOpportunity, opportunityInput)) {
     console.log(`Skipped update: ${existingOpportunity.id} for ${account.accountId}`)
     return

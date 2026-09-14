@@ -5,7 +5,6 @@ import {
   type TinyResidentData,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { readTrimmedString, toContactFieldValues as toContactFieldValues } from './util.ts'
 import {
   createOpportunity,
   findAssignedUserId,
@@ -14,7 +13,7 @@ import {
   getContact,
   getPipeline,
   type ContactResponse,
-  type GoHighLevelContactInput,
+  toContactInput,
   toOpportunityInput,
   updateContact,
   updateOpportunityStage,
@@ -77,7 +76,7 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = secrets.privateIntegrationToken
   const assignedTo = await findAssignedUserId(accessToken, locationId, closer.email)
-  const contactInput = toContactInput(account, locationId, scriptConfig, assignedTo)
+  const contactInput = toContactInput(account, locationId, scriptConfig.contactFieldMappings, assignedTo)
   let contactResponse: ContactResponse
   if (account.externalLeadId) {
     const existingContact = await getContact(accessToken, account.externalLeadId)
@@ -141,29 +140,3 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const updatedOpportunity = await updateOpportunityStage(accessToken, existingOpportunity.id, opportunityUpdate)
   console.log(updatedOpportunity)
 })
-
-function toContactInput(
-  account: AccountChangeData,
-  locationId: string,
-  config: ScriptConfig,
-  assignedTo: string | undefined
-): GoHighLevelContactInput {
-  const customFields = toContactFieldValues(account, config.contactFieldMappings)
-
-  const contact: GoHighLevelContactInput = {
-    locationId,
-    firstName: readTrimmedString(account.resident?.firstName),
-    lastName: readTrimmedString(account.resident?.lastName),
-    name: readTrimmedString(account.resident?.name),
-    email: readTrimmedString(account.resident?.email),
-    phone: readTrimmedString(account.resident?.phone),
-    address1: account.address?.line1,
-    city: account.address?.locality,
-    state: account.address?.countrySubd,
-    postalCode: account.address?.postal1,
-    assignedTo,
-    source: 'Terros',
-    customFields,
-  }
-  return contact
-}

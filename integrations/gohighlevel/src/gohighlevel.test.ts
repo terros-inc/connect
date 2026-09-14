@@ -1,11 +1,51 @@
 import {
   findPipelineStage,
   opportunityNeedsUpdate,
+  toContactInput,
   toOpportunityInput,
   type GoHighLevelOpportunity,
   type GoHighLevelPipeline,
   updateOpportunityStage,
 } from './gohighlevel.ts'
+
+describe('GoHighLevel contacts', () => {
+  test('builds a contact from account data', () => {
+    const account = {
+      address: {
+        line1: '123 Main St',
+        locality: 'Victoria',
+        countrySubd: 'BC',
+        postal1: 'V8V 1V1',
+        latlng: {
+          latitude: 48.4284,
+          longitude: -123.3656,
+        },
+      },
+      resident: {
+        firstName: ' Quinn ',
+        lastName: ' Example ',
+        email: ' quinn@example.com ',
+        phone: ' 555-0100 ',
+      },
+    }
+
+    expect(toContactInput(account, 'ghl-location', undefined, 'ghl-user')).toEqual({
+      locationId: 'ghl-location',
+      firstName: 'Quinn',
+      lastName: 'Example',
+      name: undefined,
+      email: 'quinn@example.com',
+      phone: '555-0100',
+      address1: '123 Main St',
+      city: 'Victoria',
+      state: 'BC',
+      postalCode: 'V8V 1V1',
+      assignedTo: 'ghl-user',
+      source: 'Terros',
+      customFields: [],
+    })
+  })
+})
 
 describe('GoHighLevel pipeline stages', () => {
   const pipeline: GoHighLevelPipeline = {
