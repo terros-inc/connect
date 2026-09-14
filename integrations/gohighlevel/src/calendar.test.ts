@@ -1,4 +1,4 @@
-import { toAppointmentInput, toOpportunityInput } from './calendar.ts'
+import { toAppointmentInput } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
   test('builds a notifying appointment from a Terros calendar event', () => {
@@ -39,31 +39,5 @@ describe('GoHighLevel appointments', () => {
       ignoreFreeSlotValidation: true,
     })
     expect(toAppointmentInput(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
-  })
-
-  test('builds an opportunity for the consultation account', () => {
-    const account = {
-      accountId: 'Account.example' as const,
-      resident: {
-        firstName: 'Quinn',
-        lastName: 'Example',
-      },
-      workflowStageName: 'Appointment Set',
-    }
-    const config = {
-      locationId: 'ghl-location',
-      calendarId: 'ghl-calendar',
-      pipelineId: 'ghl-pipeline',
-    }
-
-    expect(toOpportunityInput(account, config, 'ghl-contact', 'ghl-stage', 'ghl-user')).toEqual({
-      locationId: 'ghl-location',
-      pipelineId: 'ghl-pipeline',
-      pipelineStageId: 'ghl-stage',
-      contactId: 'ghl-contact',
-      name: 'Quinn Example',
-      status: 'open',
-      assignedTo: 'ghl-user',
-    })
   })
 })

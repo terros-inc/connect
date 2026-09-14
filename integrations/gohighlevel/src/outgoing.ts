@@ -7,6 +7,7 @@ import {
 } from '@terros-inc/sdk'
 import { readTrimmedString, toContactFieldValues as toContactFieldValues } from './util.ts'
 import {
+  createOpportunity,
   findAssignedUserId,
   findOpportunity,
   findPipelineStage,
@@ -14,6 +15,7 @@ import {
   getPipeline,
   type ContactResponse,
   type GoHighLevelContactInput,
+  toOpportunityInput,
   updateContact,
   updateOpportunityStage,
   upsertContact,
@@ -111,15 +113,26 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
 
   const route = { locationId, pipelineId }
   const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
-  if (!existingOpportunity) return
-
   const workflowStageName = account.workflowState?.stageName
   if (!workflowStageName) throw Error(`${account.id} has no workflow stage name`)
   const pipeline = await getPipeline(accessToken, locationId, pipelineId)
   const stageName = resolveGoHighLevelStageName(workflowStageName, scriptConfig.stageMappings)
   const stage = findPipelineStage(pipeline, stageName)
+  const opportunityInput = toOpportunityInput(
+    { accountId: account.id, resident: account.resident },
+    route,
+    contact.id,
+    stage.id,
+    assignedTo
+  )
+
+  if (!existingOpportunity) {
+    const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
+    console.log('Created opportunity:', createdOpportunity)
+    return
+  }
+
   if (existingOpportunity.pipelineStageId === stage.id) {
-    console.log(`Skipped unchanged opportunity stage ${stage.name} for ${account.id}`)
     return
   }
 

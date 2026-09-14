@@ -1,4 +1,4 @@
-import { ghlApi, normalizeName, type GoHighLevelCustomField } from './util.ts'
+import { ghlApi, normalizeName, readTrimmedString, type GoHighLevelCustomField } from './util.ts'
 
 export type GoHighLevelContact = {
   id: string
@@ -62,6 +62,11 @@ export type GoHighLevelOpportunityInput = {
 
 export type GoHighLevelOpportunityUpdate = Omit<GoHighLevelOpportunityInput, 'locationId' | 'contactId'>
 export type GoHighLevelOpportunityStageUpdate = Pick<GoHighLevelOpportunityInput, 'pipelineStageId'>
+
+type OpportunityAccount = {
+  accountId: string
+  resident?: Record<string, unknown>
+}
 
 export type GoHighLevelAppointment = {
   id: string
@@ -191,6 +196,31 @@ export function opportunityNeedsUpdate(
   if (opportunity.pipelineStageId !== input.pipelineStageId) return true
   if (opportunity.name !== input.name) return true
   return input.assignedTo !== undefined && opportunity.assignedTo !== input.assignedTo
+}
+
+export function toOpportunityInput(
+  account: OpportunityAccount,
+  route: { locationId: string; pipelineId: string },
+  contactId: string,
+  pipelineStageId: string,
+  assignedTo: string | undefined
+): GoHighLevelOpportunityInput {
+  const firstName = readTrimmedString(account.resident?.firstName) || ''
+  const lastName = readTrimmedString(account.resident?.lastName) || ''
+  const name =
+    `${firstName} ${lastName}`.trim() ||
+    readTrimmedString(account.resident?.name) ||
+    `Terros Account ${account.accountId}`
+
+  return {
+    locationId: route.locationId,
+    pipelineId: route.pipelineId,
+    pipelineStageId,
+    contactId,
+    name,
+    status: 'open',
+    assignedTo,
+  }
 }
 
 export async function findOpportunity(

@@ -1,6 +1,7 @@
 import {
   findPipelineStage,
   opportunityNeedsUpdate,
+  toOpportunityInput,
   type GoHighLevelOpportunity,
   type GoHighLevelPipeline,
   updateOpportunityStage,
@@ -35,6 +36,30 @@ describe('GoHighLevel opportunities', () => {
     name: 'Jane Homeowner',
     assignedTo: 'user-1',
   }
+
+  test('builds an opportunity for an outgoing account', () => {
+    const account = {
+      accountId: 'Account.example',
+      resident: {
+        firstName: 'Quinn',
+        lastName: 'Example',
+      },
+    }
+    const route = {
+      locationId: 'ghl-location',
+      pipelineId: 'ghl-pipeline',
+    }
+
+    expect(toOpportunityInput(account, route, 'ghl-contact', 'ghl-stage', 'ghl-user')).toEqual({
+      locationId: 'ghl-location',
+      pipelineId: 'ghl-pipeline',
+      pipelineStageId: 'ghl-stage',
+      contactId: 'ghl-contact',
+      name: 'Quinn Example',
+      status: 'open',
+      assignedTo: 'ghl-user',
+    })
+  })
 
   test('updates when the name changes without a stage change', () => {
     expect(

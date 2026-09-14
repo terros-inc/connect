@@ -1,22 +1,19 @@
 import {
-  type AccountData,
   type AccountId,
   type CalendarEventId,
   type EventType,
   type SmallAddress,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { readTrimmedString } from './util.ts'
 import {
   createAppointment,
-  createOpportunity,
   findAssignedUserId,
   findOpportunity,
   findPipelineStage,
   getPipeline,
   type GoHighLevelAppointmentInput,
-  type GoHighLevelOpportunityInput,
   opportunityNeedsUpdate,
+  toOpportunityInput,
   updateAppointment,
   updateOpportunity,
 } from './gohighlevel.ts'
@@ -63,7 +60,6 @@ type CalendarEventWebhook =
     }
 
 type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration' | 'address'>
-type OpportunityAccount = Pick<AccountData, 'accountId' | 'resident' | 'workflowStageName'>
 
 export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
   const payload = input.context.payload
@@ -120,17 +116,15 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const stage = findPipelineStage(pipeline, stageName)
   console.log(`Resolved ${account.workflowStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
   const existingOpportunity = await findOpportunity(accessToken, scriptConfig, account.externalLeadId)
-  const opportunityInput = toOpportunityInput(account, scriptConfig, account.externalLeadId, stage.id, assignedUserId)
 
   if (!existingOpportunity) {
-    console.log('Create opportunity:', opportunityInput)
-    const createdOpportunity = await createOpportunity(accessToken, opportunityInput)
-    console.log(createdOpportunity)
+    console.log(`Skipped opportunity update for ${account.accountId} because no opportunity exists`)
     return
   }
 
+  const opportunityInput = toOpportunityInput(account, scriptConfig, account.externalLeadId, stage.id, assignedUserId)
   if (!opportunityNeedsUpdate(existingOpportunity, opportunityInput)) {
-    console.log(`Skipped ${existingOpportunity.id} for ${account.accountId}`)
+    console.log(`Skipped update: ${existingOpportunity.id} for ${account.accountId}`)
     return
   }
 
@@ -162,30 +156,5 @@ export function toAppointmentInput(
     toNotify: true,
     ignoreDateRange: true,
     ignoreFreeSlotValidation: true,
-  }
-}
-
-export function toOpportunityInput(
-  account: OpportunityAccount,
-  config: Pick<ScriptConfig, 'locationId' | 'pipelineId'>,
-  contactId: string,
-  pipelineStageId: string,
-  assignedTo: string | undefined
-): GoHighLevelOpportunityInput {
-  const firstName = readTrimmedString(account.resident?.firstName) || ''
-  const lastName = readTrimmedString(account.resident?.lastName) || ''
-  const name =
-    `${firstName} ${lastName}`.trim() ||
-    readTrimmedString(account.resident?.name) ||
-    `Terros Account ${account.accountId}`
-
-  return {
-    locationId: config.locationId,
-    pipelineId: config.pipelineId,
-    pipelineStageId,
-    contactId,
-    name,
-    status: 'open',
-    assignedTo,
   }
 }
