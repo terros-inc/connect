@@ -1,13 +1,41 @@
-import type { CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
-import { ghlApi, normalizeName, readTrimmedString, toContactFieldValues, type GoHighLevelCustomField } from './util.ts'
+import { type AccountData, type CustomFieldMap, type SmallAddress, type TinyResidentData } from '@terros-inc/sdk'
+import { ghlApi, isEmpty, normalizeText, readString, toContactFields, type GoHighLevelCustomField } from './util.ts'
 
-export type GoHighLevelContact = {
+export type GoHighLevelUser = {
   id: string
-  locationId: string
+  name?: string
+  firstName?: string
+  lastName?: string
+  email?: string
 }
 
-export type ContactResponse = {
-  contact: GoHighLevelContact
+type GoHighLevelLocation = {
+  id: string
+  companyId: string
+}
+
+export async function listUsers(
+  accessToken: string,
+  locationId: string,
+  userIds: string[]
+): Promise<GoHighLevelUser[]> {
+  if (isEmpty(userIds)) return []
+
+  const locationResponse = await ghlApi<{ location: GoHighLevelLocation }>(accessToken, `/locations/${locationId}`)
+  const search = new URLSearchParams({
+    companyId: locationResponse.location.companyId,
+    locationId,
+    ids: userIds.join(','),
+    limit: String(userIds.length),
+  })
+  const response = await ghlApi<{ users: GoHighLevelUser[] }>(accessToken, `/users/search?${search}`)
+  return response.users
+}
+
+type ContactAccount = {
+  address?: SmallAddress
+  resident?: TinyResidentData
+  customFieldMap?: CustomFieldMap
 }
 
 export type GoHighLevelContactInput = {
@@ -26,10 +54,27 @@ export type GoHighLevelContactInput = {
   customFields?: GoHighLevelCustomField[]
 }
 
-type ContactAccount = {
-  address?: SmallAddress
-  resident?: Record<string, unknown>
-  customFieldMap?: CustomFieldMap
+export function toContact(
+  account: ContactAccount,
+  locationId: string,
+  contactFieldMappings: Record<string, string> | undefined,
+  assignedTo: string | undefined
+): GoHighLevelContactInput {
+  return {
+    locationId,
+    firstName: readString(account.resident?.firstName),
+    lastName: readString(account.resident?.lastName),
+    name: readString(account.resident?.name),
+    email: readString(account.resident?.email),
+    phone: readString(account.resident?.phone),
+    address1: account.address?.line1,
+    city: account.address?.locality,
+    state: account.address?.countrySubd,
+    postalCode: account.address?.postal1,
+    assignedTo,
+    source: 'Terros',
+    customFields: toContactFields(account, contactFieldMappings),
+  }
 }
 
 export type GoHighLevelPipelineStage = {
@@ -41,125 +86,6 @@ export type GoHighLevelPipeline = {
   id: string
   locationId: string
   stages: GoHighLevelPipelineStage[]
-}
-
-export type GoHighLevelOpportunity = {
-  id: string
-  contactId: string
-  locationId: string
-  pipelineId: string
-  pipelineStageId?: string
-  name?: string
-  assignedTo?: string
-}
-
-export type OpportunityResponse = {
-  opportunity: GoHighLevelOpportunity
-}
-
-export type GoHighLevelOpportunityInput = {
-  locationId: string
-  pipelineId: string
-  pipelineStageId: string
-  contactId: string
-  name: string
-  status: 'open'
-  assignedTo?: string
-}
-
-export type GoHighLevelOpportunityUpdate = Omit<GoHighLevelOpportunityInput, 'locationId' | 'contactId'>
-export type GoHighLevelOpportunityStageUpdate = Pick<GoHighLevelOpportunityInput, 'pipelineStageId'>
-
-type OpportunityAccount = {
-  accountId: string
-  resident?: Record<string, unknown>
-}
-
-export type GoHighLevelAppointment = {
-  id: string
-  calendarId: string
-  locationId: string
-  contactId: string
-}
-
-export type GoHighLevelAppointmentInput = {
-  calendarId: string
-  locationId: string
-  contactId: string
-  title: string
-  startTime: string
-  endTime: string
-  appointmentStatus: 'confirmed'
-  assignedUserId?: string
-  address?: string
-  toNotify: true
-  ignoreDateRange: true
-  ignoreFreeSlotValidation: true
-}
-
-export type GoHighLevelAppointmentUpdate = Partial<
-  Omit<GoHighLevelAppointmentInput, 'locationId' | 'contactId' | 'appointmentStatus'>
-> & {
-  appointmentStatus?: 'confirmed' | 'cancelled'
-}
-
-type GoHighLevelLocation = {
-  id: string
-  companyId: string
-}
-
-type GoHighLevelUser = {
-  id: string
-  email?: string
-}
-
-export async function getContact(accessToken: string, contactId: string): Promise<GoHighLevelContact> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${contactId}`)
-  return response.contact
-}
-
-export function toContactInput(
-  account: ContactAccount,
-  locationId: string,
-  contactFieldMappings: Record<string, string> | undefined,
-  assignedTo: string | undefined
-): GoHighLevelContactInput {
-  return {
-    locationId,
-    firstName: readTrimmedString(account.resident?.firstName),
-    lastName: readTrimmedString(account.resident?.lastName),
-    name: readTrimmedString(account.resident?.name),
-    email: readTrimmedString(account.resident?.email),
-    phone: readTrimmedString(account.resident?.phone),
-    address1: account.address?.line1,
-    city: account.address?.locality,
-    state: account.address?.countrySubd,
-    postalCode: account.address?.postal1,
-    assignedTo,
-    source: 'Terros',
-    customFields: toContactFieldValues(account, contactFieldMappings),
-  }
-}
-
-export async function upsertContact(accessToken: string, contact: GoHighLevelContactInput): Promise<ContactResponse> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, '/contacts/upsert', {
-    method: 'POST',
-    body: JSON.stringify(contact),
-  })
-  return response
-}
-
-export async function updateContact(
-  accessToken: string,
-  contactId: string,
-  contact: Omit<GoHighLevelContactInput, 'locationId'>
-): Promise<ContactResponse> {
-  const response = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${contactId}`, {
-    method: 'PUT',
-    body: JSON.stringify(contact),
-  })
-  console.log(`Updated contact ${contactId}`)
-  return response
 }
 
 export async function getPipeline(
@@ -174,7 +100,7 @@ export async function getPipeline(
   return pipeline
 }
 
-export async function findAssignedUserId(
+export async function findUserId(
   accessToken: string,
   locationId: string,
   ownerEmail: string | undefined
@@ -189,9 +115,9 @@ export async function findAssignedUserId(
     limit: '2',
   })
   const response = await ghlApi<{ users: GoHighLevelUser[] }>(accessToken, `/users/search?${search}`)
-  const normalizedOwnerEmail = normalizeName(ownerEmail)
+  const normalizedOwnerEmail = normalizeText(ownerEmail)
   const matchingUsers = response.users.filter(
-    (user) => user.email && normalizeName(user.email) === normalizedOwnerEmail
+    (user) => user.email && normalizeText(user.email) === normalizedOwnerEmail
   )
 
   if (matchingUsers.length > 1) {
@@ -207,9 +133,9 @@ export async function findAssignedUserId(
   return matchingUser.id
 }
 
-export function findPipelineStage(pipeline: GoHighLevelPipeline, stageName: string): GoHighLevelPipelineStage {
-  const normalizedStageName = normalizeName(stageName)
-  const stages = pipeline.stages.filter((stage) => normalizeName(stage.name) === normalizedStageName)
+export function findStage(pipeline: GoHighLevelPipeline, stageName: string): GoHighLevelPipelineStage {
+  const normalizedStageName = normalizeText(stageName)
+  const stages = pipeline.stages.filter((stage) => normalizeText(stage.name) === normalizedStageName)
   const stage = stages[0]
   if (stages.length !== 1 || !stage) {
     throw Error(
@@ -219,7 +145,27 @@ export function findPipelineStage(pipeline: GoHighLevelPipeline, stageName: stri
   return stage
 }
 
-export function opportunityNeedsUpdate(
+export type GoHighLevelOpportunity = {
+  id: string
+  contactId: string
+  locationId: string
+  pipelineId: string
+  pipelineStageId?: string
+  name?: string
+  assignedTo?: string
+}
+
+export type GoHighLevelOpportunityInput = {
+  locationId: string
+  pipelineId: string
+  pipelineStageId: string
+  contactId: string
+  name: string
+  status: 'open'
+  assignedTo?: string
+}
+
+export function needsUpdate(
   opportunity: GoHighLevelOpportunity,
   input: Pick<GoHighLevelOpportunityInput, 'pipelineStageId' | 'name' | 'assignedTo'>
 ): boolean {
@@ -228,19 +174,19 @@ export function opportunityNeedsUpdate(
   return input.assignedTo !== undefined && opportunity.assignedTo !== input.assignedTo
 }
 
-export function toOpportunityInput(
+type OpportunityAccount = Pick<AccountData, 'accountId' | 'resident'>
+
+export function toOpportunity(
   account: OpportunityAccount,
   route: { locationId: string; pipelineId: string },
   contactId: string,
   pipelineStageId: string,
   assignedTo: string | undefined
 ): GoHighLevelOpportunityInput {
-  const firstName = readTrimmedString(account.resident?.firstName) || ''
-  const lastName = readTrimmedString(account.resident?.lastName) || ''
+  const firstName = readString(account.resident?.firstName) || ''
+  const lastName = readString(account.resident?.lastName) || ''
   const name =
-    `${firstName} ${lastName}`.trim() ||
-    readTrimmedString(account.resident?.name) ||
-    `Terros Account ${account.accountId}`
+    `${firstName} ${lastName}`.trim() || readString(account.resident?.name) || `Terros Account ${account.accountId}`
 
   return {
     locationId: route.locationId,
@@ -273,68 +219,4 @@ export async function findOpportunity(
     throw Error(`Multiple GoHighLevel opportunities found for contact ${contactId} in pipeline ${route.pipelineId}`)
   }
   return response.opportunities[0]
-}
-
-export async function createOpportunity(
-  accessToken: string,
-  opportunity: GoHighLevelOpportunityInput
-): Promise<OpportunityResponse> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
-    method: 'POST',
-    body: JSON.stringify(opportunity),
-  })
-  return response
-}
-
-export async function updateOpportunity(
-  accessToken: string,
-  opportunityId: string,
-  opportunity: GoHighLevelOpportunityUpdate
-): Promise<OpportunityResponse> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
-    accessToken,
-    `/opportunities/${opportunityId}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(opportunity),
-    }
-  )
-  return response
-}
-
-export async function updateOpportunityStage(
-  accessToken: string,
-  opportunityId: string,
-  opportunity: GoHighLevelOpportunityStageUpdate
-): Promise<OpportunityResponse> {
-  const response = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
-    accessToken,
-    `/opportunities/${opportunityId}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(opportunity),
-    }
-  )
-  return response
-}
-
-export async function createAppointment(
-  accessToken: string,
-  appointment: GoHighLevelAppointmentInput
-): Promise<GoHighLevelAppointment> {
-  return await ghlApi<GoHighLevelAppointment>(accessToken, '/calendars/events/appointments', {
-    method: 'POST',
-    body: JSON.stringify(appointment),
-  })
-}
-
-export async function updateAppointment(
-  accessToken: string,
-  appointmentId: string,
-  appointment: GoHighLevelAppointmentUpdate
-): Promise<GoHighLevelAppointment> {
-  return await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${appointmentId}`, {
-    method: 'PUT',
-    body: JSON.stringify(appointment),
-  })
 }

@@ -1,11 +1,11 @@
+import { type AccountData } from '@terros-inc/sdk'
 import {
-  findPipelineStage,
-  opportunityNeedsUpdate,
-  toContactInput,
-  toOpportunityInput,
+  findStage,
+  needsUpdate,
+  toContact,
+  toOpportunity,
   type GoHighLevelOpportunity,
   type GoHighLevelPipeline,
-  updateOpportunityStage,
 } from './gohighlevel.ts'
 
 describe('GoHighLevel contacts', () => {
@@ -29,7 +29,7 @@ describe('GoHighLevel contacts', () => {
       },
     }
 
-    expect(toContactInput(account, 'ghl-location', undefined, 'ghl-user')).toEqual({
+    expect(toContact(account, 'ghl-location', undefined, 'ghl-user')).toEqual({
       locationId: 'ghl-location',
       firstName: 'Quinn',
       lastName: 'Example',
@@ -58,11 +58,11 @@ describe('GoHighLevel pipeline stages', () => {
   }
 
   test('matches an outbound stage name case-insensitively', () => {
-    expect(findPipelineStage(pipeline, ' appointment SET ')).toEqual({ id: 'stage-2', name: 'Appointment Set' })
+    expect(findStage(pipeline, ' appointment SET ')).toEqual({ id: 'stage-2', name: 'Appointment Set' })
   })
 
   test('rejects a missing stage', () => {
-    expect(() => findPipelineStage(pipeline, 'Installed')).toThrow('Expected one stage named')
+    expect(() => findStage(pipeline, 'Installed')).toThrow('Expected one stage named')
   })
 })
 
@@ -78,7 +78,7 @@ describe('GoHighLevel opportunities', () => {
   }
 
   test('builds an opportunity for an outgoing account', () => {
-    const account = {
+    const account: Pick<AccountData, 'accountId' | 'resident'> = {
       accountId: 'Account.example',
       resident: {
         firstName: 'Quinn',
@@ -90,7 +90,7 @@ describe('GoHighLevel opportunities', () => {
       pipelineId: 'ghl-pipeline',
     }
 
-    expect(toOpportunityInput(account, route, 'ghl-contact', 'ghl-stage', 'ghl-user')).toEqual({
+    expect(toOpportunity(account, route, 'ghl-contact', 'ghl-stage', 'ghl-user')).toEqual({
       locationId: 'ghl-location',
       pipelineId: 'ghl-pipeline',
       pipelineStageId: 'ghl-stage',
@@ -103,7 +103,7 @@ describe('GoHighLevel opportunities', () => {
 
   test('updates when the name changes without a stage change', () => {
     expect(
-      opportunityNeedsUpdate(opportunity, {
+      needsUpdate(opportunity, {
         pipelineStageId: 'stage-1',
         name: 'Jane Customer',
         assignedTo: 'user-1',
@@ -113,7 +113,7 @@ describe('GoHighLevel opportunities', () => {
 
   test('updates when the owner changes without a stage change', () => {
     expect(
-      opportunityNeedsUpdate(opportunity, {
+      needsUpdate(opportunity, {
         pipelineStageId: 'stage-1',
         name: 'Jane Homeowner',
         assignedTo: 'user-2',
@@ -123,29 +123,11 @@ describe('GoHighLevel opportunities', () => {
 
   test('skips an unchanged opportunity', () => {
     expect(
-      opportunityNeedsUpdate(opportunity, {
+      needsUpdate(opportunity, {
         pipelineStageId: 'stage-1',
         name: 'Jane Homeowner',
         assignedTo: 'user-1',
       })
     ).toBe(false)
-  })
-
-  test('updates only the opportunity stage', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ opportunity: { ...opportunity, pipelineStageId: 'stage-2' } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    )
-
-    await updateOpportunityStage('token', opportunity.id, { pipelineStageId: 'stage-2' })
-
-    const request = fetchMock.mock.calls[0]
-    expect(request?.[1]).toMatchObject({
-      method: 'PUT',
-      body: JSON.stringify({ pipelineStageId: 'stage-2' }),
-    })
-    fetchMock.mockRestore()
   })
 })

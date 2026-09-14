@@ -1,4 +1,4 @@
-import { toAppointmentInput } from './calendar.ts'
+import { toAppointment } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
   test('builds a notifying appointment from a Terros calendar event', () => {
@@ -24,7 +24,7 @@ describe('GoHighLevel appointments', () => {
       pipelineId: 'ghl-pipeline',
     }
 
-    expect(toAppointmentInput(event, config, 'ghl-contact', 'ghl-user')).toEqual({
+    expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).toEqual({
       calendarId: 'ghl-calendar',
       locationId: 'ghl-location',
       contactId: 'ghl-contact',
@@ -38,6 +38,6 @@ describe('GoHighLevel appointments', () => {
       ignoreDateRange: true,
       ignoreFreeSlotValidation: true,
     })
-    expect(toAppointmentInput(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
+    expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
   })
 })

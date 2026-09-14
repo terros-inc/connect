@@ -5,21 +5,18 @@ import {
   type SmallAddress,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
+import { ghlApi } from './util.ts'
 import {
-  createAppointment,
-  findAssignedUserId,
   findOpportunity,
-  findPipelineStage,
+  findStage,
+  findUserId,
   getPipeline,
-  type GoHighLevelAppointmentInput,
-  opportunityNeedsUpdate,
-  toContactInput,
-  toOpportunityInput,
-  updateAppointment,
-  updateOpportunity,
-  upsertContact,
+  needsUpdate,
+  toContact,
+  toOpportunity,
+  type GoHighLevelOpportunity,
 } from './gohighlevel.ts'
-import { resolveGoHighLevelStageName } from './config.ts'
+import { toGhlStage } from './config.ts'
 
 type ScriptConfig = {
   locationId: string
@@ -61,7 +58,16 @@ type CalendarEventWebhook =
       data: { id: CalendarEventId }
     }
 
-type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration' | 'address'>
+type GoHighLevelAppointment = {
+  id: string
+  calendarId: string
+  locationId: string
+  contactId: string
+}
+
+type GoHighLevelContact = {
+  id: string
+}
 
 export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
   const payload = input.context.payload
@@ -89,10 +95,10 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   if (!account.workflowStageName) throw Error(`${account.accountId} has no workflow stage name`)
 
-  const assignedUserId = await findAssignedUserId(accessToken, scriptConfig.locationId, closer.email)
+  const assignedUserId = await findUserId(accessToken, scriptConfig.locationId, closer.email)
   let contactId = account.externalLeadId
   if (!contactId) {
-    const contactInput = toContactInput(
+    const contactInput = toContact(
       {
         address: account.location,
         resident: account.resident,
@@ -101,11 +107,14 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       undefined,
       assignedUserId
     )
-    const contactResponse = await upsertContact(accessToken, contactInput)
-    console.log('Created contact: ', contactResponse)
+    const contactResponse = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, '/contacts/upsert', {
+      method: 'POST',
+      body: JSON.stringify(contactInput),
+    })
+    console.log('Created contact:', contactResponse)
     contactId = contactResponse.contact.id
 
-    const updated = await client.account.upsert({
+    await client.account.upsert({
       requestType: 'update',
       account: {
         accountId: account.accountId,
@@ -116,17 +125,26 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
   console.log(`Using ${contactId} for ${event.id}`)
 
-  const appointmentInput = toAppointmentInput(event, scriptConfig, contactId, assignedUserId)
+  const appointmentInput = toAppointment(event, scriptConfig, contactId, assignedUserId)
 
   if (event.sourceId) {
     const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointmentInput
-    console.log('Appointment update:', appointmentUpdate)
-    const updatedAppointment = await updateAppointment(accessToken, event.sourceId, appointmentUpdate)
-    console.log(updatedAppointment)
+
+    const updatedAppointment = await ghlApi<GoHighLevelAppointment>(
+      accessToken,
+      `/calendars/events/appointments/${event.sourceId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(appointmentUpdate),
+      }
+    )
+    console.log('Updated Appointment: ', updatedAppointment)
   } else {
-    console.log('Create appointment:', appointmentInput)
-    const createdAppointment = await createAppointment(accessToken, appointmentInput)
-    console.log(createdAppointment)
+    const createdAppointment = await ghlApi<GoHighLevelAppointment>(accessToken, '/calendars/events/appointments', {
+      method: 'POST',
+      body: JSON.stringify(appointmentInput),
+    })
+    console.log('Created Appointment: ', createdAppointment)
     await client.calendar.event.update({
       event: {
         eventId: event.id,
@@ -136,29 +154,58 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   const pipeline = await getPipeline(accessToken, scriptConfig.locationId, scriptConfig.pipelineId)
-  const stageName = resolveGoHighLevelStageName(account.workflowStageName, scriptConfig.stageMappings)
-  const stage = findPipelineStage(pipeline, stageName)
+  const stageName = toGhlStage(account.workflowStageName, scriptConfig.stageMappings)
+  const stage = findStage(pipeline, stageName)
   console.log(`Resolved ${account.workflowStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
   const existingOpportunity = await findOpportunity(accessToken, scriptConfig, contactId)
+  const opportunityInput = toOpportunity(account, scriptConfig, contactId, stage.id, assignedUserId)
 
   if (!existingOpportunity) {
-    console.log(`Skipped opportunity update for ${account.accountId} because no opportunity exists`)
+    console.log('Create opportunity:', opportunityInput)
+    const createdOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
+      method: 'POST',
+      body: JSON.stringify(opportunityInput),
+    })
+    console.log(createdOpportunity)
     return
   }
 
-  const opportunityInput = toOpportunityInput(account, scriptConfig, contactId, stage.id, assignedUserId)
-  if (!opportunityNeedsUpdate(existingOpportunity, opportunityInput)) {
+  if (!needsUpdate(existingOpportunity, opportunityInput)) {
     console.log(`Skipped update: ${existingOpportunity.id} for ${account.accountId}`)
     return
   }
 
   const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunityInput
   console.log('Opportunity update:', opportunityUpdate)
-  const updatedOpportunity = await updateOpportunity(accessToken, existingOpportunity.id, opportunityUpdate)
+  const updatedOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
+    accessToken,
+    `/opportunities/${existingOpportunity.id}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(opportunityUpdate),
+    }
+  )
   console.log(updatedOpportunity)
 })
 
-export function toAppointmentInput(
+type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration' | 'address'>
+
+type GoHighLevelAppointmentInput = {
+  calendarId: string
+  locationId: string
+  contactId: string
+  title: string
+  startTime: string
+  endTime: string
+  appointmentStatus: 'confirmed'
+  assignedUserId?: string
+  address?: string
+  toNotify: true
+  ignoreDateRange: true
+  ignoreFreeSlotValidation: true
+}
+
+export function toAppointment(
   event: AppointmentEvent,
   config: Pick<ScriptConfig, 'locationId' | 'calendarId'>,
   contactId: string,

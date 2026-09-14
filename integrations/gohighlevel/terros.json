@@ -33,7 +33,7 @@
       "authSchema": {
         "privateIntegrationToken": "GoHighLevel private integration token"
       },
-      "permissions": ["account:save"],
+      "permissions": ["account:save", "user:list"],
       "slug": "gohighlevel-account-sync"
     },
     {
@@ -53,8 +53,10 @@
           "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
         }
       ],
-      "authSchema": {},
-      "permissions": ["account:list", "account:save"],
+      "authSchema": {
+        "privateIntegrationToken": "GoHighLevel private integration token"
+      },
+      "permissions": ["account:list", "account:save", "user:list"],
       "slug": "gohighlevel-opportunity-webhook"
     },
     {

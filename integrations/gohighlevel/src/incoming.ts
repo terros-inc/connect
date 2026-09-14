@@ -1,9 +1,16 @@
-import { wrapConnectHandler } from '@terros-inc/sdk'
-import { resolveTerrosStageName } from './config.ts'
+import { type AccountUpsertInput, wrapConnectHandler } from '@terros-inc/sdk'
+import { ghlApi, isNotEmpty } from './util.ts'
+import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
+import { listUsers } from './gohighlevel.ts'
+import { toTerrosStage } from './config.ts'
 
 type ScriptConfig = {
   locationId: string
   stageMappings?: Record<string, string>
+}
+
+type Secrets = {
+  privateIntegrationToken: string
 }
 
 type OpportunityWorkflowWebhook = {
@@ -18,6 +25,8 @@ type OpportunityWorkflowWebhook = {
 
 export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (input, client) => {
   const payload = input.context.payload
+  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+
   const customDataFields =
     Object.keys(payload.customData ?? {})
       .sort()
@@ -33,7 +42,6 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
   if (!contactId) throw Error('GoHighLevel workflow webhook is missing contact_id')
   if (!stageName) throw Error('GoHighLevel workflow webhook is missing customData.pipeline_stage')
 
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   if (locationId !== scriptConfig.locationId) {
     throw Error(`GoHighLevel location ${locationId} does not match configured location ${scriptConfig.locationId}`)
   }
@@ -43,10 +51,33 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
   if (!account) {
     throw Error(`No account matched contact ${contactId} at location ${locationId}`)
   }
-  const workflowTarget = resolveTerrosStageName(stageName, scriptConfig.stageMappings)
+  const workflowTarget = toTerrosStage(stageName, scriptConfig.stageMappings)
   console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
 
-  await client.account.upsert({
+  const secrets = input.context.config.secrets as unknown as Secrets
+  const accessToken = secrets.privateIntegrationToken
+  const { notes: goHighLevelNotes } = await ghlApi<{ notes: GoHighLevelNote[] }>(
+    accessToken,
+    `/contacts/${contactId}/notes`
+  )
+  const terrosUserIds = getMissingUserIds(account, goHighLevelNotes)
+  const goHighLevelUserIds = getIncomingUserIds(account, goHighLevelNotes)
+  const userInput = getUserInput(terrosUserIds, goHighLevelUserIds)
+  const [userResponse, goHighLevelUsers] = await Promise.all([
+    userInput ? client.user.list(userInput) : undefined,
+    listUsers(accessToken, locationId, goHighLevelUserIds),
+  ])
+  const noteChanges = getChanges(account, goHighLevelNotes, userResponse?.users ?? [], goHighLevelUsers)
+  await Promise.all(
+    noteChanges.goHighLevelNotes.map((note) =>
+      ghlApi<{ note: GoHighLevelNote }>(accessToken, `/contacts/${contactId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify(note),
+      })
+    )
+  )
+
+  const terrosInput: AccountUpsertInput = {
     requestType: 'update',
     account: {
       accountId: account.accountId,
@@ -55,7 +86,11 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
       externalLeadId: contactId,
       lastActionDate: Date.now(),
     },
-  })
+  }
+
+  if (isNotEmpty(noteChanges.terrosNotes)) terrosInput.account.notes = noteChanges.terrosNotes
+
+  await client.account.upsert(terrosInput)
 
   console.log(`Updated ${account.accountId} from GoHighLevel pipeline stage ${stageName}`)
 })
