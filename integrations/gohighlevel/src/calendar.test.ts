@@ -1,7 +1,7 @@
 import { toAppointment } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
-  test('builds a notifying appointment with the calendar default meeting location', () => {
+  test('builds a notifying appointment with a Google Meet location', () => {
     const event = {
       title: 'Solar Consultation',
       eventDate: '2026-09-01T17:00:00.000Z',
@@ -33,11 +33,13 @@ describe('GoHighLevel appointments', () => {
       endTime: '2026-09-01T18:30:00.000Z',
       appointmentStatus: 'confirmed',
       assignedUserId: 'ghl-user',
-      meetingLocationId: 'default',
+      meetingLocationType: 'gmeet',
       toNotify: true,
       ignoreDateRange: true,
       ignoreFreeSlotValidation: true,
     })
+    expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('meetingLocationId')
+    expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('address')
     expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
   })
 })

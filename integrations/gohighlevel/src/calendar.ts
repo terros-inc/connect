@@ -199,7 +199,7 @@ type GoHighLevelAppointmentInput = {
   endTime: string
   appointmentStatus: 'confirmed'
   assignedUserId?: string
-  meetingLocationId: 'default'
+  meetingLocationType: 'gmeet'
   toNotify: true
   ignoreDateRange: true
   ignoreFreeSlotValidation: true
@@ -223,7 +223,7 @@ export function toAppointment(
     endTime: endTime.toISOString(),
     appointmentStatus: 'confirmed',
     assignedUserId,
-    meetingLocationId: 'default',
+    meetingLocationType: 'gmeet',
     toNotify: true,
     ignoreDateRange: true,
     ignoreFreeSlotValidation: true,
