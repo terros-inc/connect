@@ -1,7 +1,7 @@
 import { toAppointment } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
-  test('builds a notifying appointment from a Terros calendar event', () => {
+  test('builds a notifying appointment with the calendar default meeting location', () => {
     const event = {
       title: 'Solar Consultation',
       eventDate: '2026-09-01T17:00:00.000Z',
@@ -33,7 +33,7 @@ describe('GoHighLevel appointments', () => {
       endTime: '2026-09-01T18:30:00.000Z',
       appointmentStatus: 'confirmed',
       assignedUserId: 'ghl-user',
-      address: '123 Main St',
+      meetingLocationId: 'default',
       toNotify: true,
       ignoreDateRange: true,
       ignoreFreeSlotValidation: true,

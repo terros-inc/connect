@@ -188,7 +188,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   console.log(updatedOpportunity)
 })
 
-type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration' | 'address'>
+type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration'>
 
 type GoHighLevelAppointmentInput = {
   calendarId: string
@@ -199,7 +199,7 @@ type GoHighLevelAppointmentInput = {
   endTime: string
   appointmentStatus: 'confirmed'
   assignedUserId?: string
-  address?: string
+  meetingLocationId: 'default'
   toNotify: true
   ignoreDateRange: true
   ignoreFreeSlotValidation: true
@@ -223,7 +223,7 @@ export function toAppointment(
     endTime: endTime.toISOString(),
     appointmentStatus: 'confirmed',
     assignedUserId,
-    address: event.address?.line1,
+    meetingLocationId: 'default',
     toNotify: true,
     ignoreDateRange: true,
     ignoreFreeSlotValidation: true,
