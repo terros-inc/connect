@@ -1,3 +1,4 @@
+import { cacheInternalEndpoints } from '../crud'
 import { getTokens, saveTokens } from '../auth/tokens'
 import { signInToAuth0 } from '../auth/auth0'
 
@@ -7,6 +8,7 @@ export const authCommands = {
     async run() {
       const tokens = await signInToAuth0()
       await saveTokens(tokens)
+      await cacheInternalEndpoints()
       console.log('Signed in successfully')
     },
   },
