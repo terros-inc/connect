@@ -38,12 +38,14 @@ export function formatSubcommandsHelp(command: string, subcommands: string[]): s
 
 export function formatSubcommandParametersHelp(
   command: string,
-  subcommand: string,
+  subcommand: string | undefined,
   parameters: EndpointParameter[],
   description?: string,
   showDepthHelp = false
 ): string {
-  const lines = [`usage: terros ${command} ${subcommand} [parameters]`, '']
+  const commandParts = [command]
+  if (subcommand) commandParts.push(subcommand)
+  const lines = [`usage: terros ${commandParts.join(' ')} [parameters]`, '']
 
   if (description) lines.push(description, '')
 

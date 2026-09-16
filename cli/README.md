@@ -52,6 +52,12 @@ Terros CLI uses the pattern:
 terros <command> <subcommand> [parameters]
 ```
 
+Single-segment API endpoints are direct commands. For example:
+
+```sh
+terros search --query "Jane Doe"
+```
+
 List available commands:
 
 ```sh
