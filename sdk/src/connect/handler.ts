@@ -6,7 +6,7 @@ export type ConnectHandlerFunction<Input, Result> = (
 ) => Promise<Result>
 
 type ConnectExecutionConfig = {
-  scriptConfig: Record<string, string> // TODO fix type of this
+  scriptConfig: Record<string, string | Record<string, string>>
   secrets: Record<string, string>
   authorization?: string
   authType?: 'ApiKey' | 'ConnectKey'
