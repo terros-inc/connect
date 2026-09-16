@@ -8,6 +8,7 @@ import {
 } from './messages'
 import { DEFAULT_TYPE_DEPTH, getEndpointParameters } from './crud/parameters'
 import { buildEndpointInput } from './crud/input'
+import type { Endpoint, Endpoints } from './crud/endpoint'
 import { loadEndpoints } from './crud'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
 import { buildTerrosClient } from './api/query'
@@ -70,15 +71,15 @@ async function main(): Promise<void> {
   }
 
   const subcommand = commands.at(1)
-  if (!subcommand) {
-    console.log(formatSubcommandsHelp(requestedAlias, Object.keys(endpointGroup).sort()))
+  const endpoint = getEndpoint(endpointGroup, requestedAlias, subcommand)
+  if (subcommand === undefined && !endpoint) {
+    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpointGroup, requestedAlias)))
     return
   }
 
-  const endpoint = endpointGroup[subcommand]
   if (!endpoint) {
     console.error(`Unknown subcommand: ${requestedAlias} ${subcommand}`)
-    console.log(formatSubcommandsHelp(requestedAlias, Object.keys(endpointGroup).sort()))
+    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpointGroup, requestedAlias)))
     process.exitCode = 1
     return
   }
@@ -105,25 +106,41 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
   const endpoints = loadEndpoints()
   const endpoint = endpoints[requestedAlias]
   if (endpoint) {
-    const subcommand = commands.at(1)
-    if (subcommand && commands.length >= 3) {
-      const requestedSubcommand = endpoint[subcommand]
-      if (requestedSubcommand) {
-        const depth = getHelpDepth(requestedDepth)
-        const parameters = getEndpointParameters(requestedSubcommand.properties, requestedSubcommand.components, depth)
-        console.log(
-          formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedSubcommand.description, true)
-        )
-        return
-      }
+    const subcommand = commands.length >= 3 ? commands.at(1) : undefined
+    const requestedEndpoint = getEndpoint(endpoint, requestedAlias, subcommand)
+    if (requestedEndpoint) {
+      const depth = getHelpDepth(requestedDepth)
+      const parameters = getEndpointParameters(requestedEndpoint.properties, requestedEndpoint.components, depth)
+      console.log(
+        formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedEndpoint.description, true)
+      )
+      return
     }
 
-    console.log(formatSubcommandsHelp(requestedAlias, Object.keys(endpoint).sort()))
+    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpoint, requestedAlias)))
     return
   }
 
   const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
   console.log(formatCommandsHelp(commandList))
+}
+
+function isDirectEndpoint(endpoint: Endpoint | undefined, command: string): endpoint is Endpoint {
+  return endpoint?.path === `/${command}`
+}
+
+function getEndpoint(endpoints: Endpoints, command: string, subcommand: string | undefined): Endpoint | undefined {
+  const endpoint = endpoints[subcommand ?? command]
+  const directEndpoint = isDirectEndpoint(endpoint, command)
+  if (subcommand === undefined) return directEndpoint ? endpoint : undefined
+  return directEndpoint ? undefined : endpoint
+}
+
+function getEndpointSubcommandNames(endpoints: Endpoints, command: string): string[] {
+  return Object.entries(endpoints)
+    .filter(([, endpoint]) => !isDirectEndpoint(endpoint, command))
+    .map(([alias]) => alias)
+    .sort()
 }
 
 function getHelpDepth(requestedDepth: unknown): number {

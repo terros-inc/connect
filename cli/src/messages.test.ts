@@ -60,4 +60,11 @@ Parameters:
 Use "--depth <number>" to control nested object type detail.`
     )
   })
+
+  it('formats help for a command without a subcommand', () => {
+    expect(formatSubcommandParametersHelp('search', undefined, [])).toBe(`usage: terros search [parameters]
+
+Parameters:
+  none`)
+  })
 })
