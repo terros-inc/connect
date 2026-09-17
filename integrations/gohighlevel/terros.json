@@ -109,6 +109,7 @@
           "description": "GoHighLevel calendar ID"
         }
       ],
+      "authSchema": {},
       "permissions": ["event:list", "event:save"],
       "slug": "gohighlevel-appointment-webhook"
     }
