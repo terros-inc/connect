@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon'
 import { wrapConnectHandler } from '@terros-inc/sdk'
 
 type ScriptConfig = {
@@ -5,88 +6,100 @@ type ScriptConfig = {
   calendarId: string
 }
 
-type GoHighLevelAppointment = {
+type GoHighLevelWorkflowCalendar = {
   id?: string
-  calendarId?: string
-  appointmentStatus?: string
+  appointmentId?: string
+  appoinmentStatus?: string
+  status?: string
   startTime?: string
   endTime?: string
+  selectedTimezone?: string
 }
 
 type GoHighLevelAppointmentWebhook = {
-  type?: string
-  locationId?: string
-  appointment?: GoHighLevelAppointment
+  location?: {
+    id?: string
+  }
+  calendar?: GoHighLevelWorkflowCalendar
 }
 
 type EventTime = {
-  eventDate: number
+  startDate: number
+  endDate: number
   duration: number
 }
 
 export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (input, client) => {
   const payload = input.context.payload
-  const appointment = payload.appointment
+  const appointment = payload.calendar
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  const payloadFields = Object.keys(payload).sort().join(', ') || '(none)'
+  const locationId = payload.location?.id
 
-  if (payload.type !== 'AppointmentUpdate' && payload.type !== 'AppointmentDelete') {
-    throw Error(`Unsupported GoHighLevel webhook type ${payload.type ?? '(missing)'}`)
+  console.log(`Received Appointment webhook: `, payload)
+
+  if (!locationId) throw Error('Appointment is missing location ID')
+  if (!appointment) {
+    throw Error(`Missing appointment data; received fields: ${payloadFields}`)
   }
+  if (!appointment.appointmentId) throw Error('Appointment is missing calendar.appointmentId')
+  if (!appointment.id) throw Error('Appointment is missing calendar.id')
 
-  if (!payload.locationId) throw Error('GoHighLevel appointment webhook is missing locationId')
-  if (!appointment?.id) throw Error('GoHighLevel appointment webhook is missing appointment.id')
-  if (!appointment.calendarId) throw Error('GoHighLevel appointment webhook is missing appointment.calendarId')
-
-  if (payload.locationId !== scriptConfig.locationId) {
-    console.log(`GoHighLevel ${payload.locationId} does not match configured ${scriptConfig.locationId}`)
+  if (locationId !== scriptConfig.locationId) {
+    console.log(`${locationId} does not match ${scriptConfig.locationId}`)
     return
   }
 
-  if (appointment.calendarId !== scriptConfig.calendarId) {
-    console.log(`Skipping appointment ${appointment.id} from calendar ${appointment.calendarId}`)
+  if (appointment.id !== scriptConfig.calendarId) {
+    console.log(`Skipping ${appointment.appointmentId} from ${appointment.id}`)
     return
   }
 
   const eventTime = toEventTime(appointment)
-  const isCanceled = isAppointmentCanceled(payload.type, appointment.appointmentStatus)
 
-  if (isCanceled) {
+  if (appointment.appoinmentStatus === 'cancelled' || appointment.status === 'cancelled') {
     const { events } = await client.calendar.event.list({
-      startTime: eventTime.eventDate - 1,
-      endTime: eventTime.eventDate + eventTime.duration * 60_000 + 1,
+      startTime: eventTime.startDate - 1,
+      endTime: eventTime.endDate + 1,
     })
-    const existingEvent = events.find((event) => event.sourceId === appointment.id)
+    const existingEvent = events.find((event) => event.sourceId === appointment.appointmentId)
     if (!existingEvent) {
-      console.log(`Skipping cancelled GoHighLevel appointment ${appointment.id} without a matching Terros event`)
+      console.log(`Skipping canceled ${appointment.appointmentId} without a matching event`)
       return
     }
 
     await client.calendar.event.remove({ eventId: existingEvent.eventId })
-    console.log(`Removed Terros event ${existingEvent.eventId} for GoHighLevel appointment ${appointment.id}`)
+    console.log(`Removed ${existingEvent.eventId} for ${appointment.appointmentId}`)
     return
   }
 
   const { event: updatedEvent } = await client.calendar.event.upsert({
     event: {
-      sourceId: appointment.id,
-      ...eventTime,
+      sourceId: appointment.appointmentId,
+      eventDate: eventTime.startDate,
+      duration: eventTime.duration,
     },
   })
-  console.log(`Updated Terros event ${updatedEvent.eventId} from GoHighLevel appointment ${appointment.id}`)
+  console.log(`Updated ${updatedEvent.eventId} from ${appointment.appointmentId}`)
 })
 
-export function toEventTime(appointment: Pick<GoHighLevelAppointment, 'startTime' | 'endTime'>): EventTime {
-  const eventDate = new Date(appointment.startTime ?? '').getTime()
-  const endTime = new Date(appointment.endTime ?? '').getTime()
-  const duration = (endTime - eventDate) / 60_000
+export function toEventTime(
+  appointment: Pick<GoHighLevelWorkflowCalendar, 'startTime' | 'endTime' | 'selectedTimezone'>
+): EventTime {
+  if (!appointment.startTime) throw Error('Appointment is missing startTime')
+  if (!appointment.endTime) throw Error('Appointment is missing endTime')
+  if (!appointment.selectedTimezone) throw Error('Appointment is missing selectedTimezone')
 
-  if (!Number.isFinite(eventDate) || !Number.isFinite(endTime) || duration <= 0) {
-    throw Error('GoHighLevel appointment has invalid startTime or endTime') // spread this into multiple more specific errors
-  }
+  const startTime = DateTime.fromISO(appointment.startTime, { zone: appointment.selectedTimezone })
+  if (!startTime.isValid) throw Error(`Invalid startTime: ${startTime.invalidExplanation}`)
 
-  return { eventDate, duration }
-}
+  const endTime = DateTime.fromISO(appointment.endTime, { zone: appointment.selectedTimezone })
+  if (!endTime.isValid) throw Error(`Invalid endTime: ${endTime.invalidExplanation}`)
 
-export function isAppointmentCanceled(type: string, appointmentStatus: string | undefined): boolean {
-  return type === 'AppointmentDelete' || appointmentStatus === 'cancelled'
+  const startDate = startTime.toMillis()
+  const endDate = endTime.toMillis()
+  const duration = endTime.diff(startTime, 'minutes').minutes
+  if (duration <= 0) throw Error('Appointment endTime must be after startTime')
+
+  return { startDate, endDate, duration }
 }

@@ -316,6 +316,9 @@ importers:
       html-to-text:
         specifier: 'catalog:'
         version: 10.0.1
+      luxon:
+        specifier: 'catalog:'
+        version: 3.7.2
     devDependencies:
       '@terros-inc/cli':
         specifier: 'workspace:'
@@ -323,6 +326,9 @@ importers:
       '@types/html-to-text':
         specifier: 'catalog:'
         version: 9.0.4
+      '@types/luxon':
+        specifier: 'catalog:'
+        version: 3.7.2
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.2
