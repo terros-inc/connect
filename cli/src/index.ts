@@ -1,4 +1,4 @@
-import minimist, { type ParsedArgs } from 'minimist'
+import minimist from 'minimist'
 import packageJson from '../package.json'
 import {
   formatCommandsHelp,
@@ -60,24 +60,45 @@ async function main(): Promise<void> {
     return
   }
 
-  if (requestedAlias === 'internal') {
-    const internalEndpoints = loadInternalEndpoints()
-    if (hasEndpointGroups(internalEndpoints)) {
-      await runInternalCommand(commands, params, internalEndpoints)
-      return
-    }
+  const isInternal = requestedAlias === 'internal'
+  const endpoints = isInternal ? loadInternalEndpoints() : loadEndpoints()
+  const endpointAlias = commands.at(isInternal ? 1 : 0)
+  if (!endpointAlias) {
+    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
+    return
   }
 
-  const endpoints = loadEndpoints()
-  const endpointGroup = endpoints[requestedAlias]
+  const command = isInternal ? `internal ${endpointAlias}` : endpointAlias
+  const endpointGroup = endpoints[endpointAlias]
   if (!endpointGroup) {
-    console.error(`Unknown command: ${requestedAlias}`)
-    console.log(formatCommandsHelp(getCommandList(endpoints)))
+    console.error(`Unknown command: ${command}`)
+    console.log(
+      isInternal
+        ? formatSubcommandsHelp('internal', Object.keys(endpoints).sort())
+        : formatCommandsHelp(getCommandList(endpoints))
+    )
     process.exitCode = 1
     return
   }
 
-  await runEndpointCommand(requestedAlias, requestedAlias, commands.at(1), endpointGroup, params)
+  const subcommand = commands.at(isInternal ? 2 : 1)
+  const endpoint = getEndpoint(endpointGroup, endpointAlias, subcommand)
+  if (subcommand === undefined && !endpoint) {
+    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
+    return
+  }
+
+  if (!endpoint) {
+    console.error(`Unknown subcommand: ${command} ${subcommand}`)
+    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
+    process.exitCode = 1
+    return
+  }
+
+  const input = buildEndpointInput(endpoint, params)
+  const client = buildTerrosClient()
+  const response = await client.call(endpoint.path, input)
+  console.log(JSON.stringify(response, null, 2))
 }
 
 function showHelp(commands: string[], requestedAlias: string, requestedDepth: unknown): void {
@@ -93,19 +114,37 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
     return
   }
 
-  if (requestedAlias === 'internal') {
-    const internalEndpoints = loadInternalEndpoints()
-    if (hasEndpointGroups(internalEndpoints)) {
-      showInternalHelp(commands, requestedDepth, internalEndpoints)
-      return
-    }
+  const isInternal = requestedAlias === 'internal'
+  const endpoints = isInternal ? loadInternalEndpoints() : loadEndpoints()
+  const endpointCommands = commands.slice(0, -1)
+  const endpointAlias = endpointCommands.at(isInternal ? 1 : 0)
+  if (!endpointAlias) {
+    console.log(
+      isInternal
+        ? formatSubcommandsHelp('internal', Object.keys(endpoints).sort())
+        : formatCommandsHelp(getCommandList(endpoints))
+    )
+    return
   }
 
-  const endpoints = loadEndpoints()
-  const endpointGroup = endpoints[requestedAlias]
+  const command = isInternal ? `internal ${endpointAlias}` : endpointAlias
+  const subcommand = endpointCommands.at(isInternal ? 2 : 1)
+  const endpointGroup = endpoints[endpointAlias]
   if (endpointGroup) {
-    const subcommand = commands.length >= 3 ? commands.at(1) : undefined
-    showEndpointHelp(requestedAlias, requestedAlias, subcommand, endpointGroup, requestedDepth)
+    const endpoint = getEndpoint(endpointGroup, endpointAlias, subcommand)
+    if (endpoint) {
+      const depth = getHelpDepth(requestedDepth)
+      const parameters = getEndpointParameters(endpoint.properties, endpoint.components, depth)
+      console.log(formatSubcommandParametersHelp(command, subcommand, parameters, endpoint.description, true))
+      return
+    }
+
+    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
+    return
+  }
+
+  if (isInternal) {
+    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
     return
   }
 
@@ -113,93 +152,8 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
   console.log(formatCommandsHelp(commandList))
 }
 
-async function runInternalCommand(commands: string[], params: ParsedArgs, endpoints: EndpointGroups): Promise<void> {
-  const requestedGroup = commands.at(1)
-  if (!requestedGroup) {
-    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
-    return
-  }
-
-  const endpointGroup = endpoints[requestedGroup]
-  if (!endpointGroup) {
-    console.error(`Unknown command: internal ${requestedGroup}`)
-    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
-    process.exitCode = 1
-    return
-  }
-
-  await runEndpointCommand(`internal ${requestedGroup}`, requestedGroup, commands.at(2), endpointGroup, params)
-}
-
-function showInternalHelp(commands: string[], requestedDepth: unknown, endpoints: EndpointGroups): void {
-  const requestedGroup = commands.at(1)
-  if (!requestedGroup || requestedGroup === 'help') {
-    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
-    return
-  }
-
-  const endpointGroup = endpoints[requestedGroup]
-  if (!endpointGroup) {
-    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
-    return
-  }
-
-  const subcommand = commands.length >= 4 ? commands.at(2) : undefined
-  showEndpointHelp(`internal ${requestedGroup}`, requestedGroup, subcommand, endpointGroup, requestedDepth)
-}
-
-async function runEndpointCommand(
-  command: string,
-  endpointGroupName: string,
-  subcommand: string | undefined,
-  endpointGroup: Endpoints,
-  params: ParsedArgs
-): Promise<void> {
-  const endpoint = getEndpoint(endpointGroup, endpointGroupName, subcommand)
-  if (subcommand === undefined && !endpoint) {
-    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointGroupName)))
-    return
-  }
-
-  if (!endpoint) {
-    console.error(`Unknown subcommand: ${command} ${subcommand}`)
-    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointGroupName)))
-    process.exitCode = 1
-    return
-  }
-
-  const input = buildEndpointInput(endpoint, params)
-  const client = buildTerrosClient()
-  const response = await client.call(endpoint.path, input)
-  console.log(JSON.stringify(response, null, 2))
-}
-
-function showEndpointHelp(
-  command: string,
-  endpointGroupName: string,
-  subcommand: string | undefined,
-  endpointGroup: Endpoints,
-  requestedDepth: unknown
-): void {
-  const endpoint = getEndpoint(endpointGroup, endpointGroupName, subcommand)
-  if (!endpoint) {
-    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointGroupName)))
-    return
-  }
-
-  const depth = getHelpDepth(requestedDepth)
-  const parameters = getEndpointParameters(endpoint.properties, endpoint.components, depth)
-  console.log(formatSubcommandParametersHelp(command, subcommand, parameters, endpoint.description, true))
-}
-
 function getCommandList(endpoints: EndpointGroups): string[] {
-  const commands = [...getCommandNames(), ...Object.keys(endpoints)]
-  if (hasEndpointGroups(loadInternalEndpoints())) commands.push('internal')
-  return commands.sort()
-}
-
-function hasEndpointGroups(endpoints: EndpointGroups): boolean {
-  return Object.keys(endpoints).at(0) !== undefined
+  return [...getCommandNames(), ...Object.keys(endpoints), 'internal'].sort()
 }
 
 function isDirectEndpoint(endpoint: Endpoint | undefined, command: string): endpoint is Endpoint {
