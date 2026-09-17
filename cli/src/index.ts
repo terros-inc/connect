@@ -61,8 +61,9 @@ async function main(): Promise<void> {
   }
 
   const isInternal = requestedAlias === 'internal'
+  const subcommandIndex = isInternal ? 2 : 1
   const endpoints = isInternal ? loadInternalEndpoints() : loadEndpoints()
-  const endpointAlias = commands.at(isInternal ? 1 : 0)
+  const endpointAlias = commands.at(subcommandIndex - 1)
   if (!endpointAlias) {
     console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
     return
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const subcommand = commands.at(isInternal ? 2 : 1)
+  const subcommand = commands.at(subcommandIndex)
   const endpoint = getEndpoint(endpointGroup, endpointAlias, subcommand)
   if (subcommand === undefined && !endpoint) {
     console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
@@ -115,9 +116,10 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
   }
 
   const isInternal = requestedAlias === 'internal'
+  const subcommandIndex = isInternal ? 2 : 1
   const endpoints = isInternal ? loadInternalEndpoints() : loadEndpoints()
   const endpointCommands = commands.slice(0, -1)
-  const endpointAlias = endpointCommands.at(isInternal ? 1 : 0)
+  const endpointAlias = endpointCommands.at(subcommandIndex - 1)
   if (!endpointAlias) {
     console.log(
       isInternal
@@ -128,7 +130,7 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
   }
 
   const command = isInternal ? `internal ${endpointAlias}` : endpointAlias
-  const subcommand = endpointCommands.at(isInternal ? 2 : 1)
+  const subcommand = endpointCommands.at(subcommandIndex)
   const endpointGroup = endpoints[endpointAlias]
   if (endpointGroup) {
     const endpoint = getEndpoint(endpointGroup, endpointAlias, subcommand)
