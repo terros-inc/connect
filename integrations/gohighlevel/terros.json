@@ -92,6 +92,25 @@
       },
       "permissions": ["account:list", "account:save", "event:save"],
       "slug": "gohighlevel-appointment-sync"
+    },
+    {
+      "name": "GoHighLevel Appointment Webhook",
+      "entrypoint": "src/calendarIncoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "locationId",
+          "type": "string",
+          "description": "GoHighLevel location/sub-account ID"
+        },
+        {
+          "name": "calendarId",
+          "type": "string",
+          "description": "GoHighLevel calendar ID"
+        }
+      ],
+      "permissions": ["event:list", "event:save"],
+      "slug": "gohighlevel-appointment-webhook"
     }
   ]
 }

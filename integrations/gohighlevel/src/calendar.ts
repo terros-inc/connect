@@ -63,6 +63,11 @@ type GoHighLevelAppointment = {
   calendarId: string
   locationId: string
   contactId: string
+  title: string
+  startTime: string
+  endTime: string
+  appointmentStatus: string
+  assignedUserId?: string
 }
 
 type GoHighLevelContact = {
@@ -128,17 +133,25 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const appointmentInput = toAppointment(event, scriptConfig, contactId, assignedUserId)
 
   if (event.sourceId) {
-    const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointmentInput
-
-    const updatedAppointment = await ghlApi<GoHighLevelAppointment>(
+    const { event: existingAppointment } = await ghlApi<{ event: GoHighLevelAppointment }>(
       accessToken,
-      `/calendars/events/appointments/${event.sourceId}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(appointmentUpdate),
-      }
+      `/calendars/events/appointments/${event.sourceId}`
     )
-    console.log('Updated Appointment: ', updatedAppointment)
+    if (appointmentNeedsUpdate(existingAppointment, appointmentInput)) {
+      const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointmentInput
+
+      const updatedAppointment = await ghlApi<GoHighLevelAppointment>(
+        accessToken,
+        `/calendars/events/appointments/${event.sourceId}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(appointmentUpdate),
+        }
+      )
+      console.log('Updated Appointment: ', updatedAppointment)
+    } else {
+      console.log(`Skipped unchanged GoHighLevel appointment ${event.sourceId}`)
+    }
   } else {
     const createdAppointment = await ghlApi<GoHighLevelAppointment>(accessToken, '/calendars/events/appointments', {
       method: 'POST',
@@ -228,4 +241,17 @@ export function toAppointment(
     ignoreDateRange: true,
     ignoreFreeSlotValidation: true,
   }
+}
+
+export function appointmentNeedsUpdate(
+  appointment: GoHighLevelAppointment,
+  input: GoHighLevelAppointmentInput
+): boolean {
+  return (
+    appointment.title !== input.title ||
+    new Date(appointment.startTime).getTime() !== new Date(input.startTime).getTime() ||
+    new Date(appointment.endTime).getTime() !== new Date(input.endTime).getTime() ||
+    appointment.appointmentStatus !== input.appointmentStatus ||
+    appointment.assignedUserId !== input.assignedUserId
+  )
 }

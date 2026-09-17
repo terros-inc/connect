@@ -1,4 +1,4 @@
-import { toAppointment } from './calendar.ts'
+import { appointmentNeedsUpdate, toAppointment } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
   test('builds a notifying appointment with a Google Meet location', () => {
@@ -41,5 +41,36 @@ describe('GoHighLevel appointments', () => {
     expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('meetingLocationId')
     expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('address')
     expect(toAppointment(event, config, 'ghl-contact', 'ghl-user')).not.toHaveProperty('rrule')
+  })
+
+  test('detects appointment time changes', () => {
+    const input: ReturnType<typeof toAppointment> = {
+      calendarId: 'ghl-calendar',
+      locationId: 'ghl-location',
+      contactId: 'ghl-contact',
+      title: 'Solar Consultation',
+      startTime: '2026-09-01T17:00:00.000Z',
+      endTime: '2026-09-01T18:30:00.000Z',
+      appointmentStatus: 'confirmed',
+      assignedUserId: 'ghl-user',
+      meetingLocationType: 'gmeet',
+      toNotify: true,
+      ignoreDateRange: true,
+      ignoreFreeSlotValidation: true,
+    }
+    const appointment = {
+      id: 'ghl-appointment',
+      calendarId: 'ghl-calendar',
+      locationId: 'ghl-location',
+      contactId: 'ghl-contact',
+      title: 'Solar Consultation',
+      startTime: '2026-09-01T17:00:00.000Z',
+      endTime: '2026-09-01T18:30:00.000Z',
+      appointmentStatus: 'confirmed',
+      assignedUserId: 'ghl-user',
+    }
+
+    expect(appointmentNeedsUpdate(appointment, input)).toBe(false)
+    expect(appointmentNeedsUpdate({ ...appointment, startTime: '2026-09-01T17:30:00.000Z' }, input)).toBe(true)
   })
 })
