@@ -12,42 +12,45 @@ import type { EndpointGroups } from './endpoint'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const INTERNAL_OPENAPI_ROUTE = 'openapi/internal'
+const USER_PROFILE_ROUTE = 'user/profile'
+const TANTALIM_COMPANY_ID = 'C:tantalim'
 const CACHE_DIR_MODE = 0o700
 const CACHE_FILE_MODE = 0o600
 
 export function loadEndpoints(): EndpointGroups {
   const file = readFileSync(resolve(__dirname, '../terros.yml'), 'utf-8')
   const publicSchema: OpenAPISchema = parse(file)
-  const internalSchema = readInternalSchema()
 
-  return buildEndpoints(internalSchema === null ? [publicSchema] : [publicSchema, internalSchema])
+  return buildEndpoints(publicSchema)
 }
 
-export function buildEndpoints(schemas: Pick<OpenAPISchema, 'paths' | 'components'>[]): EndpointGroups {
+export function loadInternalEndpoints(): EndpointGroups {
+  const internalSchema = readInternalSchema()
+  return internalSchema === null ? {} : buildEndpoints(internalSchema)
+}
+
+export function buildEndpoints(openApiSchema: Pick<OpenAPISchema, 'paths' | 'components'>): EndpointGroups {
   const endpoints: EndpointGroups = {}
+  const entries = Object.entries(openApiSchema.paths)
 
-  schemas.forEach((openApiSchema) => {
-    const entries = Object.entries(openApiSchema.paths)
+  entries.forEach(([path, config]) => {
+    const { group, alias } = getPathParts(path)
+    const existingEndpoints = endpoints[group]
+    const existingDirectEndpoint = existingEndpoints?.[group]
+    if ((path === `/${alias}` && existingEndpoints) || existingDirectEndpoint?.path === `/${group}`) {
+      throw new Error(`Cannot combine direct and grouped endpoints for command: ${group}`)
+    }
 
-    entries.forEach(([path, config]) => {
-      const { group, alias } = getPathParts(path)
-      const existingEndpoints = endpoints[group]
-      const existingDirectEndpoint = existingEndpoints?.[group]
-      if ((path === `/${alias}` && existingEndpoints) || existingDirectEndpoint?.path === `/${group}`) {
-        throw new Error(`Cannot combine direct and grouped endpoints for command: ${group}`)
-      }
+    endpoints[group] ??= {}
 
-      endpoints[group] ??= {}
+    const schema = config.post.requestBody.content['application/json'].schema
 
-      const schema = config.post.requestBody.content['application/json'].schema
-
-      endpoints[group][alias] = {
-        path,
-        description: config.post.description ?? config.post.summary,
-        properties: schema,
-        components: openApiSchema.components,
-      }
-    })
+    endpoints[group][alias] = {
+      path,
+      description: config.post.description ?? config.post.summary,
+      properties: schema,
+      components: openApiSchema.components,
+    }
   })
 
   return endpoints
@@ -55,7 +58,14 @@ export function buildEndpoints(schemas: Pick<OpenAPISchema, 'paths' | 'component
 
 export async function cacheInternalEndpoints(): Promise<void> {
   try {
-    const updatedSchema = await buildTerrosClient().call<unknown>(INTERNAL_OPENAPI_ROUTE, {})
+    const client = buildTerrosClient()
+    const profile = await client.call<UserProfileResponse>(USER_PROFILE_ROUTE, {})
+    if (profile.company.companyId !== TANTALIM_COMPANY_ID) {
+      await removeInternalSchema()
+      return
+    }
+
+    const updatedSchema = await client.call<unknown>(INTERNAL_OPENAPI_ROUTE, {})
 
     if (!isOpenApiSchema(updatedSchema)) {
       await removeInternalSchema()
@@ -68,6 +78,12 @@ export async function cacheInternalEndpoints(): Promise<void> {
   } catch {
     await removeInternalSchema()
     return
+  }
+}
+
+type UserProfileResponse = {
+  company: {
+    companyId: string
   }
 }
 
