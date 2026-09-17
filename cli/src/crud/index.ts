@@ -1,22 +1,37 @@
 import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { chmod, mkdir, unlink, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { parse } from 'yaml'
+import { buildTerrosClient } from '../api/query'
 import { getPathParts } from './util'
 import type { OpenAPISchema } from './types'
 import type { EndpointGroups } from './endpoint'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const INTERNAL_OPENAPI_ROUTE = 'openapi/internal'
+const USER_PROFILE_ROUTE = 'user/profile'
+const TANTALIM_COMPANY_ID = 'C:tantalim'
+const CACHE_DIR_MODE = 0o700
+const CACHE_FILE_MODE = 0o600
 
 export function loadEndpoints(): EndpointGroups {
   const file = readFileSync(resolve(__dirname, '../terros.yml'), 'utf-8')
+  const publicSchema: OpenAPISchema = parse(file)
 
-  const data = parse(file) as OpenAPISchema
+  return buildEndpoints(publicSchema)
+}
 
-  const entries = Object.entries(data.paths)
+export function loadInternalEndpoints(): EndpointGroups {
+  const internalSchema = readInternalSchema()
+  return internalSchema === null ? {} : buildEndpoints(internalSchema)
+}
 
+export function buildEndpoints(openApiSchema: Pick<OpenAPISchema, 'paths' | 'components'>): EndpointGroups {
   const endpoints: EndpointGroups = {}
+  const entries = Object.entries(openApiSchema.paths)
 
   entries.forEach(([path, config]) => {
     const { group, alias } = getPathParts(path)
@@ -34,9 +49,84 @@ export function loadEndpoints(): EndpointGroups {
       path,
       description: config.post.description ?? config.post.summary,
       properties: schema,
-      components: data.components,
+      components: openApiSchema.components,
     }
   })
 
   return endpoints
+}
+
+export async function cacheInternalEndpoints(): Promise<void> {
+  try {
+    const client = buildTerrosClient()
+    const profile = await client.call<UserProfileResponse>(USER_PROFILE_ROUTE, {})
+    if (profile.company.companyId !== TANTALIM_COMPANY_ID) {
+      await removeInternalSchema()
+      return
+    }
+
+    const updatedSchema = await client.call<unknown>(INTERNAL_OPENAPI_ROUTE, {})
+
+    if (!isOpenApiSchema(updatedSchema)) {
+      await removeInternalSchema()
+      return
+    }
+
+    try {
+      await saveInternalSchema(updatedSchema)
+    } catch {}
+  } catch {
+    await removeInternalSchema()
+    return
+  }
+}
+
+type UserProfileResponse = {
+  company: {
+    companyId: string
+  }
+}
+
+function readInternalSchema(): OpenAPISchema | null {
+  try {
+    const file = readFileSync(getCacheFilePath(), 'utf-8')
+    const schema: unknown = JSON.parse(file)
+    return isOpenApiSchema(schema) ? schema : null
+  } catch {
+    return null
+  }
+}
+
+async function saveInternalSchema(schema: OpenAPISchema): Promise<void> {
+  const cacheDirectory = getCacheDirectory()
+  await mkdir(cacheDirectory, { recursive: true, mode: CACHE_DIR_MODE })
+  await chmod(cacheDirectory, CACHE_DIR_MODE)
+  const cacheFile = getCacheFilePath()
+  await writeFile(cacheFile, JSON.stringify(schema), { mode: CACHE_FILE_MODE })
+  await chmod(cacheFile, CACHE_FILE_MODE)
+}
+
+async function removeInternalSchema(): Promise<void> {
+  try {
+    await unlink(getCacheFilePath())
+  } catch {}
+}
+
+function getCacheDirectory(): string {
+  return join(homedir(), '.config', 'terros')
+}
+
+function getCacheFilePath(): string {
+  return join(getCacheDirectory(), 'internal-openapi.json')
+}
+
+function isOpenApiSchema(schema: unknown): schema is OpenAPISchema {
+  if (typeof schema !== 'object' || schema === null) return false
+  if (!('paths' in schema)) return false
+  if (typeof schema.paths !== 'object') return false
+  if (schema.paths === null) return false
+  if (!('components' in schema)) return false
+  if (typeof schema.components !== 'object') return false
+  if (schema.components === null) return false
+  return true
 }

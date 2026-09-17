@@ -8,8 +8,8 @@ import {
 } from './messages'
 import { DEFAULT_TYPE_DEPTH, getEndpointParameters } from './crud/parameters'
 import { buildEndpointInput } from './crud/input'
-import type { Endpoint, Endpoints } from './crud/endpoint'
-import { loadEndpoints } from './crud'
+import type { Endpoint, EndpointGroups, Endpoints } from './crud/endpoint'
+import { loadEndpoints, loadInternalEndpoints } from './crud'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
 import { buildTerrosClient } from './api/query'
 
@@ -60,26 +60,38 @@ async function main(): Promise<void> {
     return
   }
 
-  const endpoints = loadEndpoints()
-  const endpointGroup = endpoints[requestedAlias]
+  const isInternal = requestedAlias === 'internal'
+  const subcommandIndex = isInternal ? 2 : 1
+  const endpoints = isInternal ? loadInternalEndpoints() : loadEndpoints()
+  const endpointAlias = commands.at(subcommandIndex - 1)
+  if (!endpointAlias) {
+    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
+    return
+  }
+
+  const command = isInternal ? `internal ${endpointAlias}` : endpointAlias
+  const endpointGroup = endpoints[endpointAlias]
   if (!endpointGroup) {
-    console.error(`Unknown command: ${requestedAlias}`)
-    const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
-    console.log(formatCommandsHelp(commandList))
+    console.error(`Unknown command: ${command}`)
+    console.log(
+      isInternal
+        ? formatSubcommandsHelp('internal', Object.keys(endpoints).sort())
+        : formatCommandsHelp(getCommandList(endpoints))
+    )
     process.exitCode = 1
     return
   }
 
-  const subcommand = commands.at(1)
-  const endpoint = getEndpoint(endpointGroup, requestedAlias, subcommand)
+  const subcommand = commands.at(subcommandIndex)
+  const endpoint = getEndpoint(endpointGroup, endpointAlias, subcommand)
   if (subcommand === undefined && !endpoint) {
-    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpointGroup, requestedAlias)))
+    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
     return
   }
 
   if (!endpoint) {
-    console.error(`Unknown subcommand: ${requestedAlias} ${subcommand}`)
-    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpointGroup, requestedAlias)))
+    console.error(`Unknown subcommand: ${command} ${subcommand}`)
+    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
     process.exitCode = 1
     return
   }
@@ -103,26 +115,47 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
     return
   }
 
-  const endpoints = loadEndpoints()
-  const endpoint = endpoints[requestedAlias]
-  if (endpoint) {
-    const subcommand = commands.length >= 3 ? commands.at(1) : undefined
-    const requestedEndpoint = getEndpoint(endpoint, requestedAlias, subcommand)
-    if (requestedEndpoint) {
-      const depth = getHelpDepth(requestedDepth)
-      const parameters = getEndpointParameters(requestedEndpoint.properties, requestedEndpoint.components, depth)
-      console.log(
-        formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedEndpoint.description, true)
-      )
-      return
-    }
-
-    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpoint, requestedAlias)))
+  const isInternal = requestedAlias === 'internal'
+  const subcommandIndex = isInternal ? 2 : 1
+  const endpoints = isInternal ? loadInternalEndpoints() : loadEndpoints()
+  const endpointCommands = commands.slice(0, -1)
+  const endpointAlias = endpointCommands.at(subcommandIndex - 1)
+  if (!endpointAlias) {
+    console.log(
+      isInternal
+        ? formatSubcommandsHelp('internal', Object.keys(endpoints).sort())
+        : formatCommandsHelp(getCommandList(endpoints))
+    )
     return
   }
 
-  const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
+  const command = isInternal ? `internal ${endpointAlias}` : endpointAlias
+  const subcommand = endpointCommands.at(subcommandIndex)
+  const endpointGroup = endpoints[endpointAlias]
+  if (endpointGroup) {
+    const endpoint = getEndpoint(endpointGroup, endpointAlias, subcommand)
+    if (endpoint) {
+      const depth = getHelpDepth(requestedDepth)
+      const parameters = getEndpointParameters(endpoint.properties, endpoint.components, depth)
+      console.log(formatSubcommandParametersHelp(command, subcommand, parameters, endpoint.description, true))
+      return
+    }
+
+    console.log(formatSubcommandsHelp(command, getEndpointSubcommandNames(endpointGroup, endpointAlias)))
+    return
+  }
+
+  if (isInternal) {
+    console.log(formatSubcommandsHelp('internal', Object.keys(endpoints).sort()))
+    return
+  }
+
+  const commandList = getCommandList(endpoints)
   console.log(formatCommandsHelp(commandList))
+}
+
+function getCommandList(endpoints: EndpointGroups): string[] {
+  return [...getCommandNames(), ...Object.keys(endpoints), 'internal'].sort()
 }
 
 function isDirectEndpoint(endpoint: Endpoint | undefined, command: string): endpoint is Endpoint {
