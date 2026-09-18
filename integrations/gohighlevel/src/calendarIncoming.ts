@@ -20,6 +20,9 @@ type GoHighLevelAppointmentWebhook = {
   location?: {
     id?: string
   }
+  user?: {
+    email?: string
+  }
   calendar?: GoHighLevelWorkflowCalendar
 }
 
@@ -58,9 +61,14 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
   const eventTime = toEventTime(appointment)
 
   if (appointment.appoinmentStatus === 'cancelled' || appointment.status === 'cancelled') {
+    const userEmail = payload.user?.email
+    if (!userEmail) throw Error('Appointment is missing user.email')
+    const { user } = await client.user.get({ userId: userEmail })
     const { events } = await client.calendar.event.list({
+      ownerId: user.userId,
       startTime: eventTime.startDate - 1,
       endTime: eventTime.endDate + 1,
+      eventType: 'Consultation',
     })
     const existingEvent = events.find((event) => event.sourceId === appointment.appointmentId)
     if (!existingEvent) {

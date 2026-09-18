@@ -110,7 +110,7 @@
         }
       ],
       "authSchema": {},
-      "permissions": ["event:read", "event:save", "event:delete"],
+      "permissions": ["user:list", "event:read", "event:save", "event:delete"],
       "slug": "gohighlevel-appointment-webhook"
     }
   ]
