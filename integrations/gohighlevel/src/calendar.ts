@@ -90,15 +90,18 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   if (!event.account) throw Error(`Terros event ${event.id} has no account`)
-  const { account } = await client.account.get({ accountId: event.account.accountId })
   const closer = event.attendee
   if (!closer) throw Error(`${event.id} has no attendee`)
+
+  const { account } = await client.account.get({ accountId: event.account.accountId })
+  if (!account.workflowStageName) {
+    console.log(account)
+    throw Error(`${account.accountId} has no workflow stage name`)
+  }
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = secrets.privateIntegrationToken
-
-  if (!account.workflowStageName) throw Error(`${account.accountId} has no workflow stage name`)
 
   const assignedUserId = await findUserId(accessToken, scriptConfig.locationId, closer.email)
   let contactId = account.externalLeadId
