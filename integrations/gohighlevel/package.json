@@ -1,0 +1,29 @@
+{
+  "author": "Terros Inc.",
+  "dependencies": {
+    "@terros-inc/sdk": "workspace:",
+    "html-to-text": "catalog:",
+    "luxon": "catalog:"
+  },
+  "description": "GoHighLevel contact and opportunity integration",
+  "devDependencies": {
+    "@terros-inc/cli": "workspace:",
+    "@types/html-to-text": "catalog:",
+    "@types/luxon": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "name": "@terros-inc/connect-gohighlevel",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "pretest": "pnpm --filter @terros-inc/sdk... build",
+    "test": "vitest run",
+    "publish": "terros connect publish"
+  },
+  "type": "module",
+  "version": "1.1.17"
+}
