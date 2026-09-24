@@ -46,7 +46,7 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
   if (!appointment.id) throw Error('Appointment is missing calendar.id')
 
   if (locationId !== scriptConfig.locationId) {
-    console.log(`${locationId} does not match ${scriptConfig.locationId}`)
+    console.log(`${locationId} does not match configured ${scriptConfig.locationId}`)
     return
   }
 
@@ -83,6 +83,7 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
 export function toEventTime(
   appointment: Pick<GoHighLevelWorkflowCalendar, 'startTime' | 'endTime' | 'selectedTimezone'>
 ): EventTime {
+  console.log(appointment)
   if (!appointment.startTime) throw Error('Appointment is missing startTime')
   if (!appointment.endTime) throw Error('Appointment is missing endTime')
   if (!appointment.selectedTimezone) throw Error('Appointment is missing selectedTimezone')

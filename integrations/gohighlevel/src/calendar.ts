@@ -83,6 +83,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   const event = payload.data
+  console.log(event)
 
   if (event.eventType !== 'Consultation') {
     console.log(`Skipping non-consultation Terros event ${event.id}`)

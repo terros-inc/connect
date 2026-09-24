@@ -81,7 +81,10 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
 
   const account = payload.data
   const closer = account.closer
-  if (!closer) throw Error(`${account.id} has no closer`)
+  if (!closer) {
+    console.log(account)
+    throw Error(`${account.id} has no closer`)
+  }
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const { locationId, pipelineId } = scriptConfig
@@ -166,7 +169,10 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const route = { locationId, pipelineId }
   const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
   const workflowStageName = account.workflowState?.stageName
-  if (!workflowStageName) throw Error(`${account.id} has no workflow stage name`)
+  if (!workflowStageName) {
+    console.log(account)
+    throw Error(`${account.id} has no workflow stage name`)
+  }
   const pipeline = await getPipeline(accessToken, locationId, pipelineId)
   const stageName = toGhlStage(workflowStageName, scriptConfig.stageMappings)
   const stage = findStage(pipeline, stageName)

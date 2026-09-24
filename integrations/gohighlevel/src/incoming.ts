@@ -49,6 +49,7 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
   const match = await client.account.match({ externalLeadId: contactId })
   const account = match.account
   if (!account) {
+    console.log(match)
     throw Error(`No account matched contact ${contactId} at location ${locationId}`)
   }
   const workflowTarget = toTerrosStage(stageName, scriptConfig.stageMappings)
