@@ -30,6 +30,10 @@ export async function ghlApi<T>(accessToken: string, path: string, init: Request
   return response.json() as Promise<T>
 }
 
+export function isNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('GHL request failed: 404')
+}
+
 export function normalizeText(value: string): string {
   return value.trim().toLocaleLowerCase()
 }

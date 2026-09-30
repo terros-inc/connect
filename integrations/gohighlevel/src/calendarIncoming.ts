@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { wrapConnectHandler } from '@terros-inc/sdk'
+import { type CalendarEventDataWithDetails, type TerrosClient, wrapConnectHandler } from '@terros-inc/sdk'
 
 type ScriptConfig = {
   locationId: string
@@ -53,28 +53,52 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
     return
   }
 
-  if (appointment.appoinmentStatus === 'cancelled' || appointment.status === 'cancelled') {
-    const { event: existingEvent } = await client.calendar.event.upsert({
-      event: {
-        sourceId: appointment.appointmentId,
-      },
-    })
-
-    await client.calendar.event.remove({ eventId: existingEvent.eventId })
-    console.log(`Removed ${existingEvent.eventId} for ${appointment.appointmentId}`)
+  const eventTime = isCancelled(appointment) ? undefined : toEventTime(appointment)
+  const existingEvent = await findLinkedEvent(client, appointment)
+  if (!existingEvent) {
+    console.log(`No Terros event is linked to GoHighLevel appointment ${appointment.appointmentId}, skipping`)
     return
   }
 
-  const eventTime = toEventTime(appointment)
+  if (!eventTime) {
+    await client.calendar.event.remove({ eventId: existingEvent.eventId, archive: true })
+    console.log(`Archived ${existingEvent.eventId} for cancelled ${appointment.appointmentId}`)
+    return
+  }
+
   const { event: updatedEvent } = await client.calendar.event.upsert({
     event: {
-      sourceId: appointment.appointmentId,
+      eventId: existingEvent.eventId,
       eventDate: eventTime.startDate,
       duration: eventTime.duration,
     },
   })
   console.log(`Updated ${updatedEvent.eventId} from ${appointment.appointmentId}`)
 })
+
+const linkedEventWindowMs = 90 * 24 * 60 * 60 * 1000
+
+function isCancelled(appointment: GoHighLevelWorkflowCalendar): boolean {
+  return appointment.appoinmentStatus === 'cancelled' || appointment.status === 'cancelled'
+}
+
+// Finds the Terros event linked by sourceId without ever creating one. The window is wide because the
+// Terros event still has the previous time when GoHighLevel reschedules it.
+async function findLinkedEvent(
+  client: TerrosClient,
+  appointment: GoHighLevelWorkflowCalendar
+): Promise<CalendarEventDataWithDetails | undefined> {
+  const startTime = appointment.startTime
+    ? DateTime.fromISO(appointment.startTime, { zone: appointment.selectedTimezone ?? 'utc' })
+    : undefined
+  const center = startTime?.isValid ? startTime.toMillis() : Date.now()
+  const { events } = await client.calendar.event.list({
+    startTime: center - linkedEventWindowMs,
+    endTime: center + linkedEventWindowMs,
+    eventType: 'Consultation',
+  })
+  return events.find((event) => event.sourceId === appointment.appointmentId)
+}
 
 export function toEventTime(
   appointment: Pick<GoHighLevelWorkflowCalendar, 'startTime' | 'endTime' | 'selectedTimezone'>
