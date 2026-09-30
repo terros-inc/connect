@@ -1,3 +1,4 @@
+import type { ApiSuccess } from '@terros-inc/connect-common'
 import type { AvailableCloser, RoleId, TeamId, TinyCloser, UserId } from '../user'
 import type { LatLng } from '../location'
 import type { AccountId, LocationId, UpsertLatLng } from '../account'
@@ -8,7 +9,6 @@ import type {
   EventType,
   UnsavedCalendarEventData,
 } from './model'
-import type { ApiSuccess } from '@terros-inc/connect-common'
 
 type CalendarEventRoleFilter = 'owner' | 'attendee'
 
@@ -103,6 +103,7 @@ export type CalendarEventUpdateSuccess = ApiSuccess<{
 }>
 
 export type CalendarEventUpsertInput = {
+  requestType: 'add' | 'update' | 'upsert'
   event: Partial<{
     eventId: CalendarEventId
     sourceId: string
