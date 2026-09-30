@@ -82,7 +82,6 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const account = payload.data
   const closer = account.closer
   if (!closer) {
-    console.log(account)
     throw Error(`${account.id} has no closer`)
   }
 
@@ -105,19 +104,16 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
     }
 
     const { locationId: _locationId, ...contactUpdate } = contactInput
-    console.log('Contact update:', contactUpdate)
     contactResponse = await ghlApi<ContactResponse>(accessToken, `/contacts/${account.externalLeadId}`, {
       method: 'PUT',
       body: JSON.stringify(contactUpdate),
     })
   } else {
-    console.log('Upsert Contact:', contactInput)
     contactResponse = await ghlApi<ContactResponse>(accessToken, '/contacts/upsert', {
       method: 'POST',
       body: JSON.stringify(contactInput),
     })
   }
-  console.log(contactResponse)
   const contact = contactResponse.contact
 
   const { notes: goHighLevelNotes } = await ghlApi<{ notes: GoHighLevelNote[] }>(
@@ -170,7 +166,6 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
   const workflowStageName = account.workflowState?.stageName
   if (!workflowStageName) {
-    console.log(account)
     throw Error(`${account.id} has no workflow stage name`)
   }
   const pipeline = await getPipeline(accessToken, locationId, pipelineId)
@@ -189,7 +184,6 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
       method: 'POST',
       body: JSON.stringify(opportunityInput),
     })
-    console.log('Created opportunity:', createdOpportunity)
     return
   }
 
@@ -198,7 +192,6 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const opportunityUpdate = { pipelineStageId: stage.id }
-  console.log('Opportunity update:', opportunityUpdate)
   const updatedOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
     `/opportunities/${existingOpportunity.id}`,
@@ -207,5 +200,4 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
       body: JSON.stringify(opportunityUpdate),
     }
   )
-  console.log(updatedOpportunity)
 })

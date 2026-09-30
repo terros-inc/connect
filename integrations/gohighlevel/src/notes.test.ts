@@ -12,9 +12,7 @@ import { type GoHighLevelUser } from './gohighlevel.ts'
 describe('GoHighLevel note sync', () => {
   test('converts GHL note HTML to text', () => {
     expect(
-      toText(
-        '<p style="margin:0px; padding-left: 0px!important;">Very &amp; important</p><p>Next<br>line</p>'
-      )
+      toText('<p style="margin:0px; padding-left: 0px!important;">Very &amp; important</p><p>Next<br>line</p>')
     ).toBe('Very & important\n\nNext\nline')
   })
 

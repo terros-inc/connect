@@ -83,7 +83,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   const event = payload.data
-  console.log(event)
 
   if (event.eventType !== 'Consultation') {
     console.log(`Skipping non-consultation Terros event ${event.id}`)
@@ -96,7 +95,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   const { account } = await client.account.get({ accountId: event.account.accountId })
   if (!account.workflowStageName) {
-    console.log(account)
     throw Error(`${account.accountId} has no workflow stage name`)
   }
 
@@ -120,7 +118,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       method: 'POST',
       body: JSON.stringify(contactInput),
     })
-    console.log('Created contact:', contactResponse)
     contactId = contactResponse.contact.id
 
     await client.account.upsert({
@@ -152,7 +149,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
           body: JSON.stringify(appointmentUpdate),
         }
       )
-      console.log('Updated Appointment: ', updatedAppointment)
     } else {
       console.log(`Skipped unchanged GoHighLevel appointment ${event.sourceId}`)
     }
@@ -161,7 +157,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       method: 'POST',
       body: JSON.stringify(appointmentInput),
     })
-    console.log('Created Appointment: ', createdAppointment)
     await client.calendar.event.update({
       event: {
         eventId: event.id,
@@ -178,12 +173,10 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const opportunityInput = toOpportunity(account, scriptConfig, contactId, stage.id, assignedUserId)
 
   if (!existingOpportunity) {
-    console.log('Create opportunity:', opportunityInput)
     const createdOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
       method: 'POST',
       body: JSON.stringify(opportunityInput),
     })
-    console.log(createdOpportunity)
     return
   }
 
@@ -193,7 +186,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunityInput
-  console.log('Opportunity update:', opportunityUpdate)
   const updatedOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
     accessToken,
     `/opportunities/${existingOpportunity.id}`,
@@ -202,7 +194,6 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       body: JSON.stringify(opportunityUpdate),
     }
   )
-  console.log(updatedOpportunity)
 })
 
 type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration'>
