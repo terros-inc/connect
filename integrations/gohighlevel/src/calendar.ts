@@ -6,7 +6,7 @@ import {
   type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { ghlApi, isNotFound } from './util.ts'
+import { ghlApi, isNotFound, normalizeText } from './util.ts'
 import {
   findOpportunity,
   findStage,
@@ -16,6 +16,8 @@ import {
   toContact,
   toOpportunity,
   type GoHighLevelOpportunity,
+  type GoHighLevelPipeline,
+  type GoHighLevelPipelineStage,
 } from './gohighlevel.ts'
 import { toGhlStage } from './config.ts'
 
@@ -105,11 +107,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     return
   }
 
-  const account = await getAccountWithStage(client, event.account.accountId)
-  if (!account.workflowStageName) {
-    console.log(`Skipping Terros event ${event.id}: ${account.accountId} has no workflow stage yet`)
-    return
-  }
+  const { account } = await client.account.get({ accountId: event.account.accountId })
 
   const assignedUserId = await findUserId(accessToken, scriptConfig.locationId, closer.email)
   if (!assignedUserId) {
@@ -196,13 +194,22 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   }
 
   const pipeline = await getPipeline(accessToken, scriptConfig.locationId, scriptConfig.pipelineId)
-  const stageName = toGhlStage(account.workflowStageName, scriptConfig.stageMappings)
-  const stage = findStage(pipeline, stageName)
-  console.log(`Resolved ${account.workflowStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
+  // Terros saves the stage after the event, so the account may not have it yet when the event is created. A new
+  // event only exists once the account reached Appointment Set, so that stage is implied instead of read.
+  const stage =
+    payload.action === 'add'
+      ? findImpliedStage(pipeline, scriptConfig.stageMappings)
+      : account.workflowStageName
+        ? resolveStage(pipeline, account.workflowStageName, scriptConfig.stageMappings)
+        : undefined
   const existingOpportunity = await findOpportunity(accessToken, scriptConfig, contactId)
-  const opportunityInput = toOpportunity(account, scriptConfig, contactId, stage.id, assignedUserId)
 
   if (!existingOpportunity) {
+    if (!stage) {
+      console.log(`Skipped creating a GoHighLevel opportunity for ${account.accountId}: no stage to create it in`)
+      return
+    }
+    const opportunityInput = toOpportunity(account, scriptConfig, contactId, stage.id, assignedUserId)
     const createdOpportunity = await ghlApi<{
       opportunity: GoHighLevelOpportunity
     }>(accessToken, '/opportunities/', {
@@ -224,23 +231,32 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   })
 })
 
-// Terros saves the event before the Appointment Set stage (seen 0.7-3.6s apart), so the account can be read too early.
-// Re-read until the stage appears; the bounds keep well inside the 60s execution limit.
-export const STAGE_WAIT_TIMEOUT_MS = 15_000
-export const STAGE_WAIT_INTERVAL_MS = 500
+const impliedStageName = 'Appointment Set'
 
-async function getAccountWithStage(client: TerrosClient, accountId: AccountId) {
-  const deadline = Date.now() + STAGE_WAIT_TIMEOUT_MS
-  let waited = false
-  while (true) {
-    const { account } = await client.account.get({ accountId })
-    if (account.workflowStageName || Date.now() + STAGE_WAIT_INTERVAL_MS > deadline) {
-      if (waited && account.workflowStageName) console.log(`Workflow stage for ${accountId} appeared after waiting`)
-      return account
-    }
-    waited = true
-    await new Promise((resolve) => setTimeout(resolve, STAGE_WAIT_INTERVAL_MS))
+function resolveStage(
+  pipeline: GoHighLevelPipeline,
+  terrosStageName: string,
+  stageMappings: Record<string, string> | undefined
+): GoHighLevelPipelineStage {
+  const stage = findStage(pipeline, toGhlStage(terrosStageName, stageMappings))
+  console.log(`Resolved ${terrosStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
+  return stage
+}
+
+// Unlike resolveStage this never throws: a missing or ambiguous match only skips the opportunity, not the appointment.
+function findImpliedStage(
+  pipeline: GoHighLevelPipeline,
+  stageMappings: Record<string, string> | undefined
+): GoHighLevelPipelineStage | undefined {
+  const stageName = normalizeText(toGhlStage(impliedStageName, stageMappings))
+  const stages = pipeline.stages.filter((stage) => normalizeText(stage.name) === stageName)
+  const [stage] = stages
+  if (stages.length !== 1 || !stage) {
+    console.log(`Found ${stages.length} stages named "${stageName}" in GoHighLevel pipeline ${pipeline.id}`)
+    return
   }
+  console.log(`Resolved implied ${impliedStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
+  return stage
 }
 
 async function findAppointment(
