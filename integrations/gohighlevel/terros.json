@@ -90,7 +90,7 @@
       "authSchema": {
         "privateIntegrationToken": "GoHighLevel private integration token"
       },
-      "permissions": ["account:list", "account:save", "event:save"],
+      "permissions": ["account:list", "account:save", "event:read", "event:save"],
       "slug": "gohighlevel-appointment-sync"
     },
     {
@@ -110,7 +110,7 @@
         }
       ],
       "authSchema": {},
-      "permissions": ["event:save", "event:delete"],
+      "permissions": ["company:read", "event:read", "event:save", "event:manage"],
       "slug": "gohighlevel-appointment-webhook"
     }
   ]

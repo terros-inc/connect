@@ -56,7 +56,8 @@ type CalendarEventWebhook =
   | {
       entity: 'Event'
       action: 'remove'
-      data: { id: CalendarEventId }
+      // The backend hard-deletes the event and sends only its id; sourceId is read when a payload carries it.
+      data: { id: CalendarEventId; sourceId?: string }
     }
 
 type GoHighLevelAppointment = {
@@ -83,7 +84,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const accessToken = secrets.privateIntegrationToken
 
   if (payload.action === 'remove') {
-    await cancelAppointment(client, accessToken, scriptConfig, payload.data.id)
+    await cancelAppointment(client, accessToken, scriptConfig, payload.data.id, payload.data.sourceId)
     return
   }
 
@@ -151,8 +152,16 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   if (event.sourceId && !existingAppointment) {
     console.log(`GoHighLevel appointment ${event.sourceId} was not found, creating a new one`)
   }
+  // Contact repair can leave the appointment on a contact that was deleted or belongs to another location.
+  const appointmentToReplace =
+    existingAppointment && existingAppointment.contactId !== contactId ? existingAppointment : undefined
+  if (appointmentToReplace) {
+    console.log(
+      `GoHighLevel appointment ${appointmentToReplace.id} is on contact ${appointmentToReplace.contactId}, not ${contactId}, creating a new one`
+    )
+  }
 
-  if (event.sourceId && existingAppointment) {
+  if (event.sourceId && existingAppointment && !appointmentToReplace) {
     const appointmentUpdate = getAppointmentUpdate(existingAppointment, appointmentInput)
     if (appointmentUpdate) {
       await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${event.sourceId}`, {
@@ -173,6 +182,17 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
         sourceId: createdAppointment.id,
       },
     })
+    if (appointmentToReplace && appointmentToReplace.appointmentStatus !== 'cancelled') {
+      // The event points at the new appointment first, so the cancel webhook finds no linked event.
+      try {
+        await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${appointmentToReplace.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ appointmentStatus: 'cancelled' }),
+        })
+      } catch (error) {
+        if (!isNotFound(error)) throw error
+      }
+    }
   }
 
   const pipeline = await getPipeline(accessToken, scriptConfig.locationId, scriptConfig.pipelineId)
@@ -183,7 +203,9 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
   const opportunityInput = toOpportunity(account, scriptConfig, contactId, stage.id, assignedUserId)
 
   if (!existingOpportunity) {
-    const createdOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
+    const createdOpportunity = await ghlApi<{
+      opportunity: GoHighLevelOpportunity
+    }>(accessToken, '/opportunities/', {
       method: 'POST',
       body: JSON.stringify(opportunityInput),
     })
@@ -255,34 +277,45 @@ async function findValidContactId(
   }
 }
 
-// Terros events are archived on remove, so the event can still be read to find its appointment.
+// Terros hard-deletes removed events and ignores archive, so the event is normally gone; its appointment can only be
+// found from a sourceId carried in the payload.
+async function readSourceId(client: TerrosClient, eventId: CalendarEventId): Promise<string | undefined> {
+  try {
+    const { event } = await client.calendar.event.get({ eventId })
+    return event.sourceId
+  } catch (error) {
+    console.log(`Could not read removed Terros event ${eventId}: ${error instanceof Error ? error.message : error}`)
+  }
+}
+
 async function cancelAppointment(
   client: TerrosClient,
   accessToken: string,
   scriptConfig: ScriptConfig,
-  eventId: CalendarEventId
+  eventId: CalendarEventId,
+  payloadSourceId: string | undefined
 ): Promise<void> {
-  const { event } = await client.calendar.event.get({ eventId })
-  if (!event.sourceId) {
+  const sourceId = payloadSourceId ?? (await readSourceId(client, eventId))
+  if (!sourceId) {
     console.log(`Skipping removed Terros event ${eventId}: no GoHighLevel appointment`)
     return
   }
 
-  const appointment = await findAppointment(accessToken, event.sourceId)
+  const appointment = await findAppointment(accessToken, sourceId)
   if (!appointment || appointment.calendarId !== scriptConfig.calendarId) {
-    console.log(`Skipping removed Terros event ${eventId}: ${event.sourceId} is not on the configured calendar`)
+    console.log(`Skipping removed Terros event ${eventId}: ${sourceId} is not on the configured calendar`)
     return
   }
   if (appointment.appointmentStatus === 'cancelled') {
-    console.log(`GoHighLevel appointment ${event.sourceId} is already cancelled`)
+    console.log(`GoHighLevel appointment ${sourceId} is already cancelled`)
     return
   }
 
-  await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${event.sourceId}`, {
+  await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${sourceId}`, {
     method: 'PUT',
     body: JSON.stringify({ appointmentStatus: 'cancelled' }),
   })
-  console.log(`Cancelled GoHighLevel appointment ${event.sourceId} for removed Terros event ${eventId}`)
+  console.log(`Cancelled GoHighLevel appointment ${sourceId} for removed Terros event ${eventId}`)
 }
 
 type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration'>

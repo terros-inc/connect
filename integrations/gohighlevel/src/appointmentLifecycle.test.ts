@@ -1,10 +1,14 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { handler as accountHandler } from './outgoing.ts'
-import { CALENDAR_ID, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
+import { CALENDAR_ID, CONNECT_USER, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
 import { handler as appointmentWebhook } from './calendarIncoming.ts'
 import { handler as appointmentSync, STAGE_WAIT_TIMEOUT_MS } from './calendar.ts'
 
-const config = { locationId: LOCATION_ID, calendarId: CALENDAR_ID, pipelineId: PIPELINE_ID }
+const config = {
+  locationId: LOCATION_ID,
+  calendarId: CALENDAR_ID,
+  pipelineId: PIPELINE_ID,
+}
 
 let world: FakeApis
 
@@ -22,10 +26,12 @@ afterEach(() => {
 })
 
 function runSync(payload: unknown) {
+  world.asScript('gohighlevel-appointment-sync')
   return appointmentSync(makeInput(payload, config))
 }
 
 function runWebhook(calendar: Record<string, unknown>, locationId = LOCATION_ID) {
+  world.asScript('gohighlevel-appointment-webhook')
   return appointmentWebhook(makeInput({ location: { id: locationId }, calendar }, config))
 }
 
@@ -59,7 +65,11 @@ describe('Appointment Webhook', () => {
   })
 
   test('does not create a Terros event when an unknown appointment is cancelled', async () => {
-    await runWebhook({ ...rescheduled, appointmentId: 'appt-unknown', status: 'cancelled' })
+    await runWebhook({
+      ...rescheduled,
+      appointmentId: 'appt-unknown',
+      status: 'cancelled',
+    })
 
     expect(world.terros.events.size).toBe(0)
     expect(world.terrosWrites()).toEqual([])
@@ -80,19 +90,55 @@ describe('Appointment Webhook', () => {
   test('finds a linked event when it is rescheduled far from its old time', async () => {
     linkedSetup()
 
-    await runWebhook({ ...rescheduled, startTime: '2026-11-20T10:00:00', endTime: '2026-11-20T11:00:00' })
+    await runWebhook({
+      ...rescheduled,
+      startTime: '2026-11-20T10:00:00',
+      endTime: '2026-11-20T11:00:00',
+    })
 
     expect(new Date(world.terros.events.get('Event.1')!.eventDate).toISOString()).toBe('2026-11-20T16:00:00.000Z')
   })
 
-  test('archives the linked event on cancel without an upsert', async () => {
+  test('removes the linked event on cancel without an upsert', async () => {
     linkedSetup()
 
     await runWebhook({ ...rescheduled, status: 'cancelled' })
 
-    expect(world.terros.events.get('Event.1')!.archived).toBe(true)
-    expect(world.terrosWrites()).toEqual([expect.stringContaining('TERROS calendar/event/remove')])
-    expect(world.terrosWrites()[0]).toContain('"archive":true')
+    // The backend hard-deletes; it has no archive.
+    expect(world.terros.events.has('Event.1')).toBe(false)
+    expect(world.terrosWrites()).toEqual(['TERROS calendar/event/remove {"eventId":"Event.1"}'])
+  })
+
+  test('finds a linked event owned by another user', async () => {
+    linkedSetup()
+    expect(world.terros.events.get('Event.1')!.ownerId).not.toBe(CONNECT_USER)
+
+    await runWebhook(rescheduled)
+
+    expect(new Date(world.terros.events.get('Event.1')!.eventDate).toISOString()).toBe('2026-10-06T15:00:00.000Z')
+  })
+
+  test('finds a linked event when it is rescheduled more than 90 days away', async () => {
+    linkedSetup()
+
+    await runWebhook({
+      ...rescheduled,
+      startTime: '2027-06-20T10:00:00',
+      endTime: '2027-06-20T11:00:00',
+    })
+
+    expect(new Date(world.terros.events.get('Event.1')!.eventDate).toISOString()).toBe('2027-06-20T15:00:00.000Z')
+  })
+
+  test('the manifest grants the permissions its reads and removes need', async () => {
+    linkedSetup()
+    world.asScript('gohighlevel-appointment-webhook')
+
+    expect(world.permissions).toEqual(new Set(['company:read', 'event:read', 'event:save', 'event:manage']))
+    world.permissions!.delete('event:read')
+    await expect(
+      appointmentWebhook(makeInput({ location: { id: LOCATION_ID }, calendar: rescheduled }, config))
+    ).rejects.toThrow('event:read required')
   })
 
   test('a GHL cancel does not flip the GHL appointment back to confirmed', async () => {
@@ -100,7 +146,11 @@ describe('Appointment Webhook', () => {
     world.ghl.appts.get('appt-1')!.appointmentStatus = 'cancelled'
 
     await runWebhook({ ...rescheduled, status: 'cancelled' })
-    await runSync({ entity: 'Event', action: 'remove', data: { id: 'Event.1' } })
+    await runSync({
+      entity: 'Event',
+      action: 'remove',
+      data: { id: 'Event.1' },
+    })
 
     expect(world.ghl.appts.get('appt-1')!.appointmentStatus).toBe('cancelled')
     expect(world.ghlWrites()).toEqual([])
@@ -119,9 +169,13 @@ describe('Appointment Webhook', () => {
 describe('Appointment Sync: Terros remove', () => {
   test('cancels the GHL appointment of a removed event', async () => {
     linkedSetup()
-    world.terros.events.get('Event.1')!.archived = true
+    world.terros.events.delete('Event.1')
 
-    await runSync({ entity: 'Event', action: 'remove', data: { id: 'Event.1' } })
+    await runSync({
+      entity: 'Event',
+      action: 'remove',
+      data: { id: 'Event.1', sourceId: 'appt-1' },
+    })
 
     expect(world.ghl.appts.get('appt-1')!.appointmentStatus).toBe('cancelled')
     expect(world.ghl.appts.size).toBe(1)
@@ -130,11 +184,33 @@ describe('Appointment Sync: Terros remove', () => {
     ])
   })
 
+  test('cancels through the still-readable event when the payload has no sourceId', async () => {
+    linkedSetup()
+
+    await runSync(world.removeWebhook('Event.1'))
+
+    expect(world.ghl.appts.get('appt-1')!.appointmentStatus).toBe('cancelled')
+  })
+
+  test('a hard-deleted event with an id-only payload cannot be resolved and is skipped, not failed', async () => {
+    linkedSetup()
+    world.terros.events.delete('Event.1')
+
+    await runSync(world.removeWebhook('Event.1'))
+
+    expect(world.ghlWrites()).toEqual([])
+    expect(world.ghl.appts.get('appt-1')!.appointmentStatus).toBe('confirmed')
+  })
+
   test('does nothing when the appointment is already cancelled', async () => {
     linkedSetup()
     world.ghl.appts.get('appt-1')!.appointmentStatus = 'cancelled'
 
-    await runSync({ entity: 'Event', action: 'remove', data: { id: 'Event.1' } })
+    await runSync({
+      entity: 'Event',
+      action: 'remove',
+      data: { id: 'Event.1', sourceId: 'appt-1' },
+    })
 
     expect(world.ghlWrites()).toEqual([])
   })
@@ -142,7 +218,11 @@ describe('Appointment Sync: Terros remove', () => {
   test('does nothing when the event has no sourceId', async () => {
     world.addEvent({ eventId: 'Event.2' })
 
-    await runSync({ entity: 'Event', action: 'remove', data: { id: 'Event.2' } })
+    await runSync({
+      entity: 'Event',
+      action: 'remove',
+      data: { id: 'Event.2' },
+    })
 
     expect(world.ghlWrites()).toEqual([])
   })
@@ -150,7 +230,11 @@ describe('Appointment Sync: Terros remove', () => {
   test('does nothing when the sourceId is not a GHL appointment', async () => {
     world.addEvent({ eventId: 'Event.2', sourceId: 'somewhere-else' })
 
-    await runSync({ entity: 'Event', action: 'remove', data: { id: 'Event.2' } })
+    await runSync({
+      entity: 'Event',
+      action: 'remove',
+      data: { id: 'Event.2' },
+    })
 
     expect(world.ghlWrites()).toEqual([])
   })
@@ -173,7 +257,11 @@ describe('Appointment Sync: waiting states are quiet skips', () => {
   test('a Consultation whose account never gets a workflow stage', async () => {
     vi.useFakeTimers()
     world.addAccount({ accountId: 'Account.1', workflowStageName: undefined })
-    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    world.addEvent({
+      eventId: 'Event.1',
+      accountId: 'Account.1',
+      attendeeEmail: 'closer@hq.test',
+    })
     const run = runSync(world.eventWebhook('Event.1', 'add'))
     await vi.advanceTimersByTimeAsync(STAGE_WAIT_TIMEOUT_MS)
     await run
@@ -186,7 +274,14 @@ describe('Appointment Sync: waiting states are quiet skips', () => {
 describe('Account Sync', () => {
   test('an account with no closer is a quiet skip', async () => {
     await accountHandler(
-      makeInput({ entity: 'Account', action: 'update', data: { id: 'Account.1', resident: {} } }, config)
+      makeInput(
+        {
+          entity: 'Account',
+          action: 'update',
+          data: { id: 'Account.1', resident: {} },
+        },
+        config
+      )
     )
     expect(world.log).toEqual([])
   })
@@ -195,7 +290,11 @@ describe('Account Sync', () => {
 describe('Appointment Sync: closer validation', () => {
   function bookWithCloser(email: string) {
     world.addAccount({ accountId: 'Account.1' })
-    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: email })
+    world.addEvent({
+      eventId: 'Event.1',
+      accountId: 'Account.1',
+      attendeeEmail: email,
+    })
     return runSync(world.eventWebhook('Event.1', 'add'))
   }
 
@@ -226,7 +325,12 @@ describe('Appointment Sync: closer validation', () => {
 describe('Appointment Sync: link validation', () => {
   function bookLinked(account: Record<string, unknown>, event: Record<string, unknown> = {}) {
     world.addAccount({ accountId: 'Account.1', ...account })
-    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test', ...event })
+    world.addEvent({
+      eventId: 'Event.1',
+      accountId: 'Account.1',
+      attendeeEmail: 'closer@hq.test',
+      ...event,
+    })
     return runSync(world.eventWebhook('Event.1', 'add'))
   }
 
@@ -268,6 +372,27 @@ describe('Appointment Sync: link validation', () => {
     expect(world.terros.events.get('Event.1')!.sourceId).toBe(created)
   })
 
+  test('an appointment on a contact that was relinked is recreated on the new contact and the old one cancelled', async () => {
+    world.addContact('contact-old', { locationId: 'other-location' })
+    world.addAppt('appt-1', 'contact-old')
+    world.addAccount({ accountId: 'Account.1', externalLeadId: 'contact-old' })
+    world.addEvent({
+      eventId: 'Event.1',
+      accountId: 'Account.1',
+      attendeeEmail: 'closer@hq.test',
+      sourceId: 'appt-1',
+    })
+
+    await runSync(world.eventWebhook('Event.1', 'update'))
+
+    const relinked = world.terros.accounts.get('Account.1')!.externalLeadId
+    const newId = world.terros.events.get('Event.1')!.sourceId
+    expect(relinked).not.toBe('contact-old')
+    expect(newId).not.toBe('appt-1')
+    expect(world.ghl.appts.get(newId)!.contactId).toBe(relinked)
+    expect(world.ghl.appts.get('appt-1')!.appointmentStatus).toBe('cancelled')
+  })
+
   test('an existing appointment is updated, not recreated', async () => {
     const event = linkedSetup()
     event.eventDate = '2026-10-07T17:00:00.000Z'
@@ -282,13 +407,21 @@ describe('Appointment Sync: link validation', () => {
 describe('Appointment Sync: stage race', () => {
   function book() {
     world.addAccount({ accountId: 'Account.1', workflowStageName: undefined })
-    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    world.addEvent({
+      eventId: 'Event.1',
+      accountId: 'Account.1',
+      attendeeEmail: 'closer@hq.test',
+    })
     return runSync(world.eventWebhook('Event.1', 'add'))
   }
 
   test('creates the appointment right away when the stage is already set', async () => {
     world.addAccount({ accountId: 'Account.1' })
-    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    world.addEvent({
+      eventId: 'Event.1',
+      accountId: 'Account.1',
+      attendeeEmail: 'closer@hq.test',
+    })
     await runSync(world.eventWebhook('Event.1', 'add'))
     expect(world.ghl.appts.size).toBe(1)
   })
