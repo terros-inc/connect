@@ -83,7 +83,8 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   const account = payload.data
   const closer = account.closer
   if (!closer) {
-    throw Error(`${account.id} has no closer`)
+    console.log(`Skipping sync for ${account.id}: no closer yet`)
+    return
   }
 
   const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig

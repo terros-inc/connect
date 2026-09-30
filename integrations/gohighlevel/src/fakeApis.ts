@@ -97,7 +97,9 @@ export class FakeApis {
         sourceId: e.sourceId,
         eventType: e.eventType,
         attendee: e.attendeeEmail ? { userId: 'U.closer', email: e.attendeeEmail } : undefined,
-        account: { accountId: e.accountId, externalLeadId: this.terros.accounts.get(e.accountId)?.externalLeadId },
+        account: e.accountId
+          ? { accountId: e.accountId, externalLeadId: this.terros.accounts.get(e.accountId)?.externalLeadId }
+          : undefined,
       },
     }
   }
@@ -161,7 +163,7 @@ export class FakeApis {
   private terrosRoute(route: string, body: Json): { status: number; json: Json } {
     const ok = (json: Json = {}) => ({ status: 200, json: { type: 'success', ...json } })
     const err = (error: string, message: string) => ({ status: 200, json: { type: 'error', error, message } })
-    if (!['account/get', 'account/match', 'user/list'].includes(route)) {
+    if (!['account/get', 'account/match', 'user/list', 'calendar/event/get', 'calendar/event/list'].includes(route)) {
       this.log.push(`TERROS ${route} ${JSON.stringify(body)}`)
     }
     switch (route) {
@@ -192,6 +194,37 @@ export class FakeApis {
         Object.assign(e!, body.event)
         return ok({ event: e })
       }
+      case 'calendar/event/get': {
+        const event = this.terros.events.get(body.eventId)
+        return event ? ok({ event }) : err('NotFound', `no event ${body.eventId}`)
+      }
+      case 'calendar/event/list': {
+        const events = [...this.terros.events.values()].filter((e) => {
+          const time = new Date(e.eventDate).getTime()
+          return (
+            !e.archived &&
+            (body.eventType === undefined || e.eventType === body.eventType) &&
+            (body.startTime === undefined || time >= body.startTime) &&
+            (body.endTime === undefined || time <= body.endTime)
+          )
+        })
+        return ok({ events })
+      }
+      case 'calendar/event/upsert': {
+        // Like the real API, an unknown sourceId creates an account-less event owned by the Connect key.
+        let event = body.event.eventId
+          ? this.terros.events.get(body.event.eventId)
+          : [...this.terros.events.values()].find((x) => x.sourceId === body.event.sourceId)
+        if (!event) event = this.addEvent({ eventId: this.id('Event'), ownerId: 'U.connect-key', ...body.event })
+        else Object.assign(event, body.event)
+        return ok({ event })
+      }
+      case 'calendar/event/remove': {
+        const event = this.terros.events.get(body.eventId)
+        if (body.archive && event) event.archived = true
+        else this.terros.events.delete(body.eventId)
+        return ok()
+      }
       default:
         return err('NotImplemented', route)
     }
@@ -213,7 +246,9 @@ export class FakeApis {
     if (path === '/users/search') {
       const ids = q.get('ids')?.split(',')
       const query = q.get('query')?.toLowerCase()
-      const users = this.ghl.users.filter((u) => (ids ? ids.includes(u.id) : query ? u.email.includes(query) : true))
+      const users = this.ghl.users.filter((u) =>
+        ids ? ids.includes(u.id) : query ? u.email.toLowerCase().includes(query) : true
+      )
       return { status: 200, json: { users } }
     }
     if (path === '/contacts/upsert') {

@@ -3,9 +3,10 @@ import {
   type CalendarEventId,
   type EventType,
   type SmallAddress,
+  type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { ghlApi } from './util.ts'
+import { ghlApi, isNotFound } from './util.ts'
 import {
   findOpportunity,
   findStage,
@@ -72,13 +73,17 @@ type GoHighLevelAppointment = {
 
 type GoHighLevelContact = {
   id: string
+  locationId?: string
 }
 
 export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
   const payload = input.context.payload
+  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  const secrets = input.context.config.secrets as unknown as Secrets
+  const accessToken = secrets.privateIntegrationToken
 
   if (payload.action === 'remove') {
-    console.log(`Skipping GoHighLevel sync for removed Terros event ${payload.data.id}`)
+    await cancelAppointment(client, accessToken, scriptConfig, payload.data.id)
     return
   }
 
@@ -89,21 +94,30 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     return
   }
 
-  if (!event.account) throw Error(`Terros event ${event.id} has no account`)
+  if (!event.account) {
+    console.log(`Skipping Terros event ${event.id}: no account yet`)
+    return
+  }
   const closer = event.attendee
-  if (!closer) throw Error(`${event.id} has no attendee`)
+  if (!closer) {
+    console.log(`Skipping Terros event ${event.id}: no attendee yet`)
+    return
+  }
 
   const { account } = await client.account.get({ accountId: event.account.accountId })
   if (!account.workflowStageName) {
-    throw Error(`${account.accountId} has no workflow stage name`)
+    console.log(`Skipping Terros event ${event.id}: ${account.accountId} has no workflow stage yet`)
+    return
   }
 
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const secrets = input.context.config.secrets as unknown as Secrets
-  const accessToken = secrets.privateIntegrationToken
-
   const assignedUserId = await findUserId(accessToken, scriptConfig.locationId, closer.email)
-  let contactId = account.externalLeadId
+  if (!assignedUserId) {
+    throw Error(
+      `No GoHighLevel user matches the attendee email ${closer.email ?? '(none)'} for Terros event ${event.id}`
+    )
+  }
+
+  let contactId = await findValidContactId(accessToken, scriptConfig.locationId, account.externalLeadId)
   if (!contactId) {
     const contactInput = toContact(
       {
@@ -133,11 +147,12 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
 
   const appointmentInput = toAppointment(event, scriptConfig, contactId, assignedUserId)
 
-  if (event.sourceId) {
-    const { event: existingAppointment } = await ghlApi<{ event: GoHighLevelAppointment }>(
-      accessToken,
-      `/calendars/events/appointments/${event.sourceId}`
-    )
+  const existingAppointment = event.sourceId ? await findAppointment(accessToken, event.sourceId) : undefined
+  if (event.sourceId && !existingAppointment) {
+    console.log(`GoHighLevel appointment ${event.sourceId} was not found, creating a new one`)
+  }
+
+  if (event.sourceId && existingAppointment) {
     const appointmentUpdate = getAppointmentUpdate(existingAppointment, appointmentInput)
     if (appointmentUpdate) {
       await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${event.sourceId}`, {
@@ -186,6 +201,70 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     body: JSON.stringify(opportunityUpdate),
   })
 })
+
+async function findAppointment(
+  accessToken: string,
+  appointmentId: string
+): Promise<GoHighLevelAppointment | undefined> {
+  try {
+    const { event } = await ghlApi<{ event: GoHighLevelAppointment }>(
+      accessToken,
+      `/calendars/events/appointments/${appointmentId}`
+    )
+    return event
+  } catch (error) {
+    if (isNotFound(error)) return
+    throw error
+  }
+}
+
+// A contact id saved by another location or since deleted is not usable; the caller relinks via upsert.
+async function findValidContactId(
+  accessToken: string,
+  locationId: string,
+  externalLeadId: string | undefined
+): Promise<string | undefined> {
+  if (!externalLeadId) return
+
+  try {
+    const { contact } = await ghlApi<{ contact: GoHighLevelContact }>(accessToken, `/contacts/${externalLeadId}`)
+    if (contact.locationId === locationId) return externalLeadId
+    console.log(`Contact ${externalLeadId} belongs to location ${contact.locationId}, relinking`)
+  } catch (error) {
+    if (!isNotFound(error)) throw error
+    console.log(`Contact ${externalLeadId} was not found, relinking`)
+  }
+}
+
+// Terros events are archived on remove, so the event can still be read to find its appointment.
+async function cancelAppointment(
+  client: TerrosClient,
+  accessToken: string,
+  scriptConfig: ScriptConfig,
+  eventId: CalendarEventId
+): Promise<void> {
+  const { event } = await client.calendar.event.get({ eventId })
+  if (!event.sourceId) {
+    console.log(`Skipping removed Terros event ${eventId}: no GoHighLevel appointment`)
+    return
+  }
+
+  const appointment = await findAppointment(accessToken, event.sourceId)
+  if (!appointment || appointment.calendarId !== scriptConfig.calendarId) {
+    console.log(`Skipping removed Terros event ${eventId}: ${event.sourceId} is not on the configured calendar`)
+    return
+  }
+  if (appointment.appointmentStatus === 'cancelled') {
+    console.log(`GoHighLevel appointment ${event.sourceId} is already cancelled`)
+    return
+  }
+
+  await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${event.sourceId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ appointmentStatus: 'cancelled' }),
+  })
+  console.log(`Cancelled GoHighLevel appointment ${event.sourceId} for removed Terros event ${eventId}`)
+}
 
 type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration'>
 
