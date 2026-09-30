@@ -9,9 +9,7 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 
 ## Setup and commands
 
-- Node 24 (`.nvmrc`). `package.json` pins pnpm 12.4.0; the lockfile is multi-document, so pnpm 10 cannot read it.
-- If the pinned pnpm binary fails locally (`ENOEXEC`), run pnpm 11 with
-  `npm_config_manage_package_manager_versions=false pnpm --pm-on-fail=ignore <command>`. Do not change `pnpm-lock.yaml`.
+- Node 24 (`.nvmrc`). Run `corepack enable` once so the pnpm version pinned in `package.json` (12.4.0) is used automatically. Verified with `corepack pnpm` install, lint, build and test.
 - Install `pnpm install --frozen-lockfile`; lint `pnpm lint`; format `pnpm format` (oxfmt, config in `.oxfmtrc.json`).
 - Build and test everything: `pnpm -r build`, `pnpm -r test` (CI runs lint, test, then build).
 - One package: `pnpm --filter <package name> test` or run the script from its directory. Integration tests need the SDK built; their `pretest` does that.
