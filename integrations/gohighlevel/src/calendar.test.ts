@@ -1,4 +1,4 @@
-import { appointmentNeedsUpdate, toAppointment } from './calendar.ts'
+import { getAppointmentUpdate, toAppointment } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
   test('builds a notifying appointment with a Google Meet location', () => {
@@ -70,9 +70,20 @@ describe('GoHighLevel appointments', () => {
       assignedUserId: 'ghl-user',
     }
 
-    expect(appointmentNeedsUpdate(appointment, input)).toBe(false)
-    expect(appointmentNeedsUpdate(appointment, { ...input, assignedUserId: undefined })).toBe(false)
-    expect(appointmentNeedsUpdate(appointment, { ...input, assignedUserId: 'other-user' })).toBe(true)
-    expect(appointmentNeedsUpdate({ ...appointment, startTime: '2026-09-01T17:30:00.000Z' }, input)).toBe(true)
+    expect(getAppointmentUpdate(appointment, input)).toBeUndefined()
+    expect(
+      getAppointmentUpdate({ ...appointment, title: 'Renamed', appointmentStatus: 'showed' }, input)
+    ).toBeUndefined()
+    expect(getAppointmentUpdate(appointment, { ...input, assignedUserId: 'other-user' })).toBeUndefined()
+    expect(getAppointmentUpdate({ ...appointment, assignedUserId: undefined }, input)).toEqual({
+      assignedUserId: 'ghl-user',
+    })
+    expect(getAppointmentUpdate({ ...appointment, startTime: '2026-09-01T17:30:00.000Z' }, input)).toEqual({
+      startTime: input.startTime,
+      endTime: input.endTime,
+      toNotify: true,
+      ignoreDateRange: true,
+      ignoreFreeSlotValidation: true,
+    })
   })
 })

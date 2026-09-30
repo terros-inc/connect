@@ -10,8 +10,8 @@ import {
   findOpportunity,
   findStage,
   findUserId,
+  getOpportunityUpdate,
   getPipeline,
-  needsUpdate,
   toContact,
   toOpportunity,
   type GoHighLevelOpportunity,
@@ -138,17 +138,12 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       accessToken,
       `/calendars/events/appointments/${event.sourceId}`
     )
-    if (appointmentNeedsUpdate(existingAppointment, appointmentInput)) {
-      const { locationId: _locationId, contactId: _contactId, ...appointmentUpdate } = appointmentInput
-
-      const updatedAppointment = await ghlApi<GoHighLevelAppointment>(
-        accessToken,
-        `/calendars/events/appointments/${event.sourceId}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(appointmentUpdate),
-        }
-      )
+    const appointmentUpdate = getAppointmentUpdate(existingAppointment, appointmentInput)
+    if (appointmentUpdate) {
+      await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${event.sourceId}`, {
+        method: 'PUT',
+        body: JSON.stringify(appointmentUpdate),
+      })
     } else {
       console.log(`Skipped unchanged GoHighLevel appointment ${event.sourceId}`)
     }
@@ -180,20 +175,16 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     return
   }
 
-  if (!needsUpdate(existingOpportunity, opportunityInput)) {
-    console.log(`Skipped update: ${existingOpportunity.id} for ${account.accountId}`)
+  const opportunityUpdate = getOpportunityUpdate(existingOpportunity, assignedUserId)
+  if (!opportunityUpdate) {
+    console.log(`Left GoHighLevel opportunity ${existingOpportunity.id} as is for ${account.accountId}`)
     return
   }
 
-  const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunityInput
-  const updatedOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
-    accessToken,
-    `/opportunities/${existingOpportunity.id}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(opportunityUpdate),
-    }
-  )
+  await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, `/opportunities/${existingOpportunity.id}`, {
+    method: 'PUT',
+    body: JSON.stringify(opportunityUpdate),
+  })
 })
 
 type AppointmentEvent = Pick<CalendarEventWebhookData, 'title' | 'eventDate' | 'duration'>
@@ -238,15 +229,37 @@ export function toAppointment(
   }
 }
 
-export function appointmentNeedsUpdate(
+type GoHighLevelAppointmentUpdate = Partial<
+  Pick<
+    GoHighLevelAppointmentInput,
+    'startTime' | 'endTime' | 'assignedUserId' | 'ignoreDateRange' | 'ignoreFreeSlotValidation'
+  >
+> & { toNotify?: true }
+
+/**
+ * GoHighLevel owns an existing appointment's status and title. Terros may only move it in time and fill in a missing
+ * assignee; returns undefined when there is nothing to send.
+ */
+export function getAppointmentUpdate(
   appointment: GoHighLevelAppointment,
   input: GoHighLevelAppointmentInput
-): boolean {
-  return (
-    appointment.title !== input.title ||
+): GoHighLevelAppointmentUpdate | undefined {
+  const timeChanged =
     new Date(appointment.startTime).getTime() !== new Date(input.startTime).getTime() ||
-    new Date(appointment.endTime).getTime() !== new Date(input.endTime).getTime() ||
-    appointment.appointmentStatus !== input.appointmentStatus ||
-    (input.assignedUserId !== undefined && appointment.assignedUserId !== input.assignedUserId)
-  )
+    new Date(appointment.endTime).getTime() !== new Date(input.endTime).getTime()
+  const assigneeMissing = !appointment.assignedUserId && input.assignedUserId !== undefined
+  if (!timeChanged && !assigneeMissing) return
+
+  return {
+    ...(timeChanged
+      ? {
+          startTime: input.startTime,
+          endTime: input.endTime,
+          toNotify: true,
+          ignoreDateRange: true,
+          ignoreFreeSlotValidation: true,
+        }
+      : {}),
+    ...(assigneeMissing ? { assignedUserId: input.assignedUserId } : {}),
+  }
 }

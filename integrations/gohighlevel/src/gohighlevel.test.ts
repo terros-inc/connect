@@ -1,7 +1,7 @@
 import { type AccountData } from '@terros-inc/sdk'
 import {
   findStage,
-  needsUpdate,
+  getOpportunityUpdate,
   toContact,
   toOpportunity,
   type GoHighLevelOpportunity,
@@ -101,33 +101,9 @@ describe('GoHighLevel opportunities', () => {
     })
   })
 
-  test('updates when the name changes without a stage change', () => {
-    expect(
-      needsUpdate(opportunity, {
-        pipelineStageId: 'stage-1',
-        name: 'Jane Customer',
-        assignedTo: 'user-1',
-      })
-    ).toBe(true)
-  })
-
-  test('updates when the owner changes without a stage change', () => {
-    expect(
-      needsUpdate(opportunity, {
-        pipelineStageId: 'stage-1',
-        name: 'Jane Homeowner',
-        assignedTo: 'user-2',
-      })
-    ).toBe(true)
-  })
-
-  test('skips an unchanged opportunity', () => {
-    expect(
-      needsUpdate(opportunity, {
-        pipelineStageId: 'stage-1',
-        name: 'Jane Homeowner',
-        assignedTo: 'user-1',
-      })
-    ).toBe(false)
+  test('only fills in a missing owner on an existing opportunity', () => {
+    expect(getOpportunityUpdate({ ...opportunity, assignedTo: undefined }, 'user-2')).toEqual({ assignedTo: 'user-2' })
+    expect(getOpportunityUpdate({ ...opportunity, assignedTo: undefined }, undefined)).toBeUndefined()
+    expect(getOpportunityUpdate(opportunity, 'user-2')).toBeUndefined()
   })
 })

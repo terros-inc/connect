@@ -18,3 +18,11 @@ export function toTerrosStage(goHighLevelStageName: string, stageMappings?: Reco
 
   return (configuredTerrosStageName ?? goHighLevelStageName).trim()
 }
+
+export function hasTerrosStageMapping(goHighLevelStageName: string, stageMappings?: Record<string, string>): boolean {
+  const normalizedGoHighLevelStageName = goHighLevelStageName.trim().toLowerCase()
+  return Object.values(stageMappings ?? {}).some(
+    (configuredGoHighLevelStageName) =>
+      configuredGoHighLevelStageName.trim().toLowerCase() === normalizedGoHighLevelStageName
+  )
+}

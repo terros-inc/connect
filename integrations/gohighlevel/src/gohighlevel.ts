@@ -152,6 +152,7 @@ export type GoHighLevelOpportunity = {
   pipelineId: string
   pipelineStageId?: string
   name?: string
+  status?: string
   assignedTo?: string
 }
 
@@ -165,13 +166,16 @@ export type GoHighLevelOpportunityInput = {
   assignedTo?: string
 }
 
-export function needsUpdate(
+/**
+ * GoHighLevel owns an opportunity's stage, status, name and owner once it exists. The only thing Terros may
+ * still fill in is a missing owner; returns undefined when nothing should be sent.
+ */
+export function getOpportunityUpdate(
   opportunity: GoHighLevelOpportunity,
-  input: Pick<GoHighLevelOpportunityInput, 'pipelineStageId' | 'name' | 'assignedTo'>
-): boolean {
-  if (opportunity.pipelineStageId !== input.pipelineStageId) return true
-  if (opportunity.name !== input.name) return true
-  return input.assignedTo !== undefined && opportunity.assignedTo !== input.assignedTo
+  assignedTo: string | undefined
+): { assignedTo: string } | undefined {
+  if (!assignedTo || opportunity.assignedTo) return
+  return { assignedTo }
 }
 
 type OpportunityAccount = Pick<AccountData, 'accountId' | 'resident'>

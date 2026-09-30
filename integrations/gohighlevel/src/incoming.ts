@@ -1,8 +1,8 @@
-import { type AccountUpsertInput, wrapConnectHandler } from '@terros-inc/sdk'
+import { wrapConnectHandler } from '@terros-inc/sdk'
 import { ghlApi, isNotEmpty } from './util.ts'
 import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
 import { listUsers } from './gohighlevel.ts'
-import { toTerrosStage } from './config.ts'
+import { hasTerrosStageMapping, toTerrosStage } from './config.ts'
 
 type ScriptConfig = {
   locationId: string
@@ -52,32 +52,16 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
     throw Error(`No account matched contact ${contactId} at location ${locationId}`)
   }
   const workflowTarget = toTerrosStage(stageName, scriptConfig.stageMappings)
-  console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
-
-  const secrets = input.context.config.secrets as unknown as Secrets
-  const accessToken = secrets.privateIntegrationToken
-  const { notes: goHighLevelNotes } = await ghlApi<{ notes: GoHighLevelNote[] }>(
-    accessToken,
-    `/contacts/${contactId}/notes`
-  )
-  const terrosUserIds = getMissingUserIds(account, goHighLevelNotes)
-  const goHighLevelUserIds = getIncomingUserIds(account, goHighLevelNotes)
-  const userInput = getUserInput(terrosUserIds, goHighLevelUserIds)
-  const [userResponse, goHighLevelUsers] = await Promise.all([
-    userInput ? client.user.list(userInput) : undefined,
-    listUsers(accessToken, locationId, goHighLevelUserIds),
-  ])
-  const noteChanges = getChanges(account, goHighLevelNotes, userResponse?.users ?? [], goHighLevelUsers)
-  await Promise.all(
-    noteChanges.goHighLevelNotes.map((note) =>
-      ghlApi<{ note: GoHighLevelNote }>(accessToken, `/contacts/${contactId}/notes`, {
-        method: 'POST',
-        body: JSON.stringify(note),
-      })
+  if (hasTerrosStageMapping(stageName, scriptConfig.stageMappings)) {
+    console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
+  } else {
+    console.warn(
+      `No stageMappings entry matched pipeline stage ${stageName}; using the GoHighLevel stage name as the Terros workflow stage`
     )
-  )
+  }
 
-  const terrosInput: AccountUpsertInput = {
+  // The stage is the point of this webhook: write it before the notes so a notes failure cannot block it.
+  await client.account.upsert({
     requestType: 'update',
     account: {
       accountId: account.accountId,
@@ -86,11 +70,43 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
       externalLeadId: contactId,
       lastActionDate: Date.now(),
     },
+  })
+  console.log(
+    `Sent workflow stage ${workflowTarget} to ${account.accountId} from GoHighLevel pipeline stage ${stageName}`
+  )
+
+  try {
+    const secrets = input.context.config.secrets as unknown as Secrets
+    const accessToken = secrets.privateIntegrationToken
+    const { notes: goHighLevelNotes } = await ghlApi<{ notes: GoHighLevelNote[] }>(
+      accessToken,
+      `/contacts/${contactId}/notes`
+    )
+    const terrosUserIds = getMissingUserIds(account, goHighLevelNotes)
+    const goHighLevelUserIds = getIncomingUserIds(account, goHighLevelNotes)
+    const userInput = getUserInput(terrosUserIds, goHighLevelUserIds)
+    const [userResponse, goHighLevelUsers] = await Promise.all([
+      userInput ? client.user.list(userInput) : undefined,
+      listUsers(accessToken, locationId, goHighLevelUserIds),
+    ])
+    const noteChanges = getChanges(account, goHighLevelNotes, userResponse?.users ?? [], goHighLevelUsers)
+    await Promise.all(
+      noteChanges.goHighLevelNotes.map((note) =>
+        ghlApi<{ note: GoHighLevelNote }>(accessToken, `/contacts/${contactId}/notes`, {
+          method: 'POST',
+          body: JSON.stringify(note),
+        })
+      )
+    )
+    if (isNotEmpty(noteChanges.terrosNotes)) {
+      await client.account.upsert({
+        requestType: 'update',
+        account: { accountId: account.accountId, notes: noteChanges.terrosNotes },
+      })
+    }
+  } catch (error) {
+    console.error(
+      `Stage for ${account.accountId} was written but importing notes failed: ${error instanceof Error ? error.message : String(error)}`
+    )
   }
-
-  if (isNotEmpty(noteChanges.terrosNotes)) terrosInput.account.notes = noteChanges.terrosNotes
-
-  await client.account.upsert(terrosInput)
-
-  console.log(`Updated ${account.accountId} from GoHighLevel pipeline stage ${stageName}`)
 })
