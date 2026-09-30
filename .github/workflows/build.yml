@@ -31,6 +31,10 @@ jobs:
       - name: Lint
         run: pnpm lint --quiet
 
+      - name: Download OpenAPI
+        run: pnpm fetch-openapi
+        working-directory: cli
+
       - name: Test
         run: pnpm -r test
 
