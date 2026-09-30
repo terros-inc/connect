@@ -1,7 +1,7 @@
 import open from 'open'
 import { DateTime } from 'luxon'
-import type { DeviceCodeResponse, TokenResponse } from './types'
-import { AUTH0_CLIENT_ID, AUTH0_DOMAIN } from './constants'
+import { AUTH0_CLIENT_ID, AUTH0_DOMAIN, type TokenResponse } from '@terros-inc/connect-common/auth'
+import type { DeviceCodeResponse } from './types'
 
 export async function signInToAuth0(): Promise<TokenResponse> {
   const res = await fetch(`${AUTH0_DOMAIN}/oauth/device/code`, {
@@ -54,24 +54,4 @@ async function pollForToken(deadline: DateTime, interval: number, deviceCode: st
     return pollForToken(deadline, interval, deviceCode)
   }
   return (await res.json()) as TokenResponse
-}
-
-export async function refreshTokens(refreshToken: string): Promise<TokenResponse> {
-  const res = await fetch(`${AUTH0_DOMAIN}/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      client_id: AUTH0_CLIENT_ID,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
-  })
-
-  if (res.ok) {
-    return (await res.json()) as TokenResponse
-  }
-
-  throw new Error('Unable to refresh token, it may be expired. Run `terros auth login` to sign in again')
 }
