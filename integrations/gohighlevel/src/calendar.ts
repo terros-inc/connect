@@ -104,7 +104,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     return
   }
 
-  const { account } = await client.account.get({ accountId: event.account.accountId })
+  const account = await getAccountWithStage(client, event.account.accountId)
   if (!account.workflowStageName) {
     console.log(`Skipping Terros event ${event.id}: ${account.accountId} has no workflow stage yet`)
     return
@@ -201,6 +201,25 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
     body: JSON.stringify(opportunityUpdate),
   })
 })
+
+// Terros saves the event before the Appointment Set stage (seen 0.7-3.6s apart), so the account can be read too early.
+// Re-read until the stage appears; the bounds keep well inside the 60s execution limit.
+export const STAGE_WAIT_TIMEOUT_MS = 15_000
+export const STAGE_WAIT_INTERVAL_MS = 500
+
+async function getAccountWithStage(client: TerrosClient, accountId: AccountId) {
+  const deadline = Date.now() + STAGE_WAIT_TIMEOUT_MS
+  let waited = false
+  while (true) {
+    const { account } = await client.account.get({ accountId })
+    if (account.workflowStageName || Date.now() + STAGE_WAIT_INTERVAL_MS > deadline) {
+      if (waited && account.workflowStageName) console.log(`Workflow stage for ${accountId} appeared after waiting`)
+      return account
+    }
+    waited = true
+    await new Promise((resolve) => setTimeout(resolve, STAGE_WAIT_INTERVAL_MS))
+  }
+}
 
 async function findAppointment(
   accessToken: string,

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { handler as accountHandler } from './outgoing.ts'
 import { CALENDAR_ID, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
 import { handler as appointmentWebhook } from './calendarIncoming.ts'
-import { handler as appointmentSync } from './calendar.ts'
+import { handler as appointmentSync, STAGE_WAIT_TIMEOUT_MS } from './calendar.ts'
 
 const config = { locationId: LOCATION_ID, calendarId: CALENDAR_ID, pipelineId: PIPELINE_ID }
 
@@ -15,6 +15,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   expect(world.blocked).toEqual([])
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -169,11 +170,16 @@ describe('Appointment Sync: waiting states are quiet skips', () => {
     expect(world.log).toEqual([])
   })
 
-  test('a Consultation whose account has no workflow stage', async () => {
+  test('a Consultation whose account never gets a workflow stage', async () => {
+    vi.useFakeTimers()
     world.addAccount({ accountId: 'Account.1', workflowStageName: undefined })
     world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
-    await runSync(world.eventWebhook('Event.1', 'add'))
+    const run = runSync(world.eventWebhook('Event.1', 'add'))
+    await vi.advanceTimersByTimeAsync(STAGE_WAIT_TIMEOUT_MS)
+    await run
     expect(world.log).toEqual([])
+    expect(world.ghl.appts.size).toBe(0)
+    vi.useRealTimers()
   })
 })
 
@@ -270,5 +276,32 @@ describe('Appointment Sync: link validation', () => {
 
     expect(world.ghl.appts.size).toBe(1)
     expect(world.ghl.appts.get('appt-1')!.startTime).toBe('2026-10-07T17:00:00.000Z')
+  })
+})
+
+describe('Appointment Sync: stage race', () => {
+  function book() {
+    world.addAccount({ accountId: 'Account.1', workflowStageName: undefined })
+    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    return runSync(world.eventWebhook('Event.1', 'add'))
+  }
+
+  test('creates the appointment right away when the stage is already set', async () => {
+    world.addAccount({ accountId: 'Account.1' })
+    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    await runSync(world.eventWebhook('Event.1', 'add'))
+    expect(world.ghl.appts.size).toBe(1)
+  })
+
+  test('waits for a stage that appears a few seconds after the event', async () => {
+    vi.useFakeTimers()
+    const run = book()
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(world.ghl.appts.size).toBe(0)
+    world.terros.accounts.get('Account.1')!.workflowStageName = 'Appointment Set'
+    await vi.advanceTimersByTimeAsync(1_000)
+    await run
+    expect(world.ghl.appts.size).toBe(1)
+    expect(world.ghl.opps.size).toBe(1)
   })
 })
