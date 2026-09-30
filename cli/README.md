@@ -44,6 +44,34 @@ To print the current API access token (for usage in scripts):
 terros auth token
 ```
 
+## MCP Server
+
+After signing in with `terros auth login`, start the MCP server with:
+
+```sh
+terros mcp
+```
+
+The server communicates over stdio and exposes the Terros API endpoints as
+tools, using names such as `account_get` and `search`. Tool arguments follow the
+API's JSON schemas. The server exits with an error if no saved login is available
+or the login cannot be refreshed. Sign in separately before starting it.
+
+For an MCP client that accepts `mcpServers` configuration:
+
+```json
+{
+  "mcpServers": {
+    "terros": {
+      "command": "terros",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Standard output is reserved for MCP messages; errors are written to standard error.
+
 ## Find Commands
 
 Terros CLI uses the pattern:

@@ -7,6 +7,7 @@
     "url": "https://github.com/terros-inc/cli/issues"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "catalog:",
     "luxon": "catalog:",
     "minimist": "catalog:",
     "open": "catalog:",

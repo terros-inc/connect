@@ -41,6 +41,10 @@ async function main(): Promise<void> {
   if (commandGroup) {
     const subcommand = commands.at(1)
     if (!subcommand) {
+      if (commandGroup.run) {
+        await commandGroup.run({ params, args: [] })
+        return
+      }
       console.log(formatSubcommandsHelp(requestedAlias, getSubcommandNames(requestedAlias)))
       return
     }
@@ -93,6 +97,10 @@ async function main(): Promise<void> {
 function showHelp(commands: string[], requestedAlias: string, requestedDepth: unknown): void {
   const commandGroup = getCommandGroup(requestedAlias)
   if (commandGroup) {
+    if (commandGroup.run) {
+      console.log(formatSubcommandParametersHelp(requestedAlias, undefined, [], commandGroup.description))
+      return
+    }
     const subcommand = commands.at(1)
     if (subcommand && commands.length >= 3 && getSubcommand(requestedAlias, subcommand)) {
       console.log(formatSubcommandParametersHelp(requestedAlias, subcommand, []))

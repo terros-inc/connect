@@ -12,6 +12,7 @@ export type Subcommand = {
 
 export type CommandGroup = {
   description: string
+  run?: Subcommand['run']
   subcommands: Record<string, Subcommand>
 }
 
