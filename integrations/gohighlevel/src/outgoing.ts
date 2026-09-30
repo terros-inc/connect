@@ -13,9 +13,9 @@ import {
   findOpportunity,
   findStage,
   findUserId,
+  getOpportunityUpdate,
   getPipeline,
   listUsers,
-  needsUpdate,
   toContact,
   toOpportunity,
   type GoHighLevelOpportunity,
@@ -188,17 +188,14 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
     return
   }
 
-  if (!needsUpdate(existingOpportunity, opportunityInput)) {
+  const opportunityUpdate = getOpportunityUpdate(existingOpportunity, assignedTo)
+  if (!opportunityUpdate) {
+    console.log(`Left GoHighLevel opportunity ${existingOpportunity.id} as is for ${account.id}`)
     return
   }
 
-  const { locationId: _locationId, contactId: _contactId, ...opportunityUpdate } = opportunityInput
-  const updatedOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(
-    accessToken,
-    `/opportunities/${existingOpportunity.id}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify(opportunityUpdate),
-    }
-  )
+  await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, `/opportunities/${existingOpportunity.id}`, {
+    method: 'PUT',
+    body: JSON.stringify(opportunityUpdate),
+  })
 })
