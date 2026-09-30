@@ -71,6 +71,8 @@ describe('GoHighLevel appointments', () => {
     }
 
     expect(appointmentNeedsUpdate(appointment, input)).toBe(false)
+    expect(appointmentNeedsUpdate(appointment, { ...input, assignedUserId: undefined })).toBe(false)
+    expect(appointmentNeedsUpdate(appointment, { ...input, assignedUserId: 'other-user' })).toBe(true)
     expect(appointmentNeedsUpdate({ ...appointment, startTime: '2026-09-01T17:30:00.000Z' }, input)).toBe(true)
   })
 })

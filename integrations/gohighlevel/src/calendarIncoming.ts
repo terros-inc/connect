@@ -53,11 +53,8 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
     return
   }
 
-  const eventTime = toEventTime(appointment)
-
   if (appointment.appoinmentStatus === 'cancelled' || appointment.status === 'cancelled') {
     const { event: existingEvent } = await client.calendar.event.upsert({
-      requestType: 'update',
       event: {
         sourceId: appointment.appointmentId,
       },
@@ -68,6 +65,7 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
     return
   }
 
+  const eventTime = toEventTime(appointment)
   const { event: updatedEvent } = await client.calendar.event.upsert({
     event: {
       sourceId: appointment.appointmentId,

@@ -103,7 +103,6 @@ export type CalendarEventUpdateSuccess = ApiSuccess<{
 }>
 
 export type CalendarEventUpsertInput = {
-  requestType?: 'add' | 'update' | 'upsert'
   event: Partial<{
     eventId: CalendarEventId
     sourceId: string

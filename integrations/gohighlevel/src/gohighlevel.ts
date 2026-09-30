@@ -112,7 +112,7 @@ export async function findUserId(
     companyId: locationResponse.location.companyId,
     locationId,
     query: ownerEmail,
-    limit: '2',
+    limit: '25',
   })
   const response = await ghlApi<{ users: GoHighLevelUser[] }>(accessToken, `/users/search?${search}`)
   const normalizedOwnerEmail = normalizeText(ownerEmail)

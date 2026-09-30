@@ -247,6 +247,6 @@ export function appointmentNeedsUpdate(
     new Date(appointment.startTime).getTime() !== new Date(input.startTime).getTime() ||
     new Date(appointment.endTime).getTime() !== new Date(input.endTime).getTime() ||
     appointment.appointmentStatus !== input.appointmentStatus ||
-    appointment.assignedUserId !== input.assignedUserId
+    (input.assignedUserId !== undefined && appointment.assignedUserId !== input.assignedUserId)
   )
 }
