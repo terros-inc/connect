@@ -20,6 +20,11 @@ export function loadEndpoints(): EndpointGroups {
 
   entries.forEach(([path, config]) => {
     const { group, alias } = getPathParts(path)
+    const existingEndpoints = endpoints[group]
+    const existingDirectEndpoint = existingEndpoints?.[group]
+    if ((path === `/${alias}` && existingEndpoints) || existingDirectEndpoint?.path === `/${group}`) {
+      throw new Error(`Cannot combine direct and grouped endpoints for command: ${group}`)
+    }
 
     endpoints[group] ??= {}
 
