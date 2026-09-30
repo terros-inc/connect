@@ -9,10 +9,10 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 
 ## Setup and commands
 
-- Node 24 (`.nvmrc`). Run `corepack enable` once so the pnpm version pinned in `package.json` (12.4.0) is used automatically. Verified with `corepack pnpm` install, lint, build and test.
+- Node 24 (`.nvmrc`). The pnpm version is pinned in `package.json`.
 - Install `pnpm install --frozen-lockfile`; lint `pnpm lint`; format `pnpm format` (oxfmt, config in `.oxfmtrc.json`).
 - Build and test everything: `pnpm -r build`, `pnpm -r test` (CI runs lint, test, then build).
-- One package: `pnpm --filter <package name> test` or run the script from its directory. Integration tests need the SDK built; their `pretest` does that.
+- One package: `pnpm --filter <package name> test`, or run the script from its directory. Only `integrations/gohighlevel` has a `pretest` that builds the SDK; build it first (`pnpm --filter @terros-inc/sdk... build`) before testing another integration that needs it.
 - Type-check an integration with `pnpm exec tsc --noEmit` in its directory (its `build` script is `tsc`). There is no root type-check script.
 
 ## Integrations
@@ -23,11 +23,11 @@ Each `integrations/<name>` has `package.json`, `tsconfig.json`, `vitest.config.t
 
 Handlers are wrapped with `wrapConnectHandler` from `@terros-inc/sdk`, which supplies the Terros client.
 
-Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls.
+Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel` has tests so far.
 
 ## Publishing
 
 - An integration's version is its `package.json` `version`. Bump it before publishing; a version already deployed cannot be republished (the CLI errors). A version still in `draft` can be re-uploaded.
-- Publish with `pnpm run publish` from the integration directory (plain `pnpm publish` is pnpm's own command), which runs `terros connect publish`. It bundles with rolldown and does not type-check, so run `tsc --noEmit` first.
-- Merging to main does not publish. `publish-integrations.yml` is manual (`workflow_dispatch`) and its integration list is hardcoded, so a new integration must be added to it.
+- Integrations are published by the `publish-integrations.yml` workflow (`pnpm run publish` in the integration directory, i.e. `terros connect publish`), not from a developer machine. It bundles with rolldown and does not type-check, so run `tsc --noEmit` before merging.
+- Merging to main does not publish. The workflow is manual (`workflow_dispatch`) and its integration list is hardcoded, so a new integration must be added to it.
 - `sdk` and `cli` publish to npm through the manual `publish.yml` workflow.
