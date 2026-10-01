@@ -2,9 +2,9 @@ import { wrapConnectHandler } from '@terros-inc/sdk'
 import { ghlApi, isNotEmpty } from './util.ts'
 import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
 import { listUsers } from './gohighlevel.ts'
-import { hasTerrosStageMapping, toTerrosStage } from './config.ts'
+import { hasTerrosStageMapping, isOn, toTerrosStage, type RunSwitches } from './config.ts'
 
-type ScriptConfig = {
+type ScriptConfig = RunSwitches & {
   locationId: string
   stageMappings?: Record<string, string>
 }
@@ -26,6 +26,10 @@ type OpportunityWorkflowWebhook = {
 export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
   const scriptConfig = input.context.config.scriptConfig
+  if (isOn(scriptConfig.disabled)) {
+    console.log('GoHighLevel Opportunity Webhook is disabled by config, skipping')
+    return
+  }
 
   const customDataFields =
     Object.keys(payload.customData ?? {})
@@ -58,6 +62,11 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, Scri
     console.warn(
       `No stageMappings entry matched pipeline stage ${stageName}; using the GoHighLevel stage name as the Terros workflow stage`
     )
+  }
+
+  if (isOn(scriptConfig.dryRun)) {
+    console.log(`DRY RUN: would move ${account.accountId} to ${workflowTarget}; nothing was written`)
+    return
   }
 
   // The stage is the point of this webhook: write it before the notes so a notes failure cannot block it.

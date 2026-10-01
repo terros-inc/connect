@@ -1,7 +1,14 @@
 import { DateTime } from 'luxon'
-import { type CalendarEventDataWithDetails, type TerrosClient, wrapConnectHandler } from '@terros-inc/sdk'
+import {
+  type CalendarEventDataWithDetails,
+  type CompanyId,
+  type TerrosClient,
+  wrapConnectHandler,
+} from '@terros-inc/sdk'
+import { isCreatingMarker } from './creationGuard.ts'
+import { isOn, type RunSwitches } from './config.ts'
 
-type ScriptConfig = {
+type ScriptConfig = RunSwitches & {
   locationId: string
   calendarId: string
 }
@@ -33,6 +40,11 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook, void, S
   const payload = input.context.payload
   const appointment = payload.calendar
   const scriptConfig = input.context.config.scriptConfig
+  if (isOn(scriptConfig.disabled)) {
+    console.log('GoHighLevel Appointment Webhook is disabled by config, skipping')
+    return
+  }
+  const dryRun = isOn(scriptConfig.dryRun)
   const payloadFields = Object.keys(payload).sort().join(', ') || '(none)'
   const locationId = payload.location?.id
 
@@ -53,10 +65,23 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook, void, S
     return
   }
 
+  // A Terros event holds a creation marker, never a real appointment id, while Terros is creating the appointment.
+  if (isCreatingMarker(appointment.appointmentId)) {
+    console.log(`Skipping ${appointment.appointmentId}: not a GoHighLevel appointment id`)
+    return
+  }
+
   const eventTime = isCancelled(appointment) ? undefined : toEventTime(appointment)
   const existingEvent = await findLinkedEvent(client, appointment)
   if (!existingEvent) {
     console.log(`No Terros event is linked to GoHighLevel appointment ${appointment.appointmentId}, skipping`)
+    return
+  }
+
+  if (dryRun) {
+    console.log(
+      `DRY RUN: would ${eventTime ? `update ${existingEvent.eventId} to ${JSON.stringify(eventTime)}` : `remove ${existingEvent.eventId}`} for ${appointment.appointmentId}; nothing was written`
+    )
     return
   }
 
@@ -97,16 +122,29 @@ async function findLinkedEvent(
       })
     : undefined
   const center = startTime?.isValid ? startTime.toMillis() : Date.now()
-  const { company } = await client.company.get({})
+  // The company lookup needs company:read for the caller. Incoming scripts run with the webhook key's own user, which
+  // may lack it; fall back to an unscoped list (the key user's own events) rather than failing every webhook.
+  const companyId = await readCompanyId(client)
   for (const windowMs of linkedEventWindowsMs) {
     const { events } = await client.calendar.event.list({
-      companyId: company.companyId,
+      companyId,
       startTime: center - windowMs,
       endTime: center + windowMs,
       eventType: 'Consultation',
     })
     const event = events.find((event) => event.sourceId === appointment.appointmentId)
     if (event) return event
+  }
+}
+
+async function readCompanyId(client: TerrosClient): Promise<CompanyId | undefined> {
+  try {
+    const { company } = await client.company.get({})
+    return company.companyId
+  } catch (error) {
+    console.error(
+      `Could not read the company, so linked events are searched without a company scope and may be missed: ${error instanceof Error ? error.message : error}`
+    )
   }
 }
 

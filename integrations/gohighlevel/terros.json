@@ -37,7 +37,7 @@
         {
           "name": "opportunityIdFieldId",
           "type": "string",
-          "description": "Optional Terros custom field ID (CF.…) that receives the GHL opportunity ID"
+          "description": "Optional Terros custom field ID (CF.\u2026) that receives the GHL opportunity ID"
         },
         {
           "name": "alertWebhookUrl",
@@ -48,6 +48,16 @@
           "name": "alertRecipients",
           "type": "string",
           "description": "Optional comma-separated emails included in the alert payload for the webhook to notify"
+        },
+        {
+          "name": "disabled",
+          "type": "string",
+          "description": "Kill switch: set to true to make this script do nothing"
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Set to true to log what this script would write without writing anything"
         }
       ],
       "authSchema": {
@@ -71,6 +81,16 @@
           "type": "mapping",
           "dataType": "None",
           "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+        },
+        {
+          "name": "disabled",
+          "type": "string",
+          "description": "Kill switch: set to true to make this script do nothing"
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Set to true to log what this script would write without writing anything"
         }
       ],
       "authSchema": {
@@ -105,6 +125,26 @@
           "type": "mapping",
           "dataType": "None",
           "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+        },
+        {
+          "name": "disabled",
+          "type": "string",
+          "description": "Kill switch: set to true to make this script do nothing"
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Set to true to log what this script would write without writing anything"
+        },
+        {
+          "name": "alertWebhookUrl",
+          "type": "string",
+          "description": "Optional URL that receives a JSON POST when the appointment sync refuses to create or change an appointment"
+        },
+        {
+          "name": "alertRecipients",
+          "type": "string",
+          "description": "Optional comma-separated emails included in the alert payload for the webhook to notify"
         }
       ],
       "authSchema": {
@@ -127,6 +167,16 @@
           "name": "calendarId",
           "type": "string",
           "description": "GoHighLevel calendar ID"
+        },
+        {
+          "name": "disabled",
+          "type": "string",
+          "description": "Kill switch: set to true to make this script do nothing"
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Set to true to log what this script would write without writing anything"
         }
       ],
       "authSchema": {},

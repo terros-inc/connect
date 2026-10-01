@@ -341,23 +341,24 @@ describe('Appointment Sync: link validation', () => {
     await bookLinked({ externalLeadId: 'contact-1' })
 
     expect(world.terros.accounts.get('Account.1')!.externalLeadId).toBe('contact-1')
-    expect(world.terrosWrites().filter((line) => line.includes('account/upsert'))).toEqual([])
+    expect(world.terrosWrites().filter((line) => line.includes('externalLeadId'))).toEqual([])
   })
 
-  test('a sourceId that is not a GHL appointment creates a new appointment and replaces it', async () => {
+  test('a sourceId that is not a GHL appointment creates nothing and leaves the event alone', async () => {
     world.addContact('contact-1')
 
     await bookLinked({ externalLeadId: 'contact-1' }, { sourceId: 'from-another-system' })
 
-    const [created] = [...world.ghl.appts.keys()]
-    expect(world.ghl.appts.size).toBe(1)
-    expect(world.terros.events.get('Event.1')!.sourceId).toBe(created)
+    expect(world.ghl.appts.size).toBe(0)
+    expect(world.terros.events.get('Event.1')!.sourceId).toBe('from-another-system')
+    expect(world.log).toEqual([])
   })
 
-  test('an appointment on a contact that was relinked is recreated on the new contact and the old one cancelled', async () => {
-    world.addContact('contact-old', { locationId: 'other-location' })
+  test('an appointment on a different contact than the account is reported, not recreated', async () => {
+    world.addContact('contact-old')
+    world.addContact('contact-new')
     world.addAppt('appt-1', 'contact-old')
-    world.addAccount({ accountId: 'Account.1', externalLeadId: 'contact-old' })
+    world.addAccount({ accountId: 'Account.1', externalLeadId: 'contact-new' })
     world.addEvent({
       eventId: 'Event.1',
       accountId: 'Account.1',
@@ -367,12 +368,9 @@ describe('Appointment Sync: link validation', () => {
 
     await runSync(world.eventWebhook('Event.1', 'update'))
 
-    const relinked = world.terros.accounts.get('Account.1')!.externalLeadId
-    const newId = world.terros.events.get('Event.1')!.sourceId
-    expect(relinked).not.toBe('contact-old')
-    expect(newId).not.toBe('appt-1')
-    expect(world.ghl.appts.get(newId)!.contactId).toBe(relinked)
-    expect(world.ghl.appts.get('appt-1')!.appointmentStatus).toBe('cancelled')
+    expect(world.ghl.appts.size).toBe(1)
+    expect(world.terros.events.get('Event.1')!.sourceId).toBe('appt-1')
+    expect(world.log).toEqual([])
   })
 
   test('an existing appointment is updated, not recreated', async () => {
