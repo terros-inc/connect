@@ -17,6 +17,7 @@ on:
         options:
           - airtable
           - docusign
+          - gohighlevel
           - jobnimbus
           - salesforce
           - zoho
