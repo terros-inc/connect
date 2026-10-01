@@ -2,7 +2,8 @@ import { wrapConnectHandler } from '@terros-inc/sdk'
 import { ghlApi, isNotEmpty } from './util.ts'
 import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
 import { listUsers } from './gohighlevel.ts'
-import { hasTerrosStageMapping, isOn, toTerrosStage, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
+import { hasTerrosStageMapping, isSwitchOn, toTerrosStage, type RunSwitches } from './config.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string
@@ -26,10 +27,11 @@ type OpportunityWorkflowWebhook = {
 export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
   const scriptConfig = input.context.config.scriptConfig
-  if (isOn(scriptConfig.disabled)) {
+  if (isSwitchOn('disabled', scriptConfig.disabled)) {
     console.log('GoHighLevel Opportunity Webhook is disabled by config, skipping')
     return
   }
+  checkConfig('opportunityWebhook', scriptConfig)
 
   const customDataFields =
     Object.keys(payload.customData ?? {})
@@ -64,7 +66,7 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, Scri
     )
   }
 
-  if (isOn(scriptConfig.dryRun)) {
+  if (isSwitchOn('dryRun', scriptConfig.dryRun)) {
     console.log(`DRY RUN: would move ${account.accountId} to ${workflowTarget}; nothing was written`)
     return
   }

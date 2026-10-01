@@ -27,10 +27,21 @@ export function hasTerrosStageMapping(goHighLevelStageName: string, stageMapping
   )
 }
 
-/** Config booleans arrive as strings from the install form, so accept both. */
-export function isOn(value: string | boolean | undefined): boolean {
+const offValues = ['', 'false', 'no', 'off', '0']
+const onValues = ['true', 'yes', 'on', '1']
+
+/**
+ * Config switches arrive as text from the install form. Blank or false is off, true is on, and any other text is
+ * treated as on and logged: for disabled that means doing nothing and for dryRun writing nothing, so a typo can only
+ * make a script more cautious, never write when the installer meant it to hold back.
+ */
+export function isSwitchOn(name: 'disabled' | 'dryRun', value: string | boolean | undefined): boolean {
   if (typeof value === 'boolean') return value
-  return ['true', 'yes', 'on', '1'].includes((value ?? '').trim().toLowerCase())
+  const text = (value ?? '').trim().toLowerCase()
+  if (offValues.includes(text)) return false
+  if (!onValues.includes(text))
+    console.error(`Config ${name} is "${value}", expected true or false; treating it as true`)
+  return true
 }
 
 export type RunSwitches = {
