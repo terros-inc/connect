@@ -26,6 +26,14 @@ export class TerrosApiClient {
   }
 
   async call<Success>(route: ApiRoute, input: object): Promise<Success> {
+    return this.request(route, 'POST', input)
+  }
+
+  async get<Success>(route: ApiRoute): Promise<Success> {
+    return this.request(route, 'GET')
+  }
+
+  private async request<Success>(route: ApiRoute, method: 'GET' | 'POST', input?: object): Promise<Success> {
     let response: Response
     try {
       const authorization = await this.getAuthorizationHeader()
@@ -36,8 +44,8 @@ export class TerrosApiClient {
       }
       if (this.impersonateUserId) headers.impersonate_user_id = this.impersonateUserId
 
-      response = await fetch(`${this.baseUrl}/${route}`, {
-        method: 'POST',
+      response = await fetch(`${this.baseUrl}/${route.replace(/^\//, '')}`, {
+        method,
         headers,
         body: JSON.stringify(input),
       })

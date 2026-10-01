@@ -1,4 +1,5 @@
 import { getTokens, saveTokens } from '@terros-inc/connect-common/auth'
+import { clearRuntimeCaches } from '../cache'
 import { signInToAuth0 } from '../auth/auth0'
 
 export const authCommands = {
@@ -7,6 +8,7 @@ export const authCommands = {
     async run() {
       const tokens = await signInToAuth0()
       await saveTokens(tokens)
+      await clearRuntimeCaches()
       console.log('Signed in successfully')
     },
   },

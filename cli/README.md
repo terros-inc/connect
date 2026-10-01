@@ -44,6 +44,14 @@ To print the current API access token (for usage in scripts):
 terros auth token
 ```
 
+The CLI caches your profile in `~/.config/terros/profile.json` for 24 hours.
+For internal users (`company.companyId === 'C:tantalim'`), it also downloads the internal OpenAPI JSON
+schema with an authenticated `GET /openapi` and caches it in
+`~/.config/terros/openapi.json` for 24 hours. The internal schema entirely replaces
+the bundled schema for commands, help, and MCP tools. Caches refresh on the next use
+after expiry and are cleared when you sign in again. If a refresh fails, the CLI
+reports it on stderr and continues with the bundled public schema.
+
 ## MCP Server
 
 After signing in with `terros auth login`, start the MCP server with:

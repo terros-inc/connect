@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerrosApiClient } from './terrosApiClient.ts'
+import { getTokens } from './oauth/tokens.ts'
+
+vi.mock('./oauth/tokens.ts', () => ({ getTokens: vi.fn() }))
 
 describe('TerrosApiClient', () => {
   const originalFetch = globalThis.fetch
@@ -16,6 +19,31 @@ describe('TerrosApiClient', () => {
       json: () => Promise.resolve(body),
     }) as unknown as typeof fetch
   }
+
+  it('makes an authenticated GET without a request body', async () => {
+    mockFetch({ openapi: '3.1.1', paths: {} })
+    vi.mocked(getTokens).mockResolvedValue({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      id_token: undefined,
+      token_type: 'Bearer',
+      expires_at: Date.now() + 3600000,
+    })
+    const caller = new TerrosApiClient({ baseUrl: 'https://api.terros.com' })
+
+    await expect(caller.get('openapi')).resolves.toMatchObject({ openapi: '3.1.1' })
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://api.terros.com/openapi', {
+      method: 'GET',
+      headers: expect.objectContaining({ authorization: 'Bearer access-token' }),
+      body: undefined,
+    })
+  })
+
+  it('rejects an unauthorized schema GET', async () => {
+    mockFetch({}, false)
+    const caller = new TerrosApiClient({ apiKey: 'test-key' })
+    await expect(caller.get('openapi')).rejects.toThrow('Bad Request')
+  })
 
   it('sends a POST with the route, headers, and JSON body, returning the parsed success', async () => {
     mockFetch({ type: 'success', value: 42 })
