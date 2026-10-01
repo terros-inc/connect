@@ -65,10 +65,10 @@ type GoHighLevelContact = {
   locationId?: string
 }
 
-export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, client) => {
+export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
-  const secrets = input.context.config.secrets as unknown as Secrets
+  const scriptConfig = input.context.config.scriptConfig
+  const secrets = input.context.config.secrets as Secrets
   const accessToken = secrets.privateIntegrationToken
 
   if (payload.action === 'remove') {
