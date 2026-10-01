@@ -7,10 +7,10 @@ import { createMcpServer, startMcpServer } from './mcp'
 import type { OpenAPISchema } from './crud/types'
 import type { EndpointGroups } from './crud/endpoint'
 import { loadEndpoints } from './crud'
-import { getTokens } from './auth/tokens'
+import { getTokens } from '@terros-inc/connect-common/auth'
 import { buildTerrosClient } from './api/query'
 
-vi.mock('./auth/tokens', () => ({ getTokens: vi.fn() }))
+vi.mock('@terros-inc/connect-common/auth', () => ({ getTokens: vi.fn() }))
 vi.mock('./crud', () => ({ loadEndpoints: vi.fn() }))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
 vi.mock('@modelcontextprotocol/server/stdio', async (importOriginal) => ({

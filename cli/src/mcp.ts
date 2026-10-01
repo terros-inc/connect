@@ -4,7 +4,7 @@ import packageJson from '../package.json'
 import type { Schema } from './crud/types'
 import type { Endpoint, EndpointGroups } from './crud/endpoint'
 import { loadEndpoints } from './crud'
-import { getTokens } from './auth/tokens'
+import { getTokens } from '@terros-inc/connect-common/auth'
 import { buildTerrosClient } from './api/query'
 
 export async function startMcpServer(): Promise<void> {
