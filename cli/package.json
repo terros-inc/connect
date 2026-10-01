@@ -7,6 +7,7 @@
     "url": "https://github.com/terros-inc/cli/issues"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "catalog:",
     "luxon": "catalog:",
     "minimist": "catalog:",
     "open": "catalog:",
@@ -56,7 +57,7 @@
     "start": "node src/index.ts"
   },
   "type": "module",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"

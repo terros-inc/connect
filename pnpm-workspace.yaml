@@ -12,6 +12,7 @@ pmOnFail: error
 updateNotifier: false
 verifyDepsBeforeRun: warn
 catalog:
+  '@modelcontextprotocol/server': ^2.1.0
   '@types/html-to-text': ^9.0.4
   '@types/luxon': ^3.7.1
   '@types/minimist': ^1.2.5
