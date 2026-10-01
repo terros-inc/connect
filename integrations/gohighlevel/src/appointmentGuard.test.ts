@@ -80,6 +80,30 @@ describe('a lookup miss right after create cannot loop', () => {
     expect(logged()).toContain('GoHighLevel appointment lookup for appt-1 returned HTTP 404')
   })
 
+  test.each(['liveShape', 'normal'] as const)('reads a linked appointment from the %s reply', async (lookup) => {
+    world.addAppt('appt-1', 'contact-1')
+    world.ghl.appointmentLookup = lookup
+    world.terros.events.get('Event.1')!.sourceId = 'appt-1'
+
+    await runSync()
+
+    expect(alerts()).toEqual([])
+    expect(logged().some((line) => line.includes('without an event'))).toBe(false)
+  })
+
+  test('a reply with neither appointment nor event is a miss that logs its keys', async () => {
+    world.addAppt('appt-1', 'contact-1')
+    world.ghl.appointmentLookup = 'noAppointment'
+    world.terros.events.get('Event.1')!.sourceId = 'appt-1'
+
+    await runSync()
+
+    expect(logged()).toContain(
+      'GoHighLevel appointment lookup for appt-1 returned HTTP 200 without an event; top-level keys: traceId'
+    )
+    expect(alerts()).toHaveLength(1)
+  })
+
   test('a refusal writes nothing to Terros or GoHighLevel', async () => {
     world.addAppt('appt-1', 'contact-1')
     world.ghl.appointmentLookup = 'missing'

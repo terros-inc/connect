@@ -277,16 +277,18 @@ async function findAppointment(
   appointmentId: string
 ): Promise<GoHighLevelAppointment | undefined> {
   try {
-    const body = await ghlApi<{ event?: GoHighLevelAppointment }>(
+    // The live endpoint answers with `appointment`; GoHighLevel's published spec says `event`. Accept either.
+    const body = await ghlApi<{ appointment?: GoHighLevelAppointment; event?: GoHighLevelAppointment }>(
       accessToken,
       `/calendars/events/appointments/${appointmentId}`
     )
-    if (!body?.event) {
+    const found = body?.appointment ?? body?.event
+    if (!found || typeof found !== 'object') {
       console.log(
         `GoHighLevel appointment lookup for ${appointmentId} returned HTTP 200 without an event; top-level keys: ${Object.keys(body ?? {}).join(', ') || '(none)'}`
       )
     }
-    return body?.event
+    return found
   } catch (error) {
     if (!isNotFound(error)) throw error
     console.log(`GoHighLevel appointment lookup for ${appointmentId} returned HTTP 404`)
