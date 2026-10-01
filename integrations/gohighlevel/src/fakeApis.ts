@@ -44,7 +44,7 @@ export class FakeApis {
     /** "METHOD /path-prefix" -> status, one-shot */
     failNext: new Map<string, number>(),
     /** How reading an appointment by id behaves: normally, as missing (404), or as belonging to another contact. */
-    appointmentLookup: 'normal' as 'normal' | 'missing' | 'otherContact',
+    appointmentLookup: 'normal' as 'normal' | 'missing' | 'otherContact' | 'liveShape' | 'noAppointment',
   }
   terros = {
     accounts: new Map<string, Json>(),
@@ -408,6 +408,10 @@ export class FakeApis {
       if (method === 'GET' && this.ghl.appointmentLookup === 'missing') return notFound
       if (method === 'GET' && this.ghl.appointmentLookup === 'otherContact')
         return { status: 200, json: { event: { ...a, contactId: 'contact-someone-else' } } }
+      if (method === 'GET' && this.ghl.appointmentLookup === 'liveShape')
+        return { status: 200, json: { appointment: a, traceId: 'trace-1' } }
+      if (method === 'GET' && this.ghl.appointmentLookup === 'noAppointment')
+        return { status: 200, json: { traceId: 'trace-1' } }
       if (method === 'PUT') Object.assign(a, body)
       return { status: 200, json: method === 'PUT' ? a : { event: a } }
     }
