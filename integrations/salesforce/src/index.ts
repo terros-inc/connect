@@ -22,7 +22,11 @@ type WebhookAccountData = WebhookAuditProps &
   }
 type WebhookAccount = WebhookPayload<'Account', WebhookAccountData, 'id'>
 
-export const handler = wrapConnectHandler<WebhookAccount>(async (input, client) => {
+type SalesforceScriptConfig = {
+  leadType?: string
+}
+
+export const handler = wrapConnectHandler<WebhookAccount, void, SalesforceScriptConfig>(async (input, client) => {
   const { payload, config } = input.context
   const { secrets, scriptConfig } = config
   const { clientId, clientSecret, url } = secrets

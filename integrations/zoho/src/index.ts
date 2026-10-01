@@ -18,9 +18,9 @@ type ZohoScriptConfig = {
   customFieldMap?: Record<string, string>
 }
 
-export const handler = wrapConnectHandler<ZohoLeadPayload>(async (input, client) => {
+export const handler = wrapConnectHandler<ZohoLeadPayload, void, ZohoScriptConfig>(async (input, client) => {
   const { payload, config } = input.context
-  const scriptConfig = config.scriptConfig as unknown as ZohoScriptConfig
+  const scriptConfig = config.scriptConfig
   const { data } = payload
 
   const sourceId = String(data.id ?? data.Id ?? data.ID ?? '').trim()

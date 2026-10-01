@@ -1,32 +1,38 @@
 import { TerrosClient } from '../client'
 
-export type ConnectHandlerFunction<Input, Result> = (
-  payload: ConnectExecutionInput<Input>,
+export type ConnectHandlerFunction<Input, Result, ScriptConfig extends ConnectScriptConfig = Record<string, string>> = (
+  payload: ConnectExecutionInput<Input, ScriptConfig>,
   client: TerrosClient
 ) => Promise<Result>
 
-type ConnectExecutionConfig = {
-  scriptConfig: Record<string, string> // TODO fix type of this
+type ConnectScriptConfigValue = string | number | boolean
+
+type ConnectScriptConfig = Record<string, ConnectScriptConfigValue | Record<string, ConnectScriptConfigValue>>
+
+type ConnectExecutionConfig<ScriptConfig extends ConnectScriptConfig> = {
+  scriptConfig: ScriptConfig
   secrets: Record<string, string>
   authorization?: string
   authType?: 'ApiKey' | 'ConnectKey'
 }
 
-type ConnectExecutionContext<Payload> = {
+type ConnectExecutionContext<Payload, ScriptConfig extends ConnectScriptConfig> = {
   payload: Payload
-  config: ConnectExecutionConfig
+  config: ConnectExecutionConfig<ScriptConfig>
 }
 
-type ConnectExecutionInput<Payload> = {
+type ConnectExecutionInput<Payload, ScriptConfig extends ConnectScriptConfig> = {
   runId: `ConnectRun.${string}`
-  context: ConnectExecutionContext<Payload>
+  context: ConnectExecutionContext<Payload, ScriptConfig>
 }
 
-type WrappedHandler<Input, Result> = (input: ConnectExecutionInput<Input>) => Promise<Result>
+type WrappedHandler<Input, Result, ScriptConfig extends ConnectScriptConfig = Record<string, string>> = (
+  input: ConnectExecutionInput<Input, ScriptConfig>
+) => Promise<Result>
 
-export function wrapConnectHandler<Input, Result = void>(
-  handler: ConnectHandlerFunction<Input, Result>
-): WrappedHandler<Input, Result> {
+export function wrapConnectHandler<Input, Result = void, ScriptConfig extends ConnectScriptConfig = Record<string, string>>(
+  handler: ConnectHandlerFunction<Input, Result, ScriptConfig>
+): WrappedHandler<Input, Result, ScriptConfig> {
   return async (input) => {
     const auth = input.context.config.authorization
     const authType = input.context.config.authType
