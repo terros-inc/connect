@@ -16,9 +16,15 @@ type JobNimbusJobPayload = {
   owners?: JobNimbusOwner[]
 }
 
-export const handler = wrapConnectHandler<JobNimbusJobPayload>(async (input, client) => {
+type JobNimbusScriptConfig = {
+  accountSource?: string
+  requestType?: string
+  workflowId?: string
+}
+
+export const handler = wrapConnectHandler<JobNimbusJobPayload, void, JobNimbusScriptConfig>(async (input, client) => {
   const payload = input.context.payload || {}
-  const scriptConfig = input.context.config.scriptConfig || {}
+  const scriptConfig = input.context.config.scriptConfig
 
   const workflowId = scriptConfig.workflowId
   if (!workflowId) {
