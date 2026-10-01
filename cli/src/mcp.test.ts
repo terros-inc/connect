@@ -1,13 +1,13 @@
 import { PassThrough } from 'node:stream'
 import { readFileSync } from 'node:fs'
 import { parse } from 'yaml'
+import { getTokens } from '@terros-inc/connect-common/auth'
 import { StdioServerTransport, serveStdio } from '@modelcontextprotocol/server/stdio'
 import type { McpServer, JSONRPCMessage } from '@modelcontextprotocol/server'
 import { createMcpServer, startMcpServer } from './mcp'
 import type { OpenAPISchema } from './crud/types'
 import type { EndpointGroups } from './crud/endpoint'
 import { loadEndpoints } from './crud'
-import { getTokens } from '@terros-inc/connect-common/auth'
 import { buildTerrosClient } from './api/query'
 
 vi.mock('@terros-inc/connect-common/auth', () => ({ getTokens: vi.fn() }))
@@ -50,7 +50,7 @@ let server: McpServer | undefined
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(loadEndpoints).mockReturnValue(endpoints)
+  vi.mocked(loadEndpoints).mockResolvedValue(endpoints)
   vi.mocked(buildTerrosClient).mockReturnValue({ call } as unknown as ReturnType<typeof buildTerrosClient>)
 })
 

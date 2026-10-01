@@ -1,10 +1,10 @@
+import { getTokens } from '@terros-inc/connect-common/auth'
 import { serveStdio } from '@modelcontextprotocol/server/stdio'
 import { McpServer, fromJsonSchema } from '@modelcontextprotocol/server'
 import packageJson from '../package.json'
 import type { Schema } from './crud/types'
 import type { Endpoint, EndpointGroups } from './crud/endpoint'
 import { loadEndpoints } from './crud'
-import { getTokens } from '@terros-inc/connect-common/auth'
 import { buildTerrosClient } from './api/query'
 
 export async function startMcpServer(): Promise<void> {
@@ -13,7 +13,7 @@ export async function startMcpServer(): Promise<void> {
     throw new Error('CLI not authorized. Run `terros auth login` to authenticate.')
   }
 
-  const endpoints = loadEndpoints()
+  const endpoints = await loadEndpoints()
   serveStdio(() => createMcpServer(endpoints), {
     onerror: (error) => console.error(error.message),
   })

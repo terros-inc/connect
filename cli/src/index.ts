@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   }
 
   if (commands.at(-1) === 'help') {
-    showHelp(commands, requestedAlias, params.depth)
+    await showHelp(commands, requestedAlias, params.depth)
     return
   }
 
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const endpoints = loadEndpoints()
+  const endpoints = await loadEndpoints()
   const endpointGroup = endpoints[requestedAlias]
   if (!endpointGroup) {
     console.error(`Unknown command: ${requestedAlias}`)
@@ -94,7 +94,7 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(response, null, 2))
 }
 
-function showHelp(commands: string[], requestedAlias: string, requestedDepth: unknown): void {
+async function showHelp(commands: string[], requestedAlias: string, requestedDepth: unknown): Promise<void> {
   const commandGroup = getCommandGroup(requestedAlias)
   if (commandGroup) {
     if (commandGroup.run) {
@@ -111,7 +111,7 @@ function showHelp(commands: string[], requestedAlias: string, requestedDepth: un
     return
   }
 
-  const endpoints = loadEndpoints()
+  const endpoints = await loadEndpoints()
   const endpoint = endpoints[requestedAlias]
   if (endpoint) {
     const subcommand = commands.length >= 3 ? commands.at(1) : undefined

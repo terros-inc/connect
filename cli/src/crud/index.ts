@@ -1,42 +1,15 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { readFileSync } from 'node:fs'
-import { parse } from 'yaml'
-import { getPathParts } from './util'
-import type { OpenAPISchema } from './types'
+import { parseEndpoints } from './parser'
+import { loadInternalSchema } from './internal'
 import type { EndpointGroups } from './endpoint'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-export function loadEndpoints(): EndpointGroups {
-  const file = readFileSync(resolve(__dirname, '../terros.yml'), 'utf-8')
-
-  const data = parse(file) as OpenAPISchema
-
-  const entries = Object.entries(data.paths)
-
-  const endpoints: EndpointGroups = {}
-
-  entries.forEach(([path, config]) => {
-    const { group, alias } = getPathParts(path)
-    const existingEndpoints = endpoints[group]
-    const existingDirectEndpoint = existingEndpoints?.[group]
-    if ((path === `/${alias}` && existingEndpoints) || existingDirectEndpoint?.path === `/${group}`) {
-      throw new Error(`Cannot combine direct and grouped endpoints for command: ${group}`)
-    }
-
-    endpoints[group] ??= {}
-
-    const schema = config.post.requestBody.content['application/json'].schema
-
-    endpoints[group][alias] = {
-      path,
-      description: config.post.description ?? config.post.summary,
-      properties: schema,
-      components: data.components,
-    }
-  })
-
-  return endpoints
+export async function loadEndpoints(): Promise<EndpointGroups> {
+  const internal = await loadInternalSchema()
+  const file = internal ?? readFileSync(resolve(__dirname, '../terros.yml'), 'utf-8')
+  return parseEndpoints(file)
 }
