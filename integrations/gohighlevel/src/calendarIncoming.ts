@@ -29,10 +29,10 @@ type EventTime = {
   duration: number
 }
 
-export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (input, client) => {
+export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
   const appointment = payload.calendar
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  const scriptConfig = input.context.config.scriptConfig
   const payloadFields = Object.keys(payload).sort().join(', ') || '(none)'
   const locationId = payload.location?.id
 

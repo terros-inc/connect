@@ -23,9 +23,9 @@ type OpportunityWorkflowWebhook = {
   }
 }
 
-export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (input, client) => {
+export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  const scriptConfig = input.context.config.scriptConfig
 
   const customDataFields =
     Object.keys(payload.customData ?? {})
@@ -76,7 +76,7 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook>(async (inp
   )
 
   try {
-    const secrets = input.context.config.secrets as unknown as Secrets
+    const secrets = input.context.config.secrets as Secrets
     const accessToken = secrets.privateIntegrationToken
     const { notes: goHighLevelNotes } = await ghlApi<{ notes: GoHighLevelNote[] }>(
       accessToken,

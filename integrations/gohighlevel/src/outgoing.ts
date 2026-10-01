@@ -83,7 +83,7 @@ type ContactResponse = {
   contact: GoHighLevelContact
 }
 
-export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, client) => {
+export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
   console.log(`Received account ${payload.action} for ${payload.data.id}`)
 
@@ -93,7 +93,7 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const account = payload.data
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  const scriptConfig = input.context.config.scriptConfig
   const workflowStageName = account.workflowState?.stageName
   const createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
   const closer = account.closer
@@ -111,7 +111,7 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const { locationId, pipelineId } = scriptConfig
-  const secrets = input.context.config.secrets as unknown as Secrets
+  const secrets = input.context.config.secrets as Secrets
   const accessToken = secrets.privateIntegrationToken
   const assignedTo = await findUserId(accessToken, locationId, closer.email)
   const contactInput = toContact(account, locationId, scriptConfig.contactFieldMappings, assignedTo)
