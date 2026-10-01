@@ -6,7 +6,8 @@ import {
   wrapConnectHandler,
 } from '@terros-inc/sdk'
 import { isCreatingMarker } from './creationGuard.ts'
-import { isOn, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
+import { isSwitchOn, type RunSwitches } from './config.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string
@@ -40,11 +41,12 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook, void, S
   const payload = input.context.payload
   const appointment = payload.calendar
   const scriptConfig = input.context.config.scriptConfig
-  if (isOn(scriptConfig.disabled)) {
+  if (isSwitchOn('disabled', scriptConfig.disabled)) {
     console.log('GoHighLevel Appointment Webhook is disabled by config, skipping')
     return
   }
-  const dryRun = isOn(scriptConfig.dryRun)
+  checkConfig('appointmentWebhook', scriptConfig)
+  const dryRun = isSwitchOn('dryRun', scriptConfig.dryRun)
   const payloadFields = Object.keys(payload).sort().join(', ') || '(none)'
   const locationId = payload.location?.id
 

@@ -11,54 +11,54 @@
         {
           "name": "locationId",
           "type": "string",
-          "description": "GoHighLevel location/sub-account ID"
+          "description": "GoHighLevel location (sub-account) ID. Required."
         },
         {
           "name": "pipelineId",
           "type": "string",
-          "description": "GoHighLevel pipeline ID"
+          "description": "GoHighLevel pipeline ID that opportunities are created in. Required."
         },
         {
           "name": "stageMappings",
           "type": "mapping",
           "dataType": "None",
-          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+          "description": "Optional. Key: a Terros workflow stage. Value: the GoHighLevel pipeline stage name. Outgoing (Account Sync): a key equal to the Terros stage NAME picks the GoHighLevel stage; with no match the Terros stage name is used as is. Incoming (Opportunity Webhook): the GoHighLevel stage name is looked up among the values and its key is sent to Terros, so use a Terros stage ID as the key (or a name listed in the workflow integration mappings). With no match the GoHighLevel stage name is sent, and Terros ignores it unless the workflow integration mappings know it."
         },
         {
           "name": "contactFieldMappings",
           "type": "mapping",
           "dataType": "Account",
-          "description": "Map an account field to a GHL custom contact field using merge-field key"
+          "description": "Optional. Key: a Terros account field (for example account.owner.email) or custom field ID (CF.…). Value: a GoHighLevel merge field such as {{ contact.owner_email }}."
         },
         {
           "name": "opportunityStages",
           "type": "string",
-          "description": "Comma-separated Terros stage names that create the GHL opportunity if missing (default: Appointment Set)"
+          "description": "Optional. Comma-separated Terros stage names, for example Appointment Set, Contract Signed. An account entering one of them gets a GoHighLevel opportunity if it has none. Case is ignored. Blank means Appointment Set."
         },
         {
           "name": "opportunityIdFieldId",
           "type": "string",
-          "description": "Optional Terros custom field ID (CF.\u2026) that receives the GHL opportunity ID"
+          "description": "Optional. Terros custom field ID (CF.…) that receives the GoHighLevel opportunity ID. A value not starting with CF. is ignored with a warning."
         },
         {
           "name": "alertWebhookUrl",
           "type": "string",
-          "description": "Optional URL that receives a JSON POST when an account in an opportunity stage has no closer"
+          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
         },
         {
           "name": "alertRecipients",
           "type": "string",
-          "description": "Optional comma-separated emails included in the alert payload for the webhook to notify"
+          "description": "Optional. Comma-separated emails. Only copied into the alert webhook JSON as recipients; this integration sends no email, so the receiver of alertWebhookUrl must act on them."
         },
         {
           "name": "disabled",
           "type": "string",
-          "description": "Kill switch: set to true to make this script do nothing"
+          "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
         },
         {
           "name": "dryRun",
           "type": "string",
-          "description": "Set to true to log what this script would write without writing anything"
+          "description": "Type true to log what this script would write without writing anything. Blank or false: run normally. Any other text, including a typo, counts as true."
         }
       ],
       "authSchema": {
@@ -75,23 +75,23 @@
         {
           "name": "locationId",
           "type": "string",
-          "description": "GoHighLevel location/sub-account ID"
+          "description": "GoHighLevel location (sub-account) ID. Required."
         },
         {
           "name": "stageMappings",
           "type": "mapping",
           "dataType": "None",
-          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
+          "description": "Optional. Key: a Terros workflow stage. Value: the GoHighLevel pipeline stage name. Outgoing (Account Sync): a key equal to the Terros stage NAME picks the GoHighLevel stage; with no match the Terros stage name is used as is. Incoming (Opportunity Webhook): the GoHighLevel stage name is looked up among the values and its key is sent to Terros, so use a Terros stage ID as the key (or a name listed in the workflow integration mappings). With no match the GoHighLevel stage name is sent, and Terros ignores it unless the workflow integration mappings know it."
         },
         {
           "name": "disabled",
           "type": "string",
-          "description": "Kill switch: set to true to make this script do nothing"
+          "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
         },
         {
           "name": "dryRun",
           "type": "string",
-          "description": "Set to true to log what this script would write without writing anything"
+          "description": "Type true to log what this script would write without writing anything. Blank or false: run normally. Any other text, including a typo, counts as true."
         }
       ],
       "authSchema": {
@@ -109,43 +109,32 @@
         {
           "name": "locationId",
           "type": "string",
-          "description": "GoHighLevel location/sub-account ID"
+          "description": "GoHighLevel location (sub-account) ID. Required."
         },
         {
           "name": "calendarId",
           "type": "string",
-          "description": "GoHighLevel calendar ID"
-        },
-        {
-          "name": "pipelineId",
-          "type": "string",
-          "description": "GoHighLevel pipeline ID"
-        },
-        {
-          "name": "stageMappings",
-          "type": "mapping",
-          "dataType": "None",
-          "description": "Map Terros workflow stage names to GoHighLevel pipeline stage names"
-        },
-        {
-          "name": "disabled",
-          "type": "string",
-          "description": "Kill switch: set to true to make this script do nothing"
-        },
-        {
-          "name": "dryRun",
-          "type": "string",
-          "description": "Set to true to log what this script would write without writing anything"
+          "description": "GoHighLevel calendar ID whose appointments are synced. Required."
         },
         {
           "name": "alertWebhookUrl",
           "type": "string",
-          "description": "Optional URL that receives a JSON POST when the appointment sync refuses to create or change an appointment"
+          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
         },
         {
           "name": "alertRecipients",
           "type": "string",
-          "description": "Optional comma-separated emails included in the alert payload for the webhook to notify"
+          "description": "Optional. Comma-separated emails. Only copied into the alert webhook JSON as recipients; this integration sends no email, so the receiver of alertWebhookUrl must act on them."
+        },
+        {
+          "name": "disabled",
+          "type": "string",
+          "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Type true to log what this script would write without writing anything. Blank or false: run normally. Any other text, including a typo, counts as true."
         }
       ],
       "authSchema": {
@@ -162,22 +151,22 @@
         {
           "name": "locationId",
           "type": "string",
-          "description": "GoHighLevel location/sub-account ID"
+          "description": "GoHighLevel location (sub-account) ID. Required."
         },
         {
           "name": "calendarId",
           "type": "string",
-          "description": "GoHighLevel calendar ID"
+          "description": "GoHighLevel calendar ID whose appointments are synced. Required."
         },
         {
           "name": "disabled",
           "type": "string",
-          "description": "Kill switch: set to true to make this script do nothing"
+          "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
         },
         {
           "name": "dryRun",
           "type": "string",
-          "description": "Set to true to log what this script would write without writing anything"
+          "description": "Type true to log what this script would write without writing anything. Blank or false: run normally. Any other text, including a typo, counts as true."
         }
       ],
       "authSchema": {},
