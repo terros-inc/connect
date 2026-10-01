@@ -11,6 +11,7 @@
   },
   "exports": {
     ".": "./dist/index.js",
+    "./auth": "./dist/oauth/index.js",
     "./package.json": "./package.json"
   },
   "files": [

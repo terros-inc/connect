@@ -1,4 +1,4 @@
-import { getTokens, saveTokens } from '../auth/tokens'
+import { getTokens, saveTokens } from '@terros-inc/connect-common/auth'
 import { signInToAuth0 } from '../auth/auth0'
 
 export const authCommands = {
