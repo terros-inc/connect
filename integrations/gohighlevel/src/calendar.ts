@@ -269,19 +269,25 @@ async function refuse(
   await sendAlert(config, { accountId, eventId, stage: 'Appointment Sync', message })
 }
 
+// A miss logs only the status and top-level key names, never values, so it is diagnosable without personal data.
 async function findAppointment(
   accessToken: string,
   appointmentId: string
 ): Promise<GoHighLevelAppointment | undefined> {
   try {
-    const { event } = await ghlApi<{ event: GoHighLevelAppointment | undefined }>(
+    const body = await ghlApi<{ event?: GoHighLevelAppointment }>(
       accessToken,
       `/calendars/events/appointments/${appointmentId}`
     )
-    return event
+    if (!body?.event) {
+      console.log(
+        `GoHighLevel appointment lookup for ${appointmentId} returned HTTP 200 without an event; top-level keys: ${Object.keys(body ?? {}).join(', ') || '(none)'}`
+      )
+    }
+    return body?.event
   } catch (error) {
-    if (isNotFound(error)) return
-    throw error
+    if (!isNotFound(error)) throw error
+    console.log(`GoHighLevel appointment lookup for ${appointmentId} returned HTTP 404`)
   }
 }
 

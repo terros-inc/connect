@@ -70,6 +70,16 @@ describe('a lookup miss right after create cannot loop', () => {
     expect(alerts()[0]).toContain('"eventId":"Event.1"')
   })
 
+  test('a miss logs the HTTP status for the lookup', async () => {
+    world.addAppt('appt-1', 'contact-1')
+    world.ghl.appointmentLookup = 'missing'
+    world.terros.events.get('Event.1')!.sourceId = 'appt-1'
+
+    await runSync()
+
+    expect(logged()).toContain('GoHighLevel appointment lookup for appt-1 returned HTTP 404')
+  })
+
   test('a refusal writes nothing to Terros or GoHighLevel', async () => {
     world.addAppt('appt-1', 'contact-1')
     world.ghl.appointmentLookup = 'missing'
