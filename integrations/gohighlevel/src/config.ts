@@ -26,3 +26,16 @@ export function hasTerrosStageMapping(goHighLevelStageName: string, stageMapping
       configuredGoHighLevelStageName.trim().toLowerCase() === normalizedGoHighLevelStageName
   )
 }
+
+/** Config booleans arrive as strings from the install form, so accept both. */
+export function isOn(value: string | boolean | undefined): boolean {
+  if (typeof value === 'boolean') return value
+  return ['true', 'yes', 'on', '1'].includes((value ?? '').trim().toLowerCase())
+}
+
+export type RunSwitches = {
+  /** Kill switch: when on the script does nothing. Checked before anything else. */
+  disabled?: string | boolean
+  /** When on the script reads and logs what it would write, and writes nothing. */
+  dryRun?: string | boolean
+}

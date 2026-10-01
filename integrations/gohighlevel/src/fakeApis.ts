@@ -43,11 +43,15 @@ export class FakeApis {
     ] as Json[],
     /** "METHOD /path-prefix" -> status, one-shot */
     failNext: new Map<string, number>(),
+    /** How reading an appointment by id behaves: normally, as missing (404), or as belonging to another contact. */
+    appointmentLookup: 'normal' as 'normal' | 'missing' | 'otherContact',
   }
   terros = {
     accounts: new Map<string, Json>(),
     events: new Map<string, Json>(),
     knownStages: new Set(['Lead', 'Appointment Set', 'Sat', 'Closed Won']),
+    /** When set, another run's creation marker replaces the one just written, as in a race. */
+    stealClaimWith: undefined as string | undefined,
   }
   /**
    * Permissions of the script under test, read from terros.json. Like the backend, the fake denies event and company
@@ -256,6 +260,8 @@ export class FakeApis {
       case 'calendar/event/update': {
         const e = this.terros.events.get(body.event.eventId)
         Object.assign(e!, body.event)
+        if (this.terros.stealClaimWith && String(body.event.sourceId).startsWith('pending:'))
+          e!.sourceId = this.terros.stealClaimWith
         return ok({ event: e })
       }
       case 'company/get':
@@ -399,6 +405,9 @@ export class FakeApis {
     if ((m = path.match(/^\/calendars\/events\/appointments\/([^/]+)$/))) {
       const a = this.ghl.appts.get(m[1]!)
       if (!a) return notFound
+      if (method === 'GET' && this.ghl.appointmentLookup === 'missing') return notFound
+      if (method === 'GET' && this.ghl.appointmentLookup === 'otherContact')
+        return { status: 200, json: { event: { ...a, contactId: 'contact-someone-else' } } }
       if (method === 'PUT') Object.assign(a, body)
       return { status: 200, json: method === 'PUT' ? a : { event: a } }
     }

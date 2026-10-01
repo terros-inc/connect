@@ -4,15 +4,27 @@ import {
   type EventType,
   type SmallAddress,
   type TerrosClient,
+  type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
 import { ghlApi, isNotFound } from './util.ts'
 import { findUserId, toContact } from './gohighlevel.ts'
+import {
+  countCreateAttempts,
+  createNoteText,
+  creatingMarker,
+  isFreshMarker,
+  MAX_APPOINTMENT_CREATES,
+  realSourceId,
+} from './creationGuard.ts'
+import { isOn, type RunSwitches } from './config.ts'
+import { sendAlert, type AlertConfig } from './alerts.ts'
 
-type ScriptConfig = {
-  locationId: string
-  calendarId: string
-}
+type ScriptConfig = RunSwitches &
+  AlertConfig & {
+    locationId: string
+    calendarId: string
+  }
 
 type Secrets = {
   privateIntegrationToken: string
@@ -30,6 +42,7 @@ type CalendarEventWebhookData = {
   eventType: EventType
   address?: SmallAddress
   attendee?: {
+    userId?: UserId
     email?: string
   }
   sourceId?: string
@@ -71,8 +84,14 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConf
   const secrets = input.context.config.secrets as Secrets
   const accessToken = secrets.privateIntegrationToken
 
+  if (isOn(scriptConfig.disabled)) {
+    console.log(`GoHighLevel Appointment Sync is disabled by config, skipping Terros event ${payload.data.id}`)
+    return
+  }
+  const dryRun = isOn(scriptConfig.dryRun)
+
   if (payload.action === 'remove') {
-    await cancelAppointment(client, accessToken, scriptConfig, payload.data.id, payload.data.sourceId)
+    await cancelAppointment(client, accessToken, scriptConfig, payload.data.id, payload.data.sourceId, dryRun)
     return
   }
 
@@ -93,6 +112,11 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConf
     return
   }
 
+  if (isFreshMarker(event.sourceId, Date.now())) {
+    console.log(`Skipping Terros event ${event.id}: a GoHighLevel appointment is already being created`)
+    return
+  }
+
   const { account } = await client.account.get({ accountId: event.account.accountId })
 
   const assignedUserId = await findUserId(accessToken, scriptConfig.locationId, closer.email)
@@ -100,6 +124,80 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConf
     throw Error(
       `No GoHighLevel user matches the attendee email ${closer.email ?? '(none)'} for Terros event ${event.id}`
     )
+  }
+
+  const appointmentInput = (contactId: string) => toAppointment(event, scriptConfig, contactId, assignedUserId)
+  const linkedAppointmentId = realSourceId(event.sourceId)
+
+  if (linkedAppointmentId) {
+    // An event that already has an appointment id is never given a second appointment. Whatever is wrong with the
+    // link (appointment missing, on another contact) is for a person to resolve, because creating a replacement
+    // writes the event, which triggers this script again.
+    const existingAppointment = await findAppointment(accessToken, linkedAppointmentId)
+    if (!existingAppointment) {
+      await refuse(
+        scriptConfig,
+        account.accountId,
+        event.id,
+        `GoHighLevel appointment ${linkedAppointmentId} for Terros event ${event.id} was not found, so no appointment was created or changed.`
+      )
+      return
+    }
+    const contactId = await findValidContactId(accessToken, scriptConfig.locationId, account.externalLeadId)
+    if (!contactId || existingAppointment.contactId !== contactId) {
+      await refuse(
+        scriptConfig,
+        account.accountId,
+        event.id,
+        `GoHighLevel appointment ${linkedAppointmentId} is on contact ${existingAppointment.contactId}, not the account's contact ${contactId ?? '(none)'}, so Terros event ${event.id} was not synced.`
+      )
+      return
+    }
+
+    const appointmentUpdate = getAppointmentUpdate(existingAppointment, appointmentInput(contactId))
+    if (!appointmentUpdate) {
+      console.log(`Skipped unchanged GoHighLevel appointment ${linkedAppointmentId}`)
+      return
+    }
+    if (dryRun) {
+      console.log(
+        `DRY RUN: would update GoHighLevel appointment ${linkedAppointmentId}: ${JSON.stringify(appointmentUpdate)}`
+      )
+      return
+    }
+    await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${linkedAppointmentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(appointmentUpdate),
+    })
+    return
+  }
+
+  // No appointment yet (or a creation marker that expired): the only path that creates one.
+  const attempts = countCreateAttempts(account.notes, event.id)
+  if (attempts >= MAX_APPOINTMENT_CREATES) {
+    await refuse(
+      scriptConfig,
+      account.accountId,
+      event.id,
+      `Terros event ${event.id} already had ${attempts} GoHighLevel appointment create attempts, so no more were made.`
+    )
+    return
+  }
+  const noteUserId = account.ownerId ?? closer.userId
+  if (!noteUserId) {
+    await refuse(
+      scriptConfig,
+      account.accountId,
+      event.id,
+      `Terros event ${event.id} has no owner or closer to record its appointment attempt under, so no appointment was created.`
+    )
+    return
+  }
+  if (dryRun) {
+    console.log(
+      `DRY RUN: would create a GoHighLevel appointment for Terros event ${event.id} at ${event.eventDate} for ${event.duration} minutes (attempt ${attempts + 1} of ${MAX_APPOINTMENT_CREATES}); nothing was written`
+    )
+    return
   }
 
   let contactId = await findValidContactId(accessToken, scriptConfig.locationId, account.externalLeadId)
@@ -130,62 +228,53 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConf
   }
   console.log(`Using ${contactId} for ${event.id}`)
 
-  const appointmentInput = toAppointment(event, scriptConfig, contactId, assignedUserId)
-
-  const existingAppointment = event.sourceId ? await findAppointment(accessToken, event.sourceId) : undefined
-  if (event.sourceId && !existingAppointment) {
-    console.log(`GoHighLevel appointment ${event.sourceId} was not found, creating a new one`)
-  }
-  // Contact repair can leave the appointment on a contact that was deleted or belongs to another location.
-  const appointmentToReplace =
-    existingAppointment && existingAppointment.contactId !== contactId ? existingAppointment : undefined
-  if (appointmentToReplace) {
-    console.log(
-      `GoHighLevel appointment ${appointmentToReplace.id} is on contact ${appointmentToReplace.contactId}, not ${contactId}, creating a new one`
-    )
+  // Claim the event before the POST, and read it back so a run that lost a race backs off. Not atomic (the API has
+  // no compare-and-set), so the attempt count below is the hard limit.
+  const marker = creatingMarker(Date.now())
+  await client.calendar.event.update({ event: { eventId: event.id, sourceId: marker } })
+  const { event: claimed } = await client.calendar.event.get({ eventId: event.id })
+  if (claimed.sourceId !== marker) {
+    console.log(`Skipping Terros event ${event.id}: another run is creating its GoHighLevel appointment`)
+    return
   }
 
-  if (event.sourceId && existingAppointment && !appointmentToReplace) {
-    const appointmentUpdate = getAppointmentUpdate(existingAppointment, appointmentInput)
-    if (appointmentUpdate) {
-      await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${event.sourceId}`, {
-        method: 'PUT',
-        body: JSON.stringify(appointmentUpdate),
-      })
-    } else {
-      console.log(`Skipped unchanged GoHighLevel appointment ${event.sourceId}`)
-    }
-  } else {
-    const createdAppointment = await ghlApi<GoHighLevelAppointment>(accessToken, '/calendars/events/appointments', {
-      method: 'POST',
-      body: JSON.stringify(appointmentInput),
-    })
-    await client.calendar.event.update({
-      event: {
-        eventId: event.id,
-        sourceId: createdAppointment.id,
-      },
-    })
-    if (appointmentToReplace && appointmentToReplace.appointmentStatus !== 'cancelled') {
-      // The event points at the new appointment first, so the cancel webhook finds no linked event.
-      try {
-        await ghlApi<GoHighLevelAppointment>(accessToken, `/calendars/events/appointments/${appointmentToReplace.id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ appointmentStatus: 'cancelled' }),
-        })
-      } catch (error) {
-        if (!isNotFound(error)) throw error
-      }
-    }
-  }
+  await client.account.upsert({
+    requestType: 'update',
+    account: {
+      accountId: account.accountId,
+      notes: [{ timestamp: Date.now(), text: createNoteText(event.id, account.accountId), userId: noteUserId }],
+    },
+  })
+
+  const createdAppointment = await ghlApi<GoHighLevelAppointment>(accessToken, '/calendars/events/appointments', {
+    method: 'POST',
+    body: JSON.stringify(appointmentInput(contactId)),
+  })
+  await client.calendar.event.update({
+    event: {
+      eventId: event.id,
+      sourceId: createdAppointment.id,
+    },
+  })
+  console.log(`Created GoHighLevel appointment ${createdAppointment.id} for ${event.id}`)
 })
+
+async function refuse(
+  config: AlertConfig,
+  accountId: AccountId,
+  eventId: CalendarEventId,
+  message: string
+): Promise<void> {
+  console.log(message)
+  await sendAlert(config, { accountId, eventId, stage: 'Appointment Sync', message })
+}
 
 async function findAppointment(
   accessToken: string,
   appointmentId: string
 ): Promise<GoHighLevelAppointment | undefined> {
   try {
-    const { event } = await ghlApi<{ event: GoHighLevelAppointment }>(
+    const { event } = await ghlApi<{ event: GoHighLevelAppointment | undefined }>(
       accessToken,
       `/calendars/events/appointments/${appointmentId}`
     )
@@ -230,9 +319,10 @@ async function cancelAppointment(
   accessToken: string,
   scriptConfig: ScriptConfig,
   eventId: CalendarEventId,
-  payloadSourceId: string | undefined
+  payloadSourceId: string | undefined,
+  dryRun: boolean
 ): Promise<void> {
-  const sourceId = payloadSourceId ?? (await readSourceId(client, eventId))
+  const sourceId = realSourceId(payloadSourceId ?? (await readSourceId(client, eventId)))
   if (!sourceId) {
     console.log(`Skipping removed Terros event ${eventId}: no GoHighLevel appointment`)
     return
@@ -245,6 +335,10 @@ async function cancelAppointment(
   }
   if (appointment.appointmentStatus === 'cancelled') {
     console.log(`GoHighLevel appointment ${sourceId} is already cancelled`)
+    return
+  }
+  if (dryRun) {
+    console.log(`DRY RUN: would cancel GoHighLevel appointment ${sourceId} for removed Terros event ${eventId}`)
     return
   }
 

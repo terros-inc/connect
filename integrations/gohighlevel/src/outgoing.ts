@@ -22,10 +22,10 @@ import {
   toOpportunity,
   type GoHighLevelOpportunity,
 } from './gohighlevel.ts'
-import { toGhlStage } from './config.ts'
+import { isOn, toGhlStage, type RunSwitches } from './config.ts'
 import { hasAlertNote, saveAlertNote, sendAlert, splitList } from './alerts.ts'
 
-type ScriptConfig = {
+type ScriptConfig = RunSwitches & {
   locationId: string
   pipelineId: string
   stageMappings?: Record<string, string>
@@ -85,6 +85,11 @@ type ContactResponse = {
 
 export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
+  const scriptConfig = input.context.config.scriptConfig
+  if (isOn(scriptConfig.disabled)) {
+    console.log(`GoHighLevel Account Sync is disabled by config, skipping ${payload.data.id}`)
+    return
+  }
   console.log(`Received account ${payload.action} for ${payload.data.id}`)
 
   if (payload.action === 'remove') {
@@ -93,7 +98,6 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   }
 
   const account = payload.data
-  const scriptConfig = input.context.config.scriptConfig
   const workflowStageName = account.workflowState?.stageName
   const createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
   const closer = account.closer
@@ -115,6 +119,10 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   const accessToken = secrets.privateIntegrationToken
   const assignedTo = await findUserId(accessToken, locationId, closer.email)
   const contactInput = toContact(account, locationId, scriptConfig.contactFieldMappings, assignedTo)
+  if (isOn(scriptConfig.dryRun)) {
+    console.log(`DRY RUN: would sync account ${account.id} to GoHighLevel; nothing was written`)
+    return
+  }
   let contactResponse: ContactResponse
   if (account.externalLeadId) {
     const { contact: existingContact } = await ghlApi<ContactResponse>(
