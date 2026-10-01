@@ -1,4 +1,5 @@
 {
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.aDFcRGDoKMcD2hK-qY6on",
   "scripts": [
     {
