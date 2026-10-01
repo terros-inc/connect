@@ -118,7 +118,7 @@ export class FakeApis {
         address: a.location,
         resident: a.resident,
         externalLeadId: a.externalLeadId,
-        customFieldMap: {},
+        customFieldMap: a.customFields ?? {},
         notes: a.notes,
       },
     }
@@ -243,6 +243,7 @@ export class FakeApis {
         const account = this.terros.accounts.get(a.accountId)
         if (!account) return err('NotFound', `no account ${a.accountId}`)
         if (a.externalLeadId) account.externalLeadId = a.externalLeadId
+        if (a.customFields) account.customFields = { ...account.customFields, ...a.customFields }
         if (a.notes) account.notes = [...account.notes, ...a.notes]
         if (a.workflowTarget) {
           const hit = [...this.terros.knownStages].find(

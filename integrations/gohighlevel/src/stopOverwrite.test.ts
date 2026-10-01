@@ -92,16 +92,14 @@ describe('Appointment Sync leaves an existing opportunity and appointment to GoH
     })
   })
 
-  test('creates the appointment and opportunity for a new consultation as before', async () => {
+  test('creates only the appointment for a new consultation', async () => {
     fake.addAccount({ accountId: 'Account.1', workflowStageName: 'Appointment Set' })
     fake.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
     await syncEvent('Event.1', 'add')
     expect([...fake.ghl.appts.values()]).toEqual([
       expect.objectContaining({ appointmentStatus: 'confirmed', toNotify: true, assignedUserId: 'ghl-closer' }),
     ])
-    expect([...fake.ghl.opps.values()]).toEqual([
-      expect.objectContaining({ pipelineStageId: 'st-appt', status: 'open' }),
-    ])
+    expect(fake.ghl.opps.size).toBe(0)
   })
 
   test('does not write appointment status, title or assignee when only those differ', async () => {

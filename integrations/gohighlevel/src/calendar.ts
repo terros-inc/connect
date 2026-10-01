@@ -6,26 +6,12 @@ import {
   type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { ghlApi, isNotFound, normalizeText } from './util.ts'
-import {
-  findOpportunity,
-  findStage,
-  findUserId,
-  getOpportunityUpdate,
-  getPipeline,
-  toContact,
-  toOpportunity,
-  type GoHighLevelOpportunity,
-  type GoHighLevelPipeline,
-  type GoHighLevelPipelineStage,
-} from './gohighlevel.ts'
-import { toGhlStage } from './config.ts'
+import { ghlApi, isNotFound } from './util.ts'
+import { findUserId, toContact } from './gohighlevel.ts'
 
 type ScriptConfig = {
   locationId: string
   calendarId: string
-  pipelineId: string
-  stageMappings?: Record<string, string>
 }
 
 type Secrets = {
@@ -192,72 +178,7 @@ export const handler = wrapConnectHandler<CalendarEventWebhook>(async (input, cl
       }
     }
   }
-
-  const pipeline = await getPipeline(accessToken, scriptConfig.locationId, scriptConfig.pipelineId)
-  // Terros saves the stage after the event, so the account may not have it yet when the event is created. A new
-  // event only exists once the account reached Appointment Set, so that stage is implied instead of read.
-  const stage =
-    payload.action === 'add'
-      ? findImpliedStage(pipeline, scriptConfig.stageMappings)
-      : account.workflowStageName
-        ? resolveStage(pipeline, account.workflowStageName, scriptConfig.stageMappings)
-        : undefined
-  const existingOpportunity = await findOpportunity(accessToken, scriptConfig, contactId)
-
-  if (!existingOpportunity) {
-    if (!stage) {
-      console.log(`Skipped creating a GoHighLevel opportunity for ${account.accountId}: no stage to create it in`)
-      return
-    }
-    const opportunityInput = toOpportunity(account, scriptConfig, contactId, stage.id, assignedUserId)
-    const createdOpportunity = await ghlApi<{
-      opportunity: GoHighLevelOpportunity
-    }>(accessToken, '/opportunities/', {
-      method: 'POST',
-      body: JSON.stringify(opportunityInput),
-    })
-    return
-  }
-
-  const opportunityUpdate = getOpportunityUpdate(existingOpportunity, assignedUserId)
-  if (!opportunityUpdate) {
-    console.log(`Left GoHighLevel opportunity ${existingOpportunity.id} as is for ${account.accountId}`)
-    return
-  }
-
-  await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, `/opportunities/${existingOpportunity.id}`, {
-    method: 'PUT',
-    body: JSON.stringify(opportunityUpdate),
-  })
 })
-
-const impliedStageName = 'Appointment Set'
-
-function resolveStage(
-  pipeline: GoHighLevelPipeline,
-  terrosStageName: string,
-  stageMappings: Record<string, string> | undefined
-): GoHighLevelPipelineStage {
-  const stage = findStage(pipeline, toGhlStage(terrosStageName, stageMappings))
-  console.log(`Resolved ${terrosStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
-  return stage
-}
-
-// Unlike resolveStage this never throws: a missing or ambiguous match only skips the opportunity, not the appointment.
-function findImpliedStage(
-  pipeline: GoHighLevelPipeline,
-  stageMappings: Record<string, string> | undefined
-): GoHighLevelPipelineStage | undefined {
-  const stageName = normalizeText(toGhlStage(impliedStageName, stageMappings))
-  const stages = pipeline.stages.filter((stage) => normalizeText(stage.name) === stageName)
-  const [stage] = stages
-  if (stages.length !== 1 || !stage) {
-    console.log(`Found ${stages.length} stages named "${stageName}" in GoHighLevel pipeline ${pipeline.id}`)
-    return
-  }
-  console.log(`Resolved implied ${impliedStageName} to stage ${stage.name} (${stage.id}) in ${pipeline.id}`)
-  return stage
-}
 
 async function findAppointment(
   accessToken: string,

@@ -296,11 +296,10 @@ describe('Appointment Sync: closer validation', () => {
     expect(world.log).toEqual([])
   })
 
-  test('a matched closer creates an assigned appointment and opportunity', async () => {
+  test('a matched closer creates an assigned appointment', async () => {
     await bookWithCloser('closer@hq.test')
 
     expect([...world.ghl.appts.values()].map((a) => a.assignedUserId)).toEqual(['ghl-closer'])
-    expect(world.ghl.opps.size).toBe(1)
     expect(world.terros.events.get('Event.1')!.sourceId).toBeDefined()
   })
 })
@@ -387,57 +386,18 @@ describe('Appointment Sync: link validation', () => {
   })
 })
 
-describe('Appointment Sync: stage is implied by a new event', () => {
-  function book(action: 'add' | 'update', scriptConfig: Record<string, unknown> = config, account = {}) {
-    world.addAccount({ accountId: 'Account.1', workflowStageName: undefined, ...account })
-    world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
-    return runSync(world.eventWebhook('Event.1', action), scriptConfig)
-  }
+describe('Appointment Sync: contact and appointment only', () => {
+  test.each(['add', 'update'] as const)(
+    'a %s creates the appointment without reading the stage or touching opportunities',
+    async (action) => {
+      world.addAccount({ accountId: 'Account.1', workflowStageName: undefined })
+      world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
 
-  test('a new event creates the appointment and an Appointment Set opportunity before the account has a stage', async () => {
-    await book('add')
+      await runSync(world.eventWebhook('Event.1', action))
 
-    expect(world.ghl.appts.size).toBe(1)
-    expect([...world.ghl.opps.values()].map((o) => o.pipelineStageId)).toEqual(['st-appt'])
-  })
-
-  test('a new event uses the configured Appointment Set mapping', async () => {
-    await book('add', { ...config, stageMappings: { 'Appointment Set': 'Sat' } })
-
-    expect([...world.ghl.opps.values()].map((o) => o.pipelineStageId)).toEqual(['st-sat'])
-  })
-
-  test('a new event ignores the account stage', async () => {
-    await book('add', config, { workflowStageName: 'Closed Won' })
-
-    expect([...world.ghl.opps.values()].map((o) => o.pipelineStageId)).toEqual(['st-appt'])
-  })
-
-  test('a new event still creates the appointment, quietly, when no GHL stage matches', async () => {
-    await book('add', { ...config, stageMappings: { 'Appointment Set': 'No Such Stage' } })
-
-    expect(world.ghl.appts.size).toBe(1)
-    expect(world.ghl.opps.size).toBe(0)
-  })
-
-  test('an update without an account stage still syncs the appointment and creates no opportunity', async () => {
-    await book('update')
-
-    expect(world.ghl.appts.size).toBe(1)
-    expect(world.ghl.opps.size).toBe(0)
-  })
-
-  test('an update keeps using the account stage', async () => {
-    await book('update', config, { workflowStageName: 'Sat' })
-
-    expect([...world.ghl.opps.values()].map((o) => o.pipelineStageId)).toEqual(['st-sat'])
-  })
-
-  test('an update never moves an existing opportunity', async () => {
-    world.addContact('contact-1')
-    world.addOpp('opp-1', 'contact-1', 'st-won')
-    await book('update', config, { externalLeadId: 'contact-1' })
-
-    expect(world.ghl.opps.get('opp-1')!.pipelineStageId).toBe('st-won')
-  })
+      expect(world.ghl.appts.size).toBe(1)
+      expect(world.ghl.opps.size).toBe(0)
+      expect(world.ghlWrites().filter((line) => line.includes('/opportunities'))).toEqual([])
+    }
+  )
 })
