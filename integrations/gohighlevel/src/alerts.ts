@@ -37,7 +37,7 @@ export async function sendAlert(config: AlertConfig, alert: Alert): Promise<void
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: alert.message, ...alert, recipients }),
     })
-    if (!response.ok) console.error(`GHL_SYNC_ALERT delivery failed: ${response.status} ${response.statusText}`)
+    if (!response.ok) console.error(`GHL_SYNC_ALERT delivery failed: HTTP ${response.status} ${response.statusText}`)
   } catch (error) {
     console.error(`GHL_SYNC_ALERT delivery failed: ${error instanceof Error ? error.message : error}`)
   }

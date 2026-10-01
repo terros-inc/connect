@@ -1,4 +1,4 @@
-import { getAppointmentUpdate, toAppointment } from './calendar.ts'
+import { getAppointmentUpdate, readAppointment, toAppointment } from './calendar.ts'
 
 describe('GoHighLevel appointments', () => {
   test('builds a notifying appointment with a Google Meet location', () => {
@@ -86,4 +86,27 @@ describe('GoHighLevel appointments', () => {
       ignoreFreeSlotValidation: true,
     })
   })
+})
+
+describe('readAppointment', () => {
+  const appointment = { id: 'appt-1', calendarId: 'cal', contactId: 'c1', startTime: 'a', endTime: 'b' }
+
+  test('reads the documented event wrapper', () => {
+    expect(readAppointment({ event: appointment })).toEqual(appointment)
+  })
+
+  test('reads an appointment wrapper', () => {
+    expect(readAppointment({ appointment })).toEqual(appointment)
+  })
+
+  test('reads an unwrapped appointment', () => {
+    expect(readAppointment(appointment)).toEqual(appointment)
+  })
+
+  test.each([null, 'x', [], {}, { event: null }, { event: {} }, { events: [appointment] }])(
+    'returns nothing for %j',
+    (body) => {
+      expect(readAppointment(body)).toBeUndefined()
+    }
+  )
 })

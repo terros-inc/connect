@@ -269,20 +269,49 @@ async function refuse(
   await sendAlert(config, { accountId, eventId, stage: 'Appointment Sync', message })
 }
 
+/**
+ * GoHighLevel documents the Get Appointment reply as `{ event: {...} }` (scope calendars/events.readonly), but the
+ * reply is read defensively: an `appointment` key or an unwrapped appointment object is accepted too.
+ */
+export function readAppointment(body: unknown): GoHighLevelAppointment | undefined {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return
+  for (const key of ['event', 'appointment']) {
+    const candidate: unknown = Reflect.get(body, key)
+    if (isAppointment(candidate)) return candidate
+  }
+  if (isAppointment(body)) return body
+}
+
+function isAppointment(value: unknown): value is GoHighLevelAppointment {
+  return typeof value === 'object' && value !== null && typeof Reflect.get(value, 'id') === 'string'
+}
+
+// Only the status and top-level key names are logged, never values, so a miss is diagnosable without personal data.
+function describeKeys(body: unknown): string {
+  if (typeof body !== 'object' || body === null) return `(${body === null ? 'null' : typeof body})`
+  if (Array.isArray(body)) return '(array)'
+  return Object.keys(body).join(', ') || '(none)'
+}
+
 async function findAppointment(
   accessToken: string,
   appointmentId: string
 ): Promise<GoHighLevelAppointment | undefined> {
+  let body: unknown
   try {
-    const { event } = await ghlApi<{ event: GoHighLevelAppointment | undefined }>(
-      accessToken,
-      `/calendars/events/appointments/${appointmentId}`
-    )
-    return event
+    body = await ghlApi<unknown>(accessToken, `/calendars/events/appointments/${appointmentId}`)
   } catch (error) {
-    if (isNotFound(error)) return
-    throw error
+    if (!isNotFound(error)) throw error
+    console.log(`GoHighLevel appointment lookup for ${appointmentId} returned HTTP 404`)
+    return
   }
+  const appointment = readAppointment(body)
+  if (!appointment) {
+    console.log(
+      `GoHighLevel appointment lookup for ${appointmentId} returned HTTP 200 without an appointment; top-level keys: ${describeKeys(body)}`
+    )
+  }
+  return appointment
 }
 
 // A contact id saved by another location or since deleted is not usable; the caller relinks via upsert.
