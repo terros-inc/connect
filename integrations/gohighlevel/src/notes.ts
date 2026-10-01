@@ -9,6 +9,7 @@ import {
 } from '@terros-inc/sdk'
 import { formatNote, getUserName, isNotEmpty, normalizeText } from './util.ts'
 import { type GoHighLevelUser } from './gohighlevel.ts'
+import { ALERT_NOTE_PREFIX } from './alerts.ts'
 
 export type GoHighLevelNote = {
   id: string
@@ -101,7 +102,10 @@ function getMissingNotes(accountNotes: AccountNote[], goHighLevelNotes: GoHighLe
       return noteId ? [noteId] : []
     })
   )
-  return accountNotes.filter((note) => isNotSource(note.text, 'GHL') && !syncedTerrosNoteIds.has(note.noteId))
+  return accountNotes.filter(
+    (note) =>
+      isNotSource(note.text, 'GHL') && !syncedTerrosNoteIds.has(note.noteId) && !note.text.startsWith(ALERT_NOTE_PREFIX)
+  )
 }
 
 function getIncomingNotes(accountNotes: AccountNote[], goHighLevelNotes: GoHighLevelNote[]): GoHighLevelNote[] {

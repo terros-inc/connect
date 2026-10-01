@@ -1,10 +1,14 @@
 // In-memory fake Terros API and fake GoHighLevel API behind a stubbed global fetch, for handler-level tests.
 // Any host other than the two fakes throws, so a test can never reach a live system.
 import { vi } from 'vitest'
+import manifest from '../terros.json' with { type: 'json' }
 
 export const LOCATION_ID = 'loc-1'
 export const PIPELINE_ID = 'pipe-1'
 export const CALENDAR_ID = 'cal-1'
+export const COMPANY_ID = 'co-1'
+/** The user the fake Terros API authenticates as; events owned by anyone else are invisible to an unscoped list. */
+export const CONNECT_USER = 'U.connect-key'
 export const GHL_STAGES = [
   { id: 'st-lead', name: 'Lead' },
   { id: 'st-appt', name: 'Appointment Set' },
@@ -24,8 +28,18 @@ export class FakeApis {
     appts: new Map<string, Json>(),
     notes: new Map<string, Json[]>(),
     users: [
-      { id: 'ghl-closer', email: 'closer@hq.test', firstName: 'Cora', lastName: 'Closer' },
-      { id: 'ghl-sales', email: 'sales@hq.test', firstName: 'Sam', lastName: 'Sales' },
+      {
+        id: 'ghl-closer',
+        email: 'closer@hq.test',
+        firstName: 'Cora',
+        lastName: 'Closer',
+      },
+      {
+        id: 'ghl-sales',
+        email: 'sales@hq.test',
+        firstName: 'Sam',
+        lastName: 'Sales',
+      },
     ] as Json[],
     /** "METHOD /path-prefix" -> status, one-shot */
     failNext: new Map<string, number>(),
@@ -35,7 +49,21 @@ export class FakeApis {
     events: new Map<string, Json>(),
     knownStages: new Set(['Lead', 'Appointment Set', 'Sat', 'Closed Won']),
   }
+  /**
+   * Permissions of the script under test, read from terros.json. Like the backend, the fake denies event and company
+   * reads/writes the script did not request. Undefined means no enforcement.
+   */
+  permissions: Set<string> | undefined
   private n = 0
+  asScript(slug: string) {
+    const script = manifest.scripts.find((s) => s.slug === slug)
+    if (!script) throw Error(`no script ${slug}`)
+    this.permissions = new Set(script.permissions)
+  }
+  private lacks(permission: string): boolean {
+    return this.permissions !== undefined && !this.permissions.has(permission)
+  }
+
   id(prefix: string) {
     return `${prefix}-${++this.n}`
   }
@@ -43,8 +71,18 @@ export class FakeApis {
   addAccount(a: Json & { accountId: string }) {
     const account = {
       workflowStageName: 'Appointment Set',
-      resident: { firstName: 'Test', lastName: 'Homeowner', email: 'test@home.test', phone: '+15125550123' },
-      location: { line1: '1 Main St', locality: 'Austin', countrySubd: 'TX', postal1: '78701' },
+      resident: {
+        firstName: 'Test',
+        lastName: 'Homeowner',
+        email: 'test@home.test',
+        phone: '+15125550123',
+      },
+      location: {
+        line1: '1 Main St',
+        locality: 'Austin',
+        countrySubd: 'TX',
+        postal1: '78701',
+      },
       closer: { userId: 'U.closer', email: 'closer@hq.test' },
       closerId: 'U.closer',
       ownerId: 'U.owner',
@@ -57,6 +95,7 @@ export class FakeApis {
   addEvent(e: Json & { eventId: string }) {
     const event = {
       eventType: 'Consultation',
+      ownerId: 'U.rep',
       title: 'Solar Consultation',
       eventDate: '2026-10-05T17:00:00.000Z',
       duration: 60,
@@ -79,10 +118,14 @@ export class FakeApis {
         address: a.location,
         resident: a.resident,
         externalLeadId: a.externalLeadId,
-        customFieldMap: {},
+        customFieldMap: a.customFields ?? {},
         notes: a.notes,
       },
     }
+  }
+  /** The backend sends only the id of a removed event; the event is already deleted when the script runs. */
+  removeWebhook(eventId: string) {
+    return { entity: 'Event', action: 'remove', data: { id: eventId } }
   }
   eventWebhook(eventId: string, action: 'add' | 'update' = 'update') {
     const e = this.terros.events.get(eventId)!
@@ -98,7 +141,10 @@ export class FakeApis {
         eventType: e.eventType,
         attendee: e.attendeeEmail ? { userId: 'U.closer', email: e.attendeeEmail } : undefined,
         account: e.accountId
-          ? { accountId: e.accountId, externalLeadId: this.terros.accounts.get(e.accountId)?.externalLeadId }
+          ? {
+              accountId: e.accountId,
+              externalLeadId: this.terros.accounts.get(e.accountId)?.externalLeadId,
+            }
           : undefined,
       },
     }
@@ -161,9 +207,24 @@ export class FakeApis {
   }
 
   private terrosRoute(route: string, body: Json): { status: number; json: Json } {
-    const ok = (json: Json = {}) => ({ status: 200, json: { type: 'success', ...json } })
-    const err = (error: string, message: string) => ({ status: 200, json: { type: 'error', error, message } })
-    if (!['account/get', 'account/match', 'user/list', 'calendar/event/get', 'calendar/event/list'].includes(route)) {
+    const ok = (json: Json = {}) => ({
+      status: 200,
+      json: { type: 'success', ...json },
+    })
+    const err = (error: string, message: string) => ({
+      status: 200,
+      json: { type: 'error', error, message },
+    })
+    if (
+      ![
+        'account/get',
+        'account/match',
+        'user/list',
+        'calendar/event/get',
+        'calendar/event/list',
+        'company/get',
+      ].includes(route)
+    ) {
       this.log.push(`TERROS ${route} ${JSON.stringify(body)}`)
     }
     switch (route) {
@@ -172,7 +233,9 @@ export class FakeApis {
         return account ? ok({ account }) : err('NotFound', `no account ${body.accountId}`)
       }
       case 'account/match':
-        return ok({ account: [...this.terros.accounts.values()].find((a) => a.externalLeadId === body.externalLeadId) })
+        return ok({
+          account: [...this.terros.accounts.values()].find((a) => a.externalLeadId === body.externalLeadId),
+        })
       case 'user/list':
         return ok({ users: [] })
       case 'account/upsert': {
@@ -180,6 +243,7 @@ export class FakeApis {
         const account = this.terros.accounts.get(a.accountId)
         if (!account) return err('NotFound', `no account ${a.accountId}`)
         if (a.externalLeadId) account.externalLeadId = a.externalLeadId
+        if (a.customFields) account.customFields = { ...account.customFields, ...a.customFields }
         if (a.notes) account.notes = [...account.notes, ...a.notes]
         if (a.workflowTarget) {
           const hit = [...this.terros.knownStages].find(
@@ -194,15 +258,22 @@ export class FakeApis {
         Object.assign(e!, body.event)
         return ok({ event: e })
       }
+      case 'company/get':
+        if (this.lacks('company:read')) return err('PermissionDenied', 'company:read required')
+        return ok({ company: { companyId: COMPANY_ID } })
       case 'calendar/event/get': {
+        if (this.lacks('event:read')) return err('PermissionDenied', 'event:read required')
         const event = this.terros.events.get(body.eventId)
         return event ? ok({ event }) : err('NotFound', `no event ${body.eventId}`)
       }
       case 'calendar/event/list': {
+        if (this.lacks('event:read')) return err('PermissionDenied', 'event:read required')
+        // Like the backend, a list without a companyId returns only the authenticated user's own events.
+        const companyScoped = body.companyId === COMPANY_ID
         const events = [...this.terros.events.values()].filter((e) => {
           const time = new Date(e.eventDate).getTime()
           return (
-            !e.archived &&
+            (companyScoped || e.ownerId === CONNECT_USER) &&
             (body.eventType === undefined || e.eventType === body.eventType) &&
             (body.startTime === undefined || time >= body.startTime) &&
             (body.endTime === undefined || time <= body.endTime)
@@ -215,14 +286,19 @@ export class FakeApis {
         let event = body.event.eventId
           ? this.terros.events.get(body.event.eventId)
           : [...this.terros.events.values()].find((x) => x.sourceId === body.event.sourceId)
-        if (!event) event = this.addEvent({ eventId: this.id('Event'), ownerId: 'U.connect-key', ...body.event })
+        if (!event)
+          event = this.addEvent({
+            eventId: this.id('Event'),
+            ownerId: 'U.connect-key',
+            ...body.event,
+          })
         else Object.assign(event, body.event)
         return ok({ event })
       }
       case 'calendar/event/remove': {
-        const event = this.terros.events.get(body.eventId)
-        if (body.archive && event) event.archived = true
-        else this.terros.events.delete(body.eventId)
+        // The backend ignores archive and always hard-deletes; removing a Consultation needs event:manage.
+        if (this.lacks('event:manage')) return err('PermissionDenied', 'event:manage required')
+        if (!this.terros.events.delete(body.eventId)) return err('NotFound', `no event ${body.eventId}`)
         return ok()
       }
       default:
@@ -242,7 +318,10 @@ export class FakeApis {
     const notFound = { status: 404, json: { message: 'Not found' } }
     let m: RegExpMatchArray | null
     if ((m = path.match(/^\/locations\/([^/]+)$/)))
-      return { status: 200, json: { location: { id: m[1], companyId: 'co-1' } } }
+      return {
+        status: 200,
+        json: { location: { id: m[1], companyId: 'co-1' } },
+      }
     if (path === '/users/search') {
       const ids = q.get('ids')?.split(',')
       const query = q.get('query')?.toLowerCase()
@@ -259,12 +338,20 @@ export class FakeApis {
       )
       const id = hit?.id ?? this.id('contact')
       this.ghl.contacts.set(id, { ...hit, ...body, id })
-      return { status: 200, json: { contact: { id, locationId: body.locationId } } }
+      return {
+        status: 200,
+        json: { contact: { id, locationId: body.locationId } },
+      }
     }
     if ((m = path.match(/^\/contacts\/([^/]+)\/notes$/))) {
       const list = this.ghl.notes.get(m[1]!) ?? []
       if (method === 'POST') {
-        const note = { id: this.id('note'), contactId: m[1], dateAdded: new Date().toISOString(), ...body }
+        const note = {
+          id: this.id('note'),
+          contactId: m[1],
+          dateAdded: new Date().toISOString(),
+          ...body,
+        }
         this.ghl.notes.set(m[1]!, [...list, note])
         return { status: 200, json: { note } }
       }
@@ -277,7 +364,12 @@ export class FakeApis {
       return { status: 200, json: { contact: c } }
     }
     if (path === '/opportunities/pipelines') {
-      return { status: 200, json: { pipelines: [{ id: PIPELINE_ID, locationId: LOCATION_ID, stages: GHL_STAGES }] } }
+      return {
+        status: 200,
+        json: {
+          pipelines: [{ id: PIPELINE_ID, locationId: LOCATION_ID, stages: GHL_STAGES }],
+        },
+      }
     }
     if (path === '/opportunities/search') {
       const opportunities = [...this.ghl.opps.values()].filter(
@@ -310,7 +402,10 @@ export class FakeApis {
       if (method === 'PUT') Object.assign(a, body)
       return { status: 200, json: method === 'PUT' ? a : { event: a } }
     }
-    return { status: 501, json: { message: `fake GHL: unhandled ${method} ${path}` } }
+    return {
+      status: 501,
+      json: { message: `fake GHL: unhandled ${method} ${path}` },
+    }
   }
 }
 
@@ -319,7 +414,11 @@ export function makeInput(payload: unknown, scriptConfig: Json) {
     runId: 'ConnectRun.test' as const,
     context: {
       payload,
-      config: { scriptConfig, secrets: { privateIntegrationToken: 'TEST-TOKEN' }, authorization: 'ApiKey test' },
+      config: {
+        scriptConfig,
+        secrets: { privateIntegrationToken: 'TEST-TOKEN' },
+        authorization: 'ApiKey test',
+      },
     },
   } as any
 }

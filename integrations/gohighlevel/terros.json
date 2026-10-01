@@ -28,6 +28,26 @@
           "type": "mapping",
           "dataType": "Account",
           "description": "Map an account field to a GHL custom contact field using merge-field key"
+        },
+        {
+          "name": "opportunityStages",
+          "type": "string",
+          "description": "Comma-separated Terros stage names that create the GHL opportunity if missing (default: Appointment Set)"
+        },
+        {
+          "name": "opportunityIdFieldId",
+          "type": "string",
+          "description": "Optional Terros custom field ID (CF.…) that receives the GHL opportunity ID"
+        },
+        {
+          "name": "alertWebhookUrl",
+          "type": "string",
+          "description": "Optional URL that receives a JSON POST when an account in an opportunity stage has no closer"
+        },
+        {
+          "name": "alertRecipients",
+          "type": "string",
+          "description": "Optional comma-separated emails included in the alert payload for the webhook to notify"
         }
       ],
       "authSchema": {
@@ -90,7 +110,7 @@
       "authSchema": {
         "privateIntegrationToken": "GoHighLevel private integration token"
       },
-      "permissions": ["account:list", "account:save", "event:save"],
+      "permissions": ["account:list", "account:save", "event:read", "event:save"],
       "slug": "gohighlevel-appointment-sync"
     },
     {
@@ -110,7 +130,7 @@
         }
       ],
       "authSchema": {},
-      "permissions": ["event:save", "event:delete"],
+      "permissions": ["company:read", "event:read", "event:save", "event:manage"],
       "slug": "gohighlevel-appointment-webhook"
     }
   ]

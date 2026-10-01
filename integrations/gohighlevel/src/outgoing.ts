@@ -1,8 +1,10 @@
 import {
   type AccountId,
   type AccountNote,
+  type CustomFieldId,
   type CustomFieldMap,
   type SmallAddress,
+  type TerrosClient,
   type TinyResidentData,
   type UserId,
   wrapConnectHandler,
@@ -21,13 +23,23 @@ import {
   type GoHighLevelOpportunity,
 } from './gohighlevel.ts'
 import { toGhlStage } from './config.ts'
+import { hasAlertNote, saveAlertNote, sendAlert, splitList } from './alerts.ts'
 
 type ScriptConfig = {
   locationId: string
   pipelineId: string
   stageMappings?: Record<string, string>
   contactFieldMappings?: Record<string, string>
+  /** Comma-separated Terros stage names that create the opportunity; defaults to Appointment Set. */
+  opportunityStages?: string
+  /** Terros custom field ID (CF.…) that receives the GoHighLevel opportunity ID. */
+  opportunityIdFieldId?: string
+  alertWebhookUrl?: string
+  alertRecipients?: string
 }
+
+const defaultOpportunityStages = ['Appointment Set']
+const noCloserAlert = 'no closer'
 
 type Secrets = {
   privateIntegrationToken: string
@@ -81,13 +93,23 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const account = payload.data
+  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
+  const workflowStageName = account.workflowState?.stageName
+  const createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
   const closer = account.closer
   if (!closer) {
     console.log(`Skipping sync for ${account.id}: no closer yet`)
+    if (createsOpportunity && !hasAlertNote(account.notes, noCloserAlert)) {
+      await sendAlert(scriptConfig, {
+        accountId: account.id,
+        stage: workflowStageName!,
+        message: `Terros account ${account.id} is in ${workflowStageName} with no closer, so it was not synced to GoHighLevel.`,
+      })
+      await saveAlertNote(client, account.id, noCloserAlert, account.ownerId)
+    }
     return
   }
 
-  const scriptConfig = input.context.config.scriptConfig as unknown as ScriptConfig
   const { locationId, pipelineId } = scriptConfig
   const secrets = input.context.config.secrets as unknown as Secrets
   const accessToken = secrets.privateIntegrationToken
@@ -165,38 +187,75 @@ export const handler = wrapConnectHandler<AccountChangeWebhook>(async (input, cl
   }
 
   const route = { locationId, pipelineId }
-  const existingOpportunity = await findOpportunity(accessToken, route, contact.id)
-  const workflowStageName = account.workflowState?.stageName
-  if (!workflowStageName) {
-    throw Error(`${account.id} has no workflow stage name`)
-  }
-  const pipeline = await getPipeline(accessToken, locationId, pipelineId)
-  const stageName = toGhlStage(workflowStageName, scriptConfig.stageMappings)
-  const stage = findStage(pipeline, stageName)
-  const opportunityInput = toOpportunity(
-    { accountId: account.id, resident: account.resident },
-    route,
-    contact.id,
-    stage.id,
-    assignedTo
-  )
+  let opportunity = await findOpportunity(accessToken, route, contact.id)
+  if (!opportunity) {
+    if (!createsOpportunity) {
+      console.log(
+        `No GoHighLevel opportunity for ${account.id}: ${workflowStageName ?? 'no stage'} does not create one`
+      )
+      return
+    }
 
-  if (!existingOpportunity) {
-    const createdOpportunity = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
-      method: 'POST',
-      body: JSON.stringify(opportunityInput),
-    })
-    return
+    const pipeline = await getPipeline(accessToken, locationId, pipelineId)
+    const stage = findStage(pipeline, toGhlStage(workflowStageName!, scriptConfig.stageMappings))
+    // Look again just before creating: another save of this account may have created it since the first look.
+    opportunity = await findOpportunity(accessToken, route, contact.id)
+    if (!opportunity) {
+      const opportunityInput = toOpportunity(
+        { accountId: account.id, resident: account.resident },
+        route,
+        contact.id,
+        stage.id,
+        assignedTo
+      )
+      const created = await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, '/opportunities/', {
+        method: 'POST',
+        body: JSON.stringify(opportunityInput),
+      })
+      console.log(`Created GoHighLevel opportunity ${created.opportunity.id} for ${account.id} in ${stage.name}`)
+      await saveOpportunityId(client, account, scriptConfig.opportunityIdFieldId, created.opportunity.id)
+      return
+    }
   }
 
-  const opportunityUpdate = getOpportunityUpdate(existingOpportunity, assignedTo)
+  await saveOpportunityId(client, account, scriptConfig.opportunityIdFieldId, opportunity.id)
+  const opportunityUpdate = getOpportunityUpdate(opportunity, assignedTo)
   if (!opportunityUpdate) {
-    console.log(`Left GoHighLevel opportunity ${existingOpportunity.id} as is for ${account.id}`)
+    console.log(`Left GoHighLevel opportunity ${opportunity.id} as is for ${account.id}`)
     return
   }
 
-  await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, `/opportunities/${existingOpportunity.id}`, {
+  await ghlApi<{ opportunity: GoHighLevelOpportunity }>(accessToken, `/opportunities/${opportunity.id}`, {
     method: 'PUT',
     body: JSON.stringify(opportunityUpdate),
   })
 })
+
+export function isOpportunityStage(stageName: string | undefined, configured: string | undefined): boolean {
+  if (!stageName) return false
+  const stages = splitList(configured)
+  const normalized = (isNotEmpty(stages) ? stages : defaultOpportunityStages).map((stage) => stage.toLowerCase())
+  return normalized.includes(stageName.trim().toLowerCase())
+}
+
+// Skips the write when the field is not configured or already holds the id, so the account notification it causes
+// settles after one extra run.
+async function saveOpportunityId(
+  client: TerrosClient,
+  account: AccountChangeData,
+  fieldId: string | undefined,
+  opportunityId: string
+): Promise<void> {
+  if (!fieldId) return
+  if (!fieldId.startsWith('CF.')) {
+    console.warn(`Ignoring opportunityIdFieldId ${fieldId}: expected a Terros custom field ID like CF.…`)
+    return
+  }
+  if (account.customFieldMap?.[fieldId as CustomFieldId] === opportunityId) return
+
+  await client.account.upsert({
+    requestType: 'update',
+    account: { accountId: account.id, customFields: { [fieldId as CustomFieldId]: opportunityId } },
+  })
+  console.log(`Saved opportunity ${opportunityId} to ${account.id}`)
+}

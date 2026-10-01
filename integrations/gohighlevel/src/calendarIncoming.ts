@@ -61,8 +61,8 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
   }
 
   if (!eventTime) {
-    await client.calendar.event.remove({ eventId: existingEvent.eventId, archive: true })
-    console.log(`Archived ${existingEvent.eventId} for cancelled ${appointment.appointmentId}`)
+    await client.calendar.event.remove({ eventId: existingEvent.eventId })
+    console.log(`Removed ${existingEvent.eventId} for cancelled ${appointment.appointmentId}`)
     return
   }
 
@@ -76,28 +76,38 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook>(async (
   console.log(`Updated ${updatedEvent.eventId} from ${appointment.appointmentId}`)
 })
 
-const linkedEventWindowMs = 90 * 24 * 60 * 60 * 1000
+const day = 24 * 60 * 60 * 1000
+// The list API cannot filter by sourceId or search without a date range, so widen the window until the link is found.
+const linkedEventWindowsMs = [90 * day, 730 * day]
 
 function isCancelled(appointment: GoHighLevelWorkflowCalendar): boolean {
   return appointment.appoinmentStatus === 'cancelled' || appointment.status === 'cancelled'
 }
 
-// Finds the Terros event linked by sourceId without ever creating one. The window is wide because the
-// Terros event still has the previous time when GoHighLevel reschedules it.
+// Finds the Terros event linked by sourceId without ever creating one. The Terros event still has the previous time when
+// GoHighLevel reschedules it, so the window is centered on the new time and widened if nothing matches. The list is
+// scoped to the company because without a companyId it returns only the authenticated user's own events.
 async function findLinkedEvent(
   client: TerrosClient,
   appointment: GoHighLevelWorkflowCalendar
 ): Promise<CalendarEventDataWithDetails | undefined> {
   const startTime = appointment.startTime
-    ? DateTime.fromISO(appointment.startTime, { zone: appointment.selectedTimezone ?? 'utc' })
+    ? DateTime.fromISO(appointment.startTime, {
+        zone: appointment.selectedTimezone ?? 'utc',
+      })
     : undefined
   const center = startTime?.isValid ? startTime.toMillis() : Date.now()
-  const { events } = await client.calendar.event.list({
-    startTime: center - linkedEventWindowMs,
-    endTime: center + linkedEventWindowMs,
-    eventType: 'Consultation',
-  })
-  return events.find((event) => event.sourceId === appointment.appointmentId)
+  const { company } = await client.company.get({})
+  for (const windowMs of linkedEventWindowsMs) {
+    const { events } = await client.calendar.event.list({
+      companyId: company.companyId,
+      startTime: center - windowMs,
+      endTime: center + windowMs,
+      eventType: 'Consultation',
+    })
+    const event = events.find((event) => event.sourceId === appointment.appointmentId)
+    if (event) return event
+  }
 }
 
 export function toEventTime(
@@ -107,10 +117,14 @@ export function toEventTime(
   if (!appointment.endTime) throw Error('Appointment is missing endTime')
   if (!appointment.selectedTimezone) throw Error('Appointment is missing selectedTimezone')
 
-  const startTime = DateTime.fromISO(appointment.startTime, { zone: appointment.selectedTimezone })
+  const startTime = DateTime.fromISO(appointment.startTime, {
+    zone: appointment.selectedTimezone,
+  })
   if (!startTime.isValid) throw Error(`Invalid startTime: ${startTime.invalidExplanation}`)
 
-  const endTime = DateTime.fromISO(appointment.endTime, { zone: appointment.selectedTimezone })
+  const endTime = DateTime.fromISO(appointment.endTime, {
+    zone: appointment.selectedTimezone,
+  })
   if (!endTime.isValid) throw Error(`Invalid endTime: ${endTime.invalidExplanation}`)
 
   const startDate = startTime.toMillis()
