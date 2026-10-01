@@ -32,7 +32,8 @@
   "files": [
     "cli.js",
     "terros.yml",
-    "dist"
+    "dist",
+    "configSchema.json"
   ],
   "homepage": "https://github.com/terros-inc/connect/tree/main/cli#readme",
   "keywords": [
