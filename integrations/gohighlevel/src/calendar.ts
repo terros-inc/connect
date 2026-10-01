@@ -17,7 +17,8 @@ import {
   MAX_APPOINTMENT_CREATES,
   realSourceId,
 } from './creationGuard.ts'
-import { isOn, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
+import { isSwitchOn, type RunSwitches } from './config.ts'
 import { sendAlert, type AlertConfig } from './alerts.ts'
 
 type ScriptConfig = RunSwitches &
@@ -84,11 +85,12 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConf
   const secrets = input.context.config.secrets as Secrets
   const accessToken = secrets.privateIntegrationToken
 
-  if (isOn(scriptConfig.disabled)) {
+  if (isSwitchOn('disabled', scriptConfig.disabled)) {
     console.log(`GoHighLevel Appointment Sync is disabled by config, skipping Terros event ${payload.data.id}`)
     return
   }
-  const dryRun = isOn(scriptConfig.dryRun)
+  checkConfig('appointmentSync', scriptConfig)
+  const dryRun = isSwitchOn('dryRun', scriptConfig.dryRun)
 
   if (payload.action === 'remove') {
     await cancelAppointment(client, accessToken, scriptConfig, payload.data.id, payload.data.sourceId, dryRun)

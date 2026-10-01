@@ -22,7 +22,8 @@ import {
   toOpportunity,
   type GoHighLevelOpportunity,
 } from './gohighlevel.ts'
-import { isOn, toGhlStage, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
+import { isSwitchOn, toGhlStage, type RunSwitches } from './config.ts'
 import { hasAlertNote, saveAlertNote, sendAlert, splitList } from './alerts.ts'
 
 type ScriptConfig = RunSwitches & {
@@ -86,10 +87,11 @@ type ContactResponse = {
 export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConfig>(async (input, client) => {
   const payload = input.context.payload
   const scriptConfig = input.context.config.scriptConfig
-  if (isOn(scriptConfig.disabled)) {
+  if (isSwitchOn('disabled', scriptConfig.disabled)) {
     console.log(`GoHighLevel Account Sync is disabled by config, skipping ${payload.data.id}`)
     return
   }
+  checkConfig('accountSync', scriptConfig)
   console.log(`Received account ${payload.action} for ${payload.data.id}`)
 
   if (payload.action === 'remove') {
@@ -119,7 +121,7 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   const accessToken = secrets.privateIntegrationToken
   const assignedTo = await findUserId(accessToken, locationId, closer.email)
   const contactInput = toContact(account, locationId, scriptConfig.contactFieldMappings, assignedTo)
-  if (isOn(scriptConfig.dryRun)) {
+  if (isSwitchOn('dryRun', scriptConfig.dryRun)) {
     console.log(`DRY RUN: would sync account ${account.id} to GoHighLevel; nothing was written`)
     return
   }
