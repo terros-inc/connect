@@ -51,14 +51,6 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, Scri
     throw Error(`GoHighLevel location ${locationId} does not match configured location ${scriptConfig.locationId}`)
   }
 
-  // The workflow posts a blank stage for a contact with no opportunity; there is nothing to move.
-  if (!stageName) {
-    console.log(
-      `GoHighLevel workflow webhook for contact ${contactId} at location ${locationId} has no pipeline_stage, skipping`
-    )
-    return
-  }
-
   // Expected when HQ books an appointment directly in GoHighLevel: that contact was never in Terros. The webhook alone
   // cannot tell that apart from a lost link, so the message stays explicit and nothing alerts.
   const match = await client.account.match({ externalLeadId: contactId })
@@ -69,34 +61,45 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, Scri
     )
     return
   }
-  const workflowTarget = toTerrosStage(stageName, scriptConfig.stageMappings)
-  if (hasTerrosStageMapping(stageName, scriptConfig.stageMappings)) {
-    console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
-  } else {
-    console.warn(
-      `No stageMappings entry matched pipeline stage ${stageName}; using the GoHighLevel stage name as the Terros workflow stage`
+  if (stageName) {
+    const workflowTarget = toTerrosStage(stageName, scriptConfig.stageMappings)
+    if (hasTerrosStageMapping(stageName, scriptConfig.stageMappings)) {
+      console.log(`Resolved pipeline stage ${stageName} to workflow stage ${workflowTarget}`)
+    } else {
+      console.warn(
+        `No stageMappings entry matched pipeline stage ${stageName}; using the GoHighLevel stage name as the Terros workflow stage`
+      )
+    }
+
+    if (isSwitchOn('dryRun', scriptConfig.dryRun)) {
+      console.log(`DRY RUN: would move ${account.accountId} to ${workflowTarget}; nothing was written`)
+      return
+    }
+
+    // The stage is the point of this webhook: write it before the notes so a notes failure cannot block it.
+    await client.account.upsert({
+      requestType: 'update',
+      account: {
+        accountId: account.accountId,
+        workflowTarget,
+        sourceStatus: stageName,
+        externalLeadId: contactId,
+        lastActionDate: Date.now(),
+      },
+    })
+    console.log(
+      `Sent workflow stage ${workflowTarget} to ${account.accountId} from GoHighLevel pipeline stage ${stageName}`
     )
+  } else {
+    // A note-change trigger carries no pipeline stage (so does a contact with no opportunity). Skip the stage write only.
+    console.log(
+      `GoHighLevel contact ${contactId} at location ${locationId}: pipeline stage is blank, so only notes are imported`
+    )
+    if (isSwitchOn('dryRun', scriptConfig.dryRun)) {
+      console.log(`DRY RUN: would import notes for ${account.accountId}; nothing was written`)
+      return
+    }
   }
-
-  if (isSwitchOn('dryRun', scriptConfig.dryRun)) {
-    console.log(`DRY RUN: would move ${account.accountId} to ${workflowTarget}; nothing was written`)
-    return
-  }
-
-  // The stage is the point of this webhook: write it before the notes so a notes failure cannot block it.
-  await client.account.upsert({
-    requestType: 'update',
-    account: {
-      accountId: account.accountId,
-      workflowTarget,
-      sourceStatus: stageName,
-      externalLeadId: contactId,
-      lastActionDate: Date.now(),
-    },
-  })
-  console.log(
-    `Sent workflow stage ${workflowTarget} to ${account.accountId} from GoHighLevel pipeline stage ${stageName}`
-  )
 
   try {
     const secrets = input.context.config.secrets as Secrets

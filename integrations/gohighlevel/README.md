@@ -102,7 +102,7 @@ HQ's Account Sync and Opportunity Webhook config, with ids replaced by placehold
 - `Config disabled is …` or `Config dryRun is …` a switch holds text that is not true or false.
 - `No GoHighLevel user matched` a closer's email has no GoHighLevel user, so nothing is assigned.
 - `no Terros account is linked to this contact, skipping` the Opportunity Webhook found no Terros account for the contact. Expected for appointments booked directly in GoHighLevel; it cannot tell that apart from a lost link, and nothing alerts.
-- `has no pipeline_stage, skipping` the workflow posted a blank stage, for example for a contact with no opportunity.
+- `pipeline stage is blank, so only notes are imported` the workflow posted no stage (a note-change trigger, or a contact with no opportunity). The stage write is skipped and notes are imported as usual.
 - `No stageMappings entry matched pipeline stage` the GoHighLevel stage name was sent to Terros as is.
 
 ## Developing and publishing
