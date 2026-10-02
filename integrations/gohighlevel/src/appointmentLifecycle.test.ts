@@ -133,7 +133,9 @@ describe('Appointment Webhook', () => {
     linkedSetup()
     world.asScript('gohighlevel-appointment-webhook')
 
-    expect(world.permissions).toEqual(new Set(['company:read', 'event:read', 'event:save', 'event:manage']))
+    expect(world.permissions).toEqual(
+      new Set(['account:list', 'account:save', 'company:read', 'event:read', 'event:save', 'event:manage', 'user:list'])
+    )
     world.permissions!.delete('event:read')
     await expect(
       appointmentWebhook(makeInput({ location: { id: LOCATION_ID }, calendar: rescheduled }, config))

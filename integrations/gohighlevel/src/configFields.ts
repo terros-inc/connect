@@ -66,7 +66,7 @@ export const configFields = {
     name: 'alertWebhookUrl',
     type: 'string',
     description:
-      'Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged.',
+      'Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused; Appointment Webhook: the GoHighLevel assignee of an appointment has no matching Terros user). A failed delivery is only logged.',
   },
   alertRecipients: {
     name: 'alertRecipients',
@@ -103,7 +103,7 @@ export const scriptFieldNames = {
   ],
   opportunityWebhook: ['locationId', 'stageMappings', 'disabled', 'dryRun'],
   appointmentSync: ['locationId', 'calendarId', 'alertWebhookUrl', 'alertRecipients', 'disabled', 'dryRun'],
-  appointmentWebhook: ['locationId', 'calendarId', 'disabled', 'dryRun'],
+  appointmentWebhook: ['locationId', 'calendarId', 'alertWebhookUrl', 'alertRecipients', 'disabled', 'dryRun'],
 } as const satisfies Record<string, readonly FieldName[]>
 
 export type ScriptKey = keyof typeof scriptFieldNames

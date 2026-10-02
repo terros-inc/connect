@@ -3,15 +3,30 @@ import {
   type CalendarEventDataWithDetails,
   type CompanyId,
   type TerrosClient,
+  type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
+import { ghlApi, isNotFound } from './util.ts'
+import { findUser } from './gohighlevel.ts'
 import { isCreatingMarker } from './creationGuard.ts'
 import { checkConfig } from './configFields.ts'
 import { isSwitchOn, type RunSwitches } from './config.ts'
+import { decideAttendee, parseTime, readTerrosUsers } from './closer.ts'
+import { hasAlertNote, saveAlertNote, sendAlert, type AlertConfig } from './alerts.ts'
 
-type ScriptConfig = RunSwitches & {
-  locationId: string
-  calendarId: string
+type ScriptConfig = RunSwitches &
+  AlertConfig & {
+    locationId: string
+    calendarId: string
+  }
+
+type Secrets = {
+  privateIntegrationToken?: string
+}
+
+type GoHighLevelAppointment = {
+  assignedUserId?: string
+  dateUpdated?: string
 }
 
 type GoHighLevelWorkflowCalendar = {
@@ -80,9 +95,21 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook, void, S
     return
   }
 
+  // Decided before anything is written, from the event as it is now, so the time update below cannot make Terros look newer.
+  const attendeeId = eventTime
+    ? await readNewAttendee(
+        client,
+        input.context.config.secrets as Secrets | undefined,
+        scriptConfig,
+        existingEvent,
+        appointment.appointmentId,
+        dryRun
+      )
+    : undefined
+
   if (dryRun) {
     console.log(
-      `DRY RUN: would ${eventTime ? `update ${existingEvent.eventId} to ${JSON.stringify(eventTime)}` : `remove ${existingEvent.eventId}`} for ${appointment.appointmentId}; nothing was written`
+      `DRY RUN: would ${eventTime ? `update ${existingEvent.eventId} to ${JSON.stringify({ ...eventTime, ...(attendeeId ? { attendeeId } : {}) })}` : `remove ${existingEvent.eventId}`} for ${appointment.appointmentId}; nothing was written`
     )
     return
   }
@@ -93,15 +120,92 @@ export const handler = wrapConnectHandler<GoHighLevelAppointmentWebhook, void, S
     return
   }
 
-  const { event: updatedEvent } = await client.calendar.event.upsert({
-    event: {
-      eventId: existingEvent.eventId,
-      eventDate: eventTime.startDate,
-      duration: eventTime.duration,
-    },
-  })
+  const eventUpdate = { eventId: existingEvent.eventId, eventDate: eventTime.startDate, duration: eventTime.duration }
+  let updatedEvent
+  try {
+    ;({ event: updatedEvent } = await client.calendar.event.upsert({
+      event: { ...eventUpdate, ...(attendeeId ? { attendeeId } : {}) },
+    }))
+  } catch (error) {
+    // Terros may refuse the new attendee (for example an availability check); the time change must still land.
+    if (!attendeeId) throw error
+    console.error(
+      `Terros refused attendee ${attendeeId} for ${existingEvent.eventId}, updating the time only: ${error instanceof Error ? error.message : error}`
+    )
+    ;({ event: updatedEvent } = await client.calendar.event.upsert({ event: eventUpdate }))
+  }
   console.log(`Updated ${updatedEvent.eventId} from ${appointment.appointmentId}`)
 })
+
+/**
+ * The attendee a linked event should get from the appointment's assignee, or undefined to leave it. Needs the
+ * GoHighLevel token (an install made before closers synced has none; the time sync then runs as before). A failure here
+ * is logged and never blocks the time update.
+ */
+async function readNewAttendee(
+  client: TerrosClient,
+  secrets: Secrets | undefined,
+  scriptConfig: ScriptConfig,
+  event: CalendarEventDataWithDetails,
+  appointmentId: string,
+  dryRun: boolean
+): Promise<UserId | undefined> {
+  const accessToken = secrets?.privateIntegrationToken
+  if (!accessToken) {
+    console.log(`Closer sync skipped for ${event.eventId}: no privateIntegrationToken secret on this script`)
+    return
+  }
+  try {
+    const { appointment, event: legacy } = await ghlApi<{
+      appointment?: GoHighLevelAppointment
+      event?: GoHighLevelAppointment
+    }>(accessToken, `/calendars/events/appointments/${appointmentId}`)
+    const found = appointment ?? legacy
+    const assignedUserId = found?.assignedUserId
+    if (!assignedUserId) return
+
+    const assignee = await findUser(accessToken, assignedUserId)
+    const terrosUsers = await readTerrosUsers(client, await readCompanyId(client))
+    const decision = decideAttendee(event, assignedUserId, assignee, parseTime(found?.dateUpdated), terrosUsers)
+    if (decision.change === 'set') {
+      console.log(`GoHighLevel assignee ${assignedUserId} of ${appointmentId} is the new attendee of ${event.eventId}`)
+      return decision.attendeeId
+    }
+    if (decision.change === 'unmatched') {
+      console.log(
+        `GoHighLevel assignee ${assignedUserId} of ${appointmentId} was not applied to ${event.eventId}: ${decision.reason}`
+      )
+      if (!dryRun) await alertUnmatched(client, scriptConfig, event, assignedUserId, decision.reason)
+    }
+  } catch (error) {
+    if (isNotFound(error)) console.log(`Closer sync skipped for ${event.eventId}: ${appointmentId} was not found`)
+    else console.error(`Closer sync failed for ${event.eventId}: ${error instanceof Error ? error.message : error}`)
+  }
+}
+
+// One alert per event, remembered in a note on the account (see alerts.ts), so a webhook for every later change of the
+// same appointment does not repeat it.
+async function alertUnmatched(
+  client: TerrosClient,
+  scriptConfig: ScriptConfig,
+  event: CalendarEventDataWithDetails,
+  goHighLevelUserId: string,
+  reason: string
+): Promise<void> {
+  const accountId = event.accountId
+  if (!accountId) return
+  const kind = `closer unmatched ${event.eventId}`
+  const { account } = await client.account.get({ accountId })
+  if (hasAlertNote(account.notes, kind)) return
+
+  await sendAlert(scriptConfig, {
+    accountId,
+    eventId: event.eventId,
+    stage: 'Appointment Webhook',
+    message: `The closer of GoHighLevel appointment for Terros event ${event.eventId} changed to GoHighLevel user ${goHighLevelUserId}, but ${reason}, so the Terros event keeps its attendee.`,
+  })
+  await saveAlertNote(client, accountId, kind, account.ownerId ?? event.ownerId)
+}
 
 const day = 24 * 60 * 60 * 1000
 // The list API cannot filter by sourceId or search without a date range, so widen the window until the link is found.

@@ -1,5 +1,13 @@
 import { type AccountData, type CustomFieldMap, type SmallAddress, type TinyResidentData } from '@terros-inc/sdk'
-import { ghlApi, isEmpty, normalizeText, readString, toContactFields, type GoHighLevelCustomField } from './util.ts'
+import {
+  ghlApi,
+  isEmpty,
+  isNotFound,
+  normalizeText,
+  readString,
+  toContactFields,
+  type GoHighLevelCustomField,
+} from './util.ts'
 
 export type GoHighLevelUser = {
   id: string
@@ -98,6 +106,16 @@ export async function getPipeline(
   const pipeline = response.pipelines.find((candidate) => candidate.id === pipelineId)
   if (!pipeline) throw Error(`GoHighLevel pipeline ${pipelineId} was not found in location ${locationId}`)
   return pipeline
+}
+
+/** One user by id. GET /users/{userId} answers with the user itself, not wrapped. */
+export async function findUser(accessToken: string, userId: string): Promise<GoHighLevelUser | undefined> {
+  try {
+    return await ghlApi<GoHighLevelUser>(accessToken, `/users/${encodeURIComponent(userId)}`)
+  } catch (error) {
+    if (!isNotFound(error)) throw error
+    console.log(`GoHighLevel user ${userId} was not found`)
+  }
 }
 
 export async function findUserId(

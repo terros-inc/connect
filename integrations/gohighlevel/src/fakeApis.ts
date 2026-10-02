@@ -52,6 +52,17 @@ export class FakeApis {
     knownStages: new Set(['Lead', 'Appointment Set', 'Sat', 'Closed Won']),
     /** When set, another run's creation marker replaces the one just written, as in a race. */
     stealClaimWith: undefined as string | undefined,
+    users: [
+      { userId: 'U.closer', email: 'closer@hq.test' },
+      { userId: 'U.sales', email: 'sales@hq.test' },
+    ] as Json[],
+    /** When set, an upsert that sets an attendee is refused with this message, as an availability check would. */
+    refuseAttendee: undefined as string | undefined,
+  }
+  /** Milliseconds since the epoch. Every write to either fake stamps its record with the next tick, so order is testable. Starts after the stamps tests give seeded records. */
+  clock = Date.parse('2026-10-01T12:01:00.000Z')
+  tick() {
+    return (this.clock += 1000)
   }
   /**
    * Permissions of the script under test, read from terros.json. Like the backend, the fake denies event and company
@@ -97,7 +108,7 @@ export class FakeApis {
     return account
   }
   addEvent(e: Json & { eventId: string }) {
-    const event = {
+    const event: Json = {
       eventType: 'Consultation',
       ownerId: 'U.rep',
       title: 'Solar Consultation',
@@ -105,8 +116,19 @@ export class FakeApis {
       duration: 60,
       ...e,
     }
+    if (event.attendeeEmail && !event.attendeeId) event.attendeeId = this.userByRef(event.attendeeEmail)?.userId
     this.terros.events.set(event.eventId, event)
     return event
+  }
+  userByRef(ref: string) {
+    return this.terros.users.find((u) => u.userId === ref || u.email.toLowerCase() === ref.toLowerCase())
+  }
+  /** Sets an event's attendee as the backend does, from a UserId or email, and keeps the email the webhook payload shows. */
+  private setAttendee(event: Json, ref: string | null | undefined) {
+    if (ref === undefined) return
+    const user = ref ? this.userByRef(ref) : undefined
+    event.attendeeId = user?.userId
+    event.attendeeEmail = user?.email
   }
   accountWebhook(accountId: string, action: 'add' | 'update' = 'update') {
     const a = this.terros.accounts.get(accountId)!
@@ -141,9 +163,10 @@ export class FakeApis {
         title: e.title,
         eventDate: e.eventDate,
         duration: e.duration,
+        updatedAt: e.updatedAt === undefined ? undefined : new Date(e.updatedAt).toISOString(),
         sourceId: e.sourceId,
         eventType: e.eventType,
-        attendee: e.attendeeEmail ? { userId: 'U.closer', email: e.attendeeEmail } : undefined,
+        attendee: e.attendeeEmail ? { userId: e.attendeeId ?? 'U.closer', email: e.attendeeEmail } : undefined,
         account: e.accountId
           ? {
               accountId: e.accountId,
@@ -241,7 +264,8 @@ export class FakeApis {
           account: [...this.terros.accounts.values()].find((a) => a.externalLeadId === body.externalLeadId),
         })
       case 'user/list':
-        return ok({ users: [] })
+        if (this.lacks('user:list')) return err('PermissionDenied', 'user:list required')
+        return ok({ users: this.terros.users })
       case 'account/upsert': {
         const a = body.account
         const account = this.terros.accounts.get(a.accountId)
@@ -259,7 +283,7 @@ export class FakeApis {
       }
       case 'calendar/event/update': {
         const e = this.terros.events.get(body.event.eventId)
-        Object.assign(e!, body.event)
+        Object.assign(e!, body.event, { updatedAt: this.tick() })
         if (this.terros.stealClaimWith && String(body.event.sourceId).startsWith('pending:'))
           e!.sourceId = this.terros.stealClaimWith
         return ok({ event: e })
@@ -298,7 +322,12 @@ export class FakeApis {
             ownerId: 'U.connect-key',
             ...body.event,
           })
-        else Object.assign(event, body.event)
+        else {
+          const { attendeeId, ...fields } = body.event
+          if (attendeeId && this.terros.refuseAttendee) return err('APIError', this.terros.refuseAttendee)
+          Object.assign(event, fields, { updatedAt: this.tick() })
+          this.setAttendee(event, attendeeId)
+        }
         return ok({ event })
       }
       case 'calendar/event/remove': {
@@ -335,6 +364,10 @@ export class FakeApis {
         ids ? ids.includes(u.id) : query ? u.email.toLowerCase().includes(query) : true
       )
       return { status: 200, json: { users } }
+    }
+    if ((m = path.match(/^\/users\/([^/]+)$/))) {
+      const user = this.ghl.users.find((u) => u.id === m![1])
+      return user ? { status: 200, json: user } : notFound
     }
     if (path === '/contacts/upsert') {
       const hit = [...this.ghl.contacts.values()].find(
@@ -412,7 +445,7 @@ export class FakeApis {
         return { status: 200, json: { appointment: a, traceId: 'trace-1' } }
       if (method === 'GET' && this.ghl.appointmentLookup === 'noAppointment')
         return { status: 200, json: { traceId: 'trace-1' } }
-      if (method === 'PUT') Object.assign(a, body)
+      if (method === 'PUT') Object.assign(a, body, { dateUpdated: new Date(this.tick()).toISOString() })
       return { status: 200, json: method === 'PUT' ? a : { event: a } }
     }
     return {

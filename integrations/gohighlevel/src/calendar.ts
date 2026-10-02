@@ -19,6 +19,7 @@ import {
 } from './creationGuard.ts'
 import { checkConfig } from './configFields.ts'
 import { isSwitchOn, type RunSwitches } from './config.ts'
+import { parseTime, terrosShouldOverwriteAssignee } from './closer.ts'
 import { sendAlert, type AlertConfig } from './alerts.ts'
 
 type ScriptConfig = RunSwitches &
@@ -72,6 +73,7 @@ type GoHighLevelAppointment = {
   endTime: string
   appointmentStatus: string
   assignedUserId?: string
+  dateUpdated?: string
 }
 
 type GoHighLevelContact = {
@@ -156,7 +158,12 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, ScriptConf
       return
     }
 
-    const appointmentUpdate = getAppointmentUpdate(existingAppointment, appointmentInput(contactId))
+    const input = appointmentInput(contactId)
+    // The event's time is read only when the two closers differ, to see which side changed last.
+    const terrosUpdatedAt = hasAssigneeConflict(existingAppointment, input)
+      ? (await client.calendar.event.get({ eventId: event.id })).event.updatedAt
+      : undefined
+    const appointmentUpdate = getAppointmentUpdate(existingAppointment, input, terrosUpdatedAt)
     if (!appointmentUpdate) {
       console.log(`Skipped unchanged GoHighLevel appointment ${linkedAppointmentId}`)
       return
@@ -406,21 +413,40 @@ type GoHighLevelAppointmentUpdate = Partial<
     GoHighLevelAppointmentInput,
     'startTime' | 'endTime' | 'assignedUserId' | 'ignoreDateRange' | 'ignoreFreeSlotValidation'
   >
-> & { toNotify?: true }
+> & { toNotify?: boolean }
+
+/** Both sides name a closer and they differ: the one changed last decides. */
+export function hasAssigneeConflict(
+  appointment: Pick<GoHighLevelAppointment, 'assignedUserId'>,
+  input: Pick<GoHighLevelAppointmentInput, 'assignedUserId'>
+): boolean {
+  return (
+    appointment.assignedUserId !== undefined &&
+    input.assignedUserId !== undefined &&
+    appointment.assignedUserId !== input.assignedUserId
+  )
+}
 
 /**
- * GoHighLevel owns an existing appointment's status and title. Terros may only move it in time and fill in a missing
- * assignee; returns undefined when there is nothing to send.
+ * GoHighLevel owns an existing appointment's status and title. Terros may move it in time, fill in a missing assignee,
+ * and replace a different assignee when the Terros event changed after the appointment (terrosUpdatedAt against the
+ * appointment's dateUpdated; either unknown means GoHighLevel keeps its assignee). Returns undefined when there is
+ * nothing to send.
  */
 export function getAppointmentUpdate(
   appointment: GoHighLevelAppointment,
-  input: GoHighLevelAppointmentInput
+  input: GoHighLevelAppointmentInput,
+  terrosUpdatedAt?: number
 ): GoHighLevelAppointmentUpdate | undefined {
   const timeChanged =
     new Date(appointment.startTime).getTime() !== new Date(input.startTime).getTime() ||
     new Date(appointment.endTime).getTime() !== new Date(input.endTime).getTime()
   const assigneeMissing = !appointment.assignedUserId && input.assignedUserId !== undefined
-  if (!timeChanged && !assigneeMissing) return
+  const assigneeReplaced =
+    hasAssigneeConflict(appointment, input) &&
+    terrosShouldOverwriteAssignee(terrosUpdatedAt, parseTime(appointment.dateUpdated))
+  const assigneeChanged = assigneeMissing || assigneeReplaced
+  if (!timeChanged && !assigneeChanged) return
 
   return {
     ...(timeChanged
@@ -432,6 +458,8 @@ export function getAppointmentUpdate(
           ignoreFreeSlotValidation: true,
         }
       : {}),
-    ...(assigneeMissing ? { assignedUserId: input.assignedUserId } : {}),
+    ...(assigneeChanged ? { assignedUserId: input.assignedUserId } : {}),
+    // Replacing an assignee alone must not notify anyone; a time change keeps its notification.
+    ...(assigneeReplaced && !timeChanged ? { toNotify: false } : {}),
   }
 }

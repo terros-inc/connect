@@ -78,6 +78,7 @@ type AccountChangeWebhook =
 type GoHighLevelContact = {
   id: string
   locationId: string
+  assignedTo?: string
 }
 
 type ContactResponse = {
@@ -137,7 +138,10 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
       )
     }
 
-    const { locationId: _locationId, ...contactUpdate } = contactInput
+    // GoHighLevel owns the contact owner once it is set (a reassignment there must survive the next account save);
+    // Terros only sets it on creation or fills it when missing, like the opportunity owner.
+    const { locationId: _locationId, assignedTo, ...contactFields } = contactInput
+    const contactUpdate = existingContact.assignedTo ? contactFields : { ...contactFields, assignedTo }
     contactResponse = await ghlApi<ContactResponse>(accessToken, `/contacts/${account.externalLeadId}`, {
       method: 'PUT',
       body: JSON.stringify(contactUpdate),

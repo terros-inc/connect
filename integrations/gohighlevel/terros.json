@@ -43,7 +43,7 @@
         {
           "name": "alertWebhookUrl",
           "type": "string",
-          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
+          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused; Appointment Webhook: the GoHighLevel assignee of an appointment has no matching Terros user). A failed delivery is only logged."
         },
         {
           "name": "alertRecipients",
@@ -119,7 +119,7 @@
         {
           "name": "alertWebhookUrl",
           "type": "string",
-          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
+          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused; Appointment Webhook: the GoHighLevel assignee of an appointment has no matching Terros user). A failed delivery is only logged."
         },
         {
           "name": "alertRecipients",
@@ -159,6 +159,16 @@
           "description": "GoHighLevel calendar ID whose appointments are synced. Required."
         },
         {
+          "name": "alertWebhookUrl",
+          "type": "string",
+          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused; Appointment Webhook: the GoHighLevel assignee of an appointment has no matching Terros user). A failed delivery is only logged."
+        },
+        {
+          "name": "alertRecipients",
+          "type": "string",
+          "description": "Optional. Comma-separated emails. Only copied into the alert webhook JSON as recipients; this integration sends no email, so the receiver of alertWebhookUrl must act on them."
+        },
+        {
           "name": "disabled",
           "type": "string",
           "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
@@ -169,8 +179,18 @@
           "description": "Type true to log what this script would write without writing anything. Blank or false: run normally. Any other text, including a typo, counts as true."
         }
       ],
-      "authSchema": {},
-      "permissions": ["company:read", "event:read", "event:save", "event:manage"],
+      "authSchema": {
+        "privateIntegrationToken": "GoHighLevel private integration token"
+      },
+      "permissions": [
+        "account:list",
+        "account:save",
+        "company:read",
+        "event:read",
+        "event:save",
+        "event:manage",
+        "user:list"
+      ],
       "slug": "gohighlevel-appointment-webhook"
     }
   ]
