@@ -15,7 +15,7 @@ export type AlertConfig = {
 }
 
 type Alert = {
-  accountId: string
+  accountId?: string
   eventId?: string
   stage: string
   message: string

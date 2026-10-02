@@ -9,6 +9,7 @@ const scriptNames: Record<ScriptKey, string> = {
   opportunityWebhook: 'GoHighLevel Opportunity Webhook',
   appointmentSync: 'GoHighLevel Appointment Sync',
   appointmentWebhook: 'GoHighLevel Appointment Webhook',
+  resync: 'GoHighLevel Resync',
 }
 
 // HQ Energy's install config, with every id and URL replaced by a placeholder. Keep its shape: the point of this
