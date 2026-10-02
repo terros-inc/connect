@@ -172,6 +172,95 @@
       "authSchema": {},
       "permissions": ["company:read", "event:read", "event:save", "event:manage"],
       "slug": "gohighlevel-appointment-webhook"
+    },
+    {
+      "name": "GoHighLevel Resync",
+      "entrypoint": "src/resync.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "locationId",
+          "type": "string",
+          "description": "GoHighLevel location (sub-account) ID. Required."
+        },
+        {
+          "name": "pipelineId",
+          "type": "string",
+          "description": "GoHighLevel pipeline ID that opportunities are created in. Required."
+        },
+        {
+          "name": "calendarId",
+          "type": "string",
+          "description": "GoHighLevel calendar ID whose appointments are synced. Required."
+        },
+        {
+          "name": "stageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Optional. Key: a Terros workflow stage. Value: the GoHighLevel pipeline stage name. Outgoing (Account Sync): a key equal to the Terros stage NAME picks the GoHighLevel stage; with no match the Terros stage name is used as is. Incoming (Opportunity Webhook): the GoHighLevel stage name is looked up among the values and its key is sent to Terros, so use a Terros stage ID as the key (or a name listed in the workflow integration mappings). With no match the GoHighLevel stage name is sent, and Terros ignores it unless the workflow integration mappings know it."
+        },
+        {
+          "name": "contactFieldMappings",
+          "type": "mapping",
+          "dataType": "Account",
+          "description": "Optional. Key: a Terros account field (for example account.owner.email) or custom field ID (CF.…). Value: a GoHighLevel merge field such as {{ contact.owner_email }}."
+        },
+        {
+          "name": "opportunityStages",
+          "type": "string",
+          "description": "Optional. Comma-separated Terros stage names, for example Appointment Set, Contract Signed. An account entering one of them gets a GoHighLevel opportunity if it has none. Case is ignored. Blank means Appointment Set."
+        },
+        {
+          "name": "opportunityIdFieldId",
+          "type": "string",
+          "description": "Optional. Terros custom field ID (CF.…) that receives the GoHighLevel opportunity ID. A value not starting with CF. is ignored with a warning."
+        },
+        {
+          "name": "alertWebhookUrl",
+          "type": "string",
+          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
+        },
+        {
+          "name": "alertRecipients",
+          "type": "string",
+          "description": "Optional. Comma-separated emails. Only copied into the alert webhook JSON as recipients; this integration sends no email, so the receiver of alertWebhookUrl must act on them."
+        },
+        {
+          "name": "mode",
+          "type": "string",
+          "description": "Resync only. report (the default): log what would be created and write nothing. repair: create the missing appointments, contacts and opportunities. Any other text counts as report. A run can override it with a \"mode\" key in the request body."
+        },
+        {
+          "name": "horizonDays",
+          "type": "string",
+          "description": "Resync only. How many days ahead to look for Consultation events with no GoHighLevel appointment. Blank means 14; the most is 60. Events in the past are never touched."
+        },
+        {
+          "name": "maxRecords",
+          "type": "string",
+          "description": "Resync only. The most records one run may create (or, in report mode, report as missing or failed) before stopping. Blank means 25; the most is 100. Run it again to continue."
+        },
+        {
+          "name": "timeBudgetSeconds",
+          "type": "string",
+          "description": "Resync only. Seconds after which a run stops starting new records, so it ends before the 60 second script limit. Blank means 40; the most is 50."
+        },
+        {
+          "name": "disabled",
+          "type": "string",
+          "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Type true to log what this script would write without writing anything. Blank or false: run normally. Any other text, including a typo, counts as true."
+        }
+      ],
+      "authSchema": {
+        "privateIntegrationToken": "GoHighLevel private integration token"
+      },
+      "permissions": ["account:list", "account:save", "company:read", "event:read", "event:save"],
+      "slug": "gohighlevel-resync"
     }
   ]
 }

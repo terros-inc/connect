@@ -74,6 +74,30 @@ export const configFields = {
     description:
       'Optional. Comma-separated emails. Only copied into the alert webhook JSON as recipients; this integration sends no email, so the receiver of alertWebhookUrl must act on them.',
   },
+  mode: {
+    name: 'mode',
+    type: 'string',
+    description:
+      'Resync only. report (the default): log what would be created and write nothing. repair: create the missing appointments, contacts and opportunities. Any other text counts as report. A run can override it with a "mode" key in the request body.',
+  },
+  horizonDays: {
+    name: 'horizonDays',
+    type: 'string',
+    description:
+      'Resync only. How many days ahead to look for Consultation events with no GoHighLevel appointment. Blank means 14; the most is 60. Events in the past are never touched.',
+  },
+  maxRecords: {
+    name: 'maxRecords',
+    type: 'string',
+    description:
+      'Resync only. The most records one run may create (or, in report mode, report as missing or failed) before stopping. Blank means 25; the most is 100. Run it again to continue.',
+  },
+  timeBudgetSeconds: {
+    name: 'timeBudgetSeconds',
+    type: 'string',
+    description:
+      'Resync only. Seconds after which a run stops starting new records, so it ends before the 60 second script limit. Blank means 40; the most is 50.',
+  },
   disabled: {
     name: 'disabled',
     type: 'string',
@@ -104,6 +128,23 @@ export const scriptFieldNames = {
   opportunityWebhook: ['locationId', 'stageMappings', 'disabled', 'dryRun'],
   appointmentSync: ['locationId', 'calendarId', 'alertWebhookUrl', 'alertRecipients', 'disabled', 'dryRun'],
   appointmentWebhook: ['locationId', 'calendarId', 'disabled', 'dryRun'],
+  resync: [
+    'locationId',
+    'pipelineId',
+    'calendarId',
+    'stageMappings',
+    'contactFieldMappings',
+    'opportunityStages',
+    'opportunityIdFieldId',
+    'alertWebhookUrl',
+    'alertRecipients',
+    'mode',
+    'horizonDays',
+    'maxRecords',
+    'timeBudgetSeconds',
+    'disabled',
+    'dryRun',
+  ],
 } as const satisfies Record<string, readonly FieldName[]>
 
 export type ScriptKey = keyof typeof scriptFieldNames

@@ -139,7 +139,7 @@ async function findLinkedEvent(
   }
 }
 
-async function readCompanyId(client: TerrosClient): Promise<CompanyId | undefined> {
+export async function readCompanyId(client: TerrosClient): Promise<CompanyId | undefined> {
   try {
     const { company } = await client.company.get({})
     return company.companyId

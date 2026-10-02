@@ -223,6 +223,7 @@ export class FakeApis {
       ![
         'account/get',
         'account/match',
+        'account/list',
         'user/list',
         'calendar/event/get',
         'calendar/event/list',
@@ -235,6 +236,14 @@ export class FakeApis {
       case 'account/get': {
         const account = this.terros.accounts.get(body.accountId)
         return account ? ok({ account }) : err('NotFound', `no account ${body.accountId}`)
+      }
+      case 'account/list': {
+        if (this.lacks('account:list')) return err('PermissionDenied', 'account:list required')
+        // Pages of body.size in insertion order; the cursor is the index of the next account.
+        const all = [...this.terros.accounts.values()]
+        const from = typeof body.searchInput?.sortTimestamp === 'number' ? body.searchInput.sortTimestamp : 0
+        const accounts = all.slice(from, from + body.size)
+        return ok({ accounts, sortTimestamp: from + accounts.length, total: all.length })
       }
       case 'account/match':
         return ok({
@@ -285,7 +294,12 @@ export class FakeApis {
             (body.endTime === undefined || time <= body.endTime)
           )
         })
-        return ok({ events })
+        return ok({
+          events: events.map((e) => ({
+            ...e,
+            attendee: e.attendeeEmail ? { userId: 'U.closer', email: e.attendeeEmail } : undefined,
+          })),
+        })
       }
       case 'calendar/event/upsert': {
         // Like the real API, an unknown sourceId creates an account-less event owned by the Connect key.
