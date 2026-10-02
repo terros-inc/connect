@@ -168,4 +168,87 @@ describe('Opportunity Webhook', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('No stageMappings entry matched pipeline stage Sat'))
     expect(fake.terros.accounts.get('Account.1')!.workflowStageName).toBe('Sat')
   })
+  describe('skips that are not errors', () => {
+    const hook = (payload: Record<string, unknown>) => opportunityWebhook(makeInput(payload, config))
+    const skipped = () => expect(fake.terrosWrites()).toEqual([])
+
+    test('a contact with no linked Terros account logs one line and writes nothing', async () => {
+      const log = vi.mocked(console.log)
+      log.mockClear()
+      await expect(
+        hook({ location: { id: LOCATION_ID }, contact_id: 'unknown-contact', customData: { pipeline_stage: 'Sat' } })
+      ).resolves.toBeUndefined()
+      expect(log).toHaveBeenCalledWith(
+        `GoHighLevel contact unknown-contact at location ${LOCATION_ID}: no Terros account is linked to this contact, skipping`
+      )
+      expect(fake.ghlWrites()).toEqual([])
+      skipped()
+      expect(error).not.toHaveBeenCalled()
+    })
+
+    test.each(['', undefined])('a blank pipeline_stage (%j) with no linked account is a quiet skip', async (stage) => {
+      const log = vi.mocked(console.log)
+      log.mockClear()
+      await expect(
+        hook({ location: { id: LOCATION_ID }, contact_id: 'unknown-contact', customData: { pipeline_stage: stage } })
+      ).resolves.toBeUndefined()
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('no Terros account is linked to this contact, skipping'))
+      expect(fake.ghlWrites()).toEqual([])
+      skipped()
+    })
+
+    test.each(['', undefined])(
+      'a blank pipeline_stage (%j) with a linked account imports notes and writes no stage',
+      async (stage) => {
+        fake.ghl.notes.set('c-1', [
+          { id: 'n-1', contactId: 'c-1', body: 'Called the homeowner', dateAdded: '2026-10-01T00:00:00.000Z' },
+        ])
+        const log = vi.mocked(console.log)
+        log.mockClear()
+        await hook({ location: { id: LOCATION_ID }, contact_id: 'c-1', customData: { pipeline_stage: stage } })
+        expect(log).toHaveBeenCalledWith(
+          `GoHighLevel contact c-1 at location ${LOCATION_ID}: pipeline stage is blank, so only notes are imported`
+        )
+        const writes = fake.terrosWrites().join('\n')
+        expect(writes).toContain('Called the homeowner')
+        expect(writes).not.toContain('workflowTarget')
+        expect(writes).not.toContain('sourceStatus')
+        expect(fake.terros.accounts.get('Account.1')!.workflowStageName).toBe('Appointment Set')
+        expect(warn).not.toHaveBeenCalled()
+      }
+    )
+
+    test('a blank pipeline_stage with dryRun writes nothing', async () => {
+      fake.ghl.notes.set('c-1', [
+        { id: 'n-1', contactId: 'c-1', body: 'Called the homeowner', dateAdded: '2026-10-01T00:00:00.000Z' },
+      ])
+      await opportunityWebhook(
+        makeInput({ location: { id: LOCATION_ID }, contact_id: 'c-1', customData: {} }, { ...config, dryRun: 'true' })
+      )
+      expect(fake.terrosWrites()).toEqual([])
+      expect(fake.ghlWrites()).toEqual([])
+    })
+
+    test('a location other than the configured one still throws', async () => {
+      await expect(
+        hook({ location: { id: 'other-location' }, contact_id: 'c-1', customData: { pipeline_stage: 'Sat' } })
+      ).rejects.toThrow('does not match configured location')
+      skipped()
+    })
+
+    test('a blank stage from another location still throws', async () => {
+      await expect(
+        hook({ location: { id: 'other-location' }, contact_id: 'c-1', customData: { pipeline_stage: '' } })
+      ).rejects.toThrow('does not match configured location')
+    })
+
+    test('a missing contact_id or location id still throws', async () => {
+      await expect(hook({ location: { id: LOCATION_ID }, customData: { pipeline_stage: 'Sat' } })).rejects.toThrow(
+        'missing contact_id'
+      )
+      await expect(hook({ contact_id: 'c-1', customData: { pipeline_stage: 'Sat' } })).rejects.toThrow(
+        'missing location.id'
+      )
+    })
+  })
 })
