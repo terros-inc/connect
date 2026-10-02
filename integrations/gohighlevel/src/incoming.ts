@@ -46,16 +46,28 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, Scri
   const stageName = payload.customData?.pipeline_stage
   if (!locationId) throw Error('GoHighLevel workflow webhook is missing location.id')
   if (!contactId) throw Error('GoHighLevel workflow webhook is missing contact_id')
-  if (!stageName) throw Error('GoHighLevel workflow webhook is missing customData.pipeline_stage')
 
   if (locationId !== scriptConfig.locationId) {
     throw Error(`GoHighLevel location ${locationId} does not match configured location ${scriptConfig.locationId}`)
   }
 
+  // The workflow posts a blank stage for a contact with no opportunity; there is nothing to move.
+  if (!stageName) {
+    console.log(
+      `GoHighLevel workflow webhook for contact ${contactId} at location ${locationId} has no pipeline_stage, skipping`
+    )
+    return
+  }
+
+  // Expected when HQ books an appointment directly in GoHighLevel: that contact was never in Terros. The webhook alone
+  // cannot tell that apart from a lost link, so the message stays explicit and nothing alerts.
   const match = await client.account.match({ externalLeadId: contactId })
   const account = match.account
   if (!account) {
-    throw Error(`No account matched contact ${contactId} at location ${locationId}`)
+    console.log(
+      `GoHighLevel contact ${contactId} at location ${locationId}: no Terros account is linked to this contact, skipping`
+    )
+    return
   }
   const workflowTarget = toTerrosStage(stageName, scriptConfig.stageMappings)
   if (hasTerrosStageMapping(stageName, scriptConfig.stageMappings)) {
