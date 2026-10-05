@@ -51,6 +51,24 @@ export function hasAlertNote(notes: readonly Pick<AccountNote, 'text'>[] | undef
   return (notes ?? []).some((note) => note.text.startsWith(`${ALERT_NOTE_PREFIX} ${kind} `))
 }
 
+/**
+ * Who the "already alerted" note is written as: the account's owner, else its closer, else the user this integration
+ * authenticates as. Undefined when none can be found.
+ */
+export async function findAlertAuthor(
+  client: TerrosClient,
+  account: { owner?: { userId?: UserId }; closer?: { userId?: UserId } }
+): Promise<UserId | undefined> {
+  const accountUserId = account.owner?.userId ?? account.closer?.userId
+  if (accountUserId) return accountUserId
+  try {
+    const { user } = await client.user.profile()
+    return user.userId
+  } catch (error) {
+    console.warn(`Could not read the integration user profile: ${error instanceof Error ? error.message : error}`)
+  }
+}
+
 /** Records that an alert was sent so later saves of the same account do not repeat it. */
 export async function saveAlertNote(
   client: TerrosClient,
@@ -59,7 +77,9 @@ export async function saveAlertNote(
   userId: UserId | undefined
 ): Promise<void> {
   if (!userId) {
-    console.log(`Cannot record the alert on ${accountId}: no owner, so it may repeat`)
+    console.log(
+      `Cannot record the alert on ${accountId}: no owner, closer or integration user to write it as, so the alert may repeat`
+    )
     return
   }
   const note: UnsavedAccountNote = { timestamp: Date.now(), text: alertNoteText(accountId, kind), userId }
