@@ -228,14 +228,18 @@ describe('Account Sync re-checks a missing closer before alerting', () => {
   test('a closer that appears a moment later sends no alert and syncs', async () => {
     account({ closer: undefined })
     const webhook = fake.accountWebhook('Account.1')
-    Object.assign(fake.terros.accounts.get('Account.1')!, { closer, closerId: closer.userId })
+    // As in production, the booking flow saves only closerId; account.closer stays empty.
+    fake.terros.accounts.get('Account.1')!.closerId = closer.userId
+    fake.terros.users.set(closer.userId, closer)
     await syncWebhook(alertConfig, webhook)
 
     expect(alertPosts).toEqual([])
     expect(error).not.toHaveBeenCalled()
     expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([])
-    expect(fake.ghl.contacts.size).toBe(1)
-    expect([...fake.ghl.opps.values()]).toEqual([expect.objectContaining({ pipelineStageId: 'st-appt' })])
+    expect(fake.ghl.contacts.get('c-1')).toMatchObject({ assignedTo: 'ghl-closer' })
+    expect([...fake.ghl.opps.values()]).toEqual([
+      expect.objectContaining({ pipelineStageId: 'st-appt', assignedTo: 'ghl-closer' }),
+    ])
     expect(fake.terros.accounts.get('Account.1')!.externalLeadId).toBeDefined()
   })
 

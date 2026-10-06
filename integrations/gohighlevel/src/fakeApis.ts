@@ -52,6 +52,8 @@ export class FakeApis {
     knownStages: new Set(['Lead', 'Appointment Set', 'Sat', 'Closed Won']),
     /** When set, another run's creation marker replaces the one just written, as in a race. */
     stealClaimWith: undefined as string | undefined,
+    /** Users user/list can return, by id. */
+    users: new Map<string, Json>(),
     /** The user the API key authenticates as, returned by user/profile; undefined makes that call fail. */
     profileUserId: CONNECT_USER as string | undefined,
   }
@@ -247,11 +249,11 @@ export class FakeApis {
           account: [...this.terros.accounts.values()].find((a) => a.externalLeadId === body.externalLeadId),
         })
       case 'user/list':
-        return ok({ users: [] })
+        return ok({ users: (body.userIds ?? []).flatMap((id: string) => this.terros.users.get(id) ?? []) })
       case 'user/profile':
         return this.terros.profileUserId
           ? ok({ user: { userId: this.terros.profileUserId }, company: { companyId: COMPANY_ID } })
-          : err('PermissionDenied', 'user:read required')
+          : err('PermissionDenied', 'user:list required')
       case 'account/upsert': {
         const a = body.account
         const account = this.terros.accounts.get(a.accountId)

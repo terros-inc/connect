@@ -269,7 +269,13 @@ async function rereadAccount(client: TerrosClient, accountId: AccountId): Promis
   await new Promise((resolve) => setTimeout(resolve, CLOSER_RECHECK_DELAY_MS))
   try {
     const { account } = await client.account.get({ accountId })
-    return fromAccountData(account)
+    const fresh = fromAccountData(account)
+    // The booking flow saves only closerId, so the closer's email is looked up for the GoHighLevel user match.
+    if (fresh.closer?.userId && !fresh.closer.email) {
+      const { users } = await client.user.list({ showArchived: 'all', userIds: [fresh.closer.userId] })
+      fresh.closer.email = users.find((user) => user.userId === fresh.closer?.userId)?.email
+    }
+    return fresh
   } catch (error) {
     console.warn(`Could not read ${accountId} again: ${error instanceof Error ? error.message : error}`)
   }
