@@ -1,5 +1,5 @@
 import minimist from 'minimist'
-import { parseApiLogParams } from './api'
+import { parseApiLogParams } from './apiLogParams'
 
 const parse = (args: string[]): ReturnType<typeof parseApiLogParams> => parseApiLogParams(minimist(args))
 
