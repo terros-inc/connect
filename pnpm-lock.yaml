@@ -254,6 +254,9 @@ importers:
       '@terros-inc/connect-common':
         specifier: workspace:^
         version: link:../packages/connect-common
+      '@terros-inc/mcp-core':
+        specifier: workspace:^
+        version: link:../packages/terros-mcp-core
       '@terros-inc/sdk':
         specifier: workspace:^
         version: link:../sdk
@@ -403,6 +406,25 @@ importers:
         version: 4.1.11(@types/node@24.13.2)(vite@8.1.3(@types/node@24.13.2)(esbuild@0.28.1)(yaml@2.9.0))
 
   packages/connect-common:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.13.2)(vite@8.1.3(@types/node@24.13.2)(esbuild@0.28.1)(yaml@2.9.0))
+
+  packages/terros-mcp-core:
+    dependencies:
+      '@modelcontextprotocol/server':
+        specifier: 'catalog:'
+        version: 2.1.0
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

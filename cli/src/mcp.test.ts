@@ -1,17 +1,16 @@
 import { PassThrough } from 'node:stream'
 import { readFileSync } from 'node:fs'
 import { parse } from 'yaml'
+import type { EndpointGroups, OpenAPISchema } from '@terros-inc/mcp-core'
 import { getTokens } from '@terros-inc/connect-common/auth'
 import { StdioServerTransport, serveStdio } from '@modelcontextprotocol/server/stdio'
 import type { McpServer, JSONRPCMessage } from '@modelcontextprotocol/server'
 import { createMcpServer, startMcpServer } from './mcp'
-import type { OpenAPISchema } from './crud/types'
-import type { EndpointGroups } from './crud/endpoint'
-import { loadEndpoints } from './crud'
+import { loadEndpoints } from './loadEndpoints'
 import { buildTerrosClient } from './api/query'
 
 vi.mock('@terros-inc/connect-common/auth', () => ({ getTokens: vi.fn() }))
-vi.mock('./crud', () => ({ loadEndpoints: vi.fn() }))
+vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn() }))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
 vi.mock('@modelcontextprotocol/server/stdio', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@modelcontextprotocol/server/stdio')>()),
