@@ -52,6 +52,10 @@ export class FakeApis {
     knownStages: new Set(['Lead', 'Appointment Set', 'Sat', 'Closed Won']),
     /** When set, another run's creation marker replaces the one just written, as in a race. */
     stealClaimWith: undefined as string | undefined,
+    /** Users user/list can return, by id. */
+    users: new Map<string, Json>(),
+    /** The user the API key authenticates as, returned by user/profile; undefined makes that call fail. */
+    profileUserId: CONNECT_USER as string | undefined,
   }
   /**
    * Permissions of the script under test, read from terros.json. Like the backend, the fake denies event and company
@@ -93,6 +97,8 @@ export class FakeApis {
       notes: [],
       ...a,
     }
+    // An account with no closer has no closerId either.
+    if ('closer' in a && !a.closer && !('closerId' in a)) (account as Json).closerId = undefined
     this.terros.accounts.set(account.accountId, account)
     return account
   }
@@ -116,9 +122,9 @@ export class FakeApis {
       data: {
         id: a.accountId,
         workflowState: { stageName: a.workflowStageName },
+        // The real payload carries owner and closer as objects and has no ownerId or closerId.
+        owner: a.ownerId ? { userId: a.ownerId, email: `${a.ownerId}@hq.test` } : undefined,
         closer: a.closer,
-        closerId: a.closerId,
-        ownerId: a.ownerId,
         address: a.location,
         resident: a.resident,
         externalLeadId: a.externalLeadId,
@@ -224,6 +230,7 @@ export class FakeApis {
         'account/get',
         'account/match',
         'user/list',
+        'user/profile',
         'calendar/event/get',
         'calendar/event/list',
         'company/get',
@@ -233,6 +240,7 @@ export class FakeApis {
     }
     switch (route) {
       case 'account/get': {
+        if (this.lacks('account:list')) return err('PermissionDenied', 'account:list required')
         const account = this.terros.accounts.get(body.accountId)
         return account ? ok({ account }) : err('NotFound', `no account ${body.accountId}`)
       }
@@ -241,7 +249,11 @@ export class FakeApis {
           account: [...this.terros.accounts.values()].find((a) => a.externalLeadId === body.externalLeadId),
         })
       case 'user/list':
-        return ok({ users: [] })
+        return ok({ users: (body.userIds ?? []).flatMap((id: string) => this.terros.users.get(id) ?? []) })
+      case 'user/profile':
+        return this.terros.profileUserId
+          ? ok({ user: { userId: this.terros.profileUserId }, company: { companyId: COMPANY_ID } })
+          : err('PermissionDenied', 'user:list required')
       case 'account/upsert': {
         const a = body.account
         const account = this.terros.accounts.get(a.accountId)

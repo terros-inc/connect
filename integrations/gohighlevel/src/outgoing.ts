@@ -1,4 +1,5 @@
 import {
+  type AccountData,
   type AccountId,
   type AccountNote,
   type CustomFieldId,
@@ -24,7 +25,7 @@ import {
 } from './gohighlevel.ts'
 import { checkConfig } from './configFields.ts'
 import { isSwitchOn, toGhlStage, type RunSwitches } from './config.ts'
-import { hasAlertNote, saveAlertNote, sendAlert, splitList } from './alerts.ts'
+import { findAlertAuthor, hasAlertNote, saveAlertNote, sendAlert, splitList } from './alerts.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string
@@ -41,9 +42,21 @@ type ScriptConfig = RunSwitches & {
 
 const defaultOpportunityStages = ['Appointment Set']
 const noCloserAlert = 'no closer'
+/**
+ * A Terros booking saves the account first and assigns the closer in a follow-up save about a second later, so an
+ * account with no closer is read again after this long before it is alerted on. Keep it well inside the 60 second
+ * script limit.
+ */
+export const CLOSER_RECHECK_DELAY_MS = 3000
 
 type Secrets = {
   privateIntegrationToken: string
+}
+
+/** A user as the account webhook sends it (SmallUser); the payload has no ownerId or closerId fields. */
+type WebhookUser = {
+  userId?: UserId
+  email?: string
 }
 
 type AccountChangeData = {
@@ -51,16 +64,13 @@ type AccountChangeData = {
   workflowState?: {
     stageName?: string
   }
-  closer?: {
-    email?: string
-  }
+  owner?: WebhookUser
+  closer?: WebhookUser
   address?: SmallAddress
   resident?: TinyResidentData
   externalLeadId?: string
   customFieldMap?: CustomFieldMap
   notes?: AccountNote[]
-  closerId?: UserId
-  ownerId?: UserId
 }
 
 type AccountChangeWebhook =
@@ -99,9 +109,17 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
     return
   }
 
-  const account = payload.data
-  const workflowStageName = account.workflowState?.stageName
-  const createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
+  let account = payload.data
+  let workflowStageName = account.workflowState?.stageName
+  let createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
+  if (createsOpportunity && !account.closer) {
+    const fresh = await rereadAccount(client, account.id)
+    if (fresh) {
+      account = fresh
+      workflowStageName = account.workflowState?.stageName
+      createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
+    }
+  }
   const closer = account.closer
   if (!closer) {
     console.log(`Skipping sync for ${account.id}: no closer yet`)
@@ -111,7 +129,8 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
         stage: workflowStageName!,
         message: `Terros account ${account.id} is in ${workflowStageName} with no closer, so it was not synced to GoHighLevel.`,
       })
-      await saveAlertNote(client, account.id, noCloserAlert, account.ownerId)
+      const authorId = await findAlertAuthor(client, account)
+      await saveAlertNote(client, account.id, noCloserAlert, authorId)
     }
     return
   }
@@ -164,8 +183,8 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   const noteChanges = getChanges(
     {
       notes: account.notes,
-      closerId: account.closerId,
-      ownerId: account.ownerId,
+      closerId: closer.userId,
+      ownerId: account.owner?.userId,
     },
     goHighLevelNotes,
     userResponse?.users ?? [],
@@ -240,6 +259,42 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
     body: JSON.stringify(opportunityUpdate),
   })
 })
+
+/**
+ * Waits briefly, then reads the account again so a closer assigned by a follow-up save is not missed. Returns
+ * undefined when the read fails, in which case the webhook data stands.
+ */
+async function rereadAccount(client: TerrosClient, accountId: AccountId): Promise<AccountChangeData | undefined> {
+  console.log(`Account ${accountId} has no closer yet; reading it again in ${CLOSER_RECHECK_DELAY_MS}ms`)
+  await new Promise((resolve) => setTimeout(resolve, CLOSER_RECHECK_DELAY_MS))
+  try {
+    const { account } = await client.account.get({ accountId })
+    const fresh = fromAccountData(account)
+    // The booking flow saves only closerId, so the closer's email is looked up for the GoHighLevel user match.
+    if (fresh.closer?.userId && !fresh.closer.email) {
+      const { users } = await client.user.list({ showArchived: 'all', userIds: [fresh.closer.userId] })
+      fresh.closer.email = users.find((user) => user.userId === fresh.closer?.userId)?.email
+    }
+    return fresh
+  } catch (error) {
+    console.warn(`Could not read ${accountId} again: ${error instanceof Error ? error.message : error}`)
+  }
+}
+
+/** Reshapes an account read through the API into the shape of the account webhook payload. */
+export function fromAccountData(account: AccountData): AccountChangeData {
+  return {
+    id: account.accountId,
+    workflowState: { stageName: account.workflowStageName },
+    owner: account.ownerId ? { userId: account.ownerId, email: account.owner?.email } : undefined,
+    closer: account.closerId ? { userId: account.closerId, email: account.closer?.email } : undefined,
+    address: account.location,
+    resident: account.resident,
+    externalLeadId: account.externalLeadId,
+    customFieldMap: account.customFields,
+    notes: account.notes,
+  }
+}
 
 export function isOpportunityStage(stageName: string | undefined, configured: string | undefined): boolean {
   if (!stageName) return false
