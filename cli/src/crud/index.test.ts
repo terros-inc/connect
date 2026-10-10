@@ -53,3 +53,37 @@ it('replaces the bundled schema entirely with the internal JSON schema', async (
   expect(readFileSync).not.toHaveBeenCalled()
   expect(endpoints.company!.list!.components).toHaveProperty('schemas.Input.properties.archived')
 })
+
+it('exposes API history as a filterable internal CLI command', async () => {
+  vi.mocked(loadInternalSchema).mockResolvedValue(
+    JSON.stringify({
+      openapi: '3.1.1',
+      paths: {
+        '/apiHistory/list': {
+          post: {
+            requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Input' } } } },
+          },
+        },
+      },
+      components: {
+        schemas: {
+          Input: {
+            type: 'object',
+            required: ['companyId'],
+            properties: {
+              companyId: { type: 'string' },
+              status: { type: 'integer' },
+              endpoint: { type: 'string' },
+              limit: { type: 'integer' },
+            },
+          },
+        },
+      },
+    })
+  )
+
+  const endpoints = await loadEndpoints()
+  expect(endpoints.apiHistory!.list!.components.schemas.Input.required).toContain('companyId')
+  expect(endpoints.apiHistory!.list!.components.schemas.Input.properties).toHaveProperty('status')
+  expect(endpoints.apiHistory!.list!.components.schemas.Input.properties).toHaveProperty('endpoint')
+})
