@@ -18,6 +18,7 @@
   "description": "Command-line interface for Terros Sales platform",
   "devDependencies": {
     "@terros-inc/connect-common": "workspace:^",
+    "@terros-inc/mcp-core": "workspace:^",
     "@terros-inc/sdk": "workspace:^",
     "@types/luxon": "catalog:",
     "@types/minimist": "catalog:",

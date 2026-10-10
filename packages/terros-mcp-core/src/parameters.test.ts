@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
-import type { Schema } from './types'
-import { getEndpointParameters, type Components } from './parameters'
+import type { Schema } from './types.ts'
+import { getEndpointParameters, type Components } from './parameters.ts'
 
 describe('getEndpointParameters', () => {
   it('formats an OpenAPI 3.1 tuple defined with prefixItems', () => {

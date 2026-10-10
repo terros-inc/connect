@@ -1,5 +1,5 @@
-import type { ObjectSchema, Schema } from './types'
-import type { EndpointParameter } from './endpoint'
+import type { ObjectSchema, Schema } from './types.ts'
+import type { EndpointParameter } from './endpoint.ts'
 
 export type Components = {
   schemas: {

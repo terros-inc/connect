@@ -1,7 +1,7 @@
 import { parse } from 'yaml'
-import { getPathParts } from './util'
-import type { OpenAPISchema } from './types'
-import type { EndpointGroups } from './endpoint'
+import { getPathParts } from './util.ts'
+import type { OpenAPISchema } from './types.ts'
+import type { EndpointGroups } from './endpoint.ts'
 
 export function parseEndpoints(file: string): EndpointGroups {
   const data = parse(file) as OpenAPISchema
