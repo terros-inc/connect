@@ -29,3 +29,17 @@ it('rejects two paths that map to the same command', () => {
     'Paths /a/item/list and /b/item/list both map to command: item list'
   )
 })
+
+it('qualifies only against groups of direct and two-segment paths', () => {
+  const endpoints = parseEndpoints(schemaWith(['/program/user/list', '/user/settings/list']))
+
+  expect(endpoints.user).toMatchObject({ list: { path: '/program/user/list' } })
+  expect(endpoints.settings).toMatchObject({ list: { path: '/user/settings/list' } })
+})
+
+it('accepts aliases that match Object.prototype properties', () => {
+  expect(parseEndpoints(schemaWith(['/foo/toString', '/foo/constructor'])).foo).toMatchObject({
+    toString: { path: '/foo/toString' },
+    constructor: { path: '/foo/constructor' },
+  })
+})

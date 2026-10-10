@@ -16,6 +16,8 @@ export function getPathParts(path: string, topLevelGroups: ReadonlySet<string> =
   return { group, alias }
 }
 
+// Groups of direct (/search) and two-segment (/user/list) paths, the only paths that map to their first segment.
 export function getTopLevelGroups(paths: string[]): Set<string> {
-  return new Set(paths.map((path) => path.substring(1).split('/')[0] as string))
+  const segments = paths.map((path) => path.substring(1).split('/'))
+  return new Set(segments.filter((parts) => parts.length <= 2).map((parts) => parts[0] as string))
 }
