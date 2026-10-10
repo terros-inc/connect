@@ -1,10 +1,19 @@
 import { type TerrosApiClient } from '@terros-inc/connect-common'
-import type { ApiHistoryListInput, ApiHistoryListSuccess } from '../models'
+import type {
+  ApiHistoryStartInput,
+  ApiHistoryStartSuccess,
+  ApiHistoryStatusInput,
+  ApiHistoryStatusSuccess,
+} from '../models'
 
 export class ApiHistoryClient {
   constructor(private readonly api: TerrosApiClient) {}
 
-  list(input: ApiHistoryListInput): Promise<ApiHistoryListSuccess> {
-    return this.api.call('apiHistory/list', input)
+  start(input: ApiHistoryStartInput): Promise<ApiHistoryStartSuccess> {
+    return this.api.call('apiHistory/start', input)
+  }
+
+  status(input: ApiHistoryStatusInput): Promise<ApiHistoryStatusSuccess> {
+    return this.api.call('apiHistory/status', input)
   }
 }

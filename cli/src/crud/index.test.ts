@@ -54,12 +54,12 @@ it('replaces the bundled schema entirely with the internal JSON schema', async (
   expect(endpoints.company!.list!.components).toHaveProperty('schemas.Input.properties.archived')
 })
 
-it('exposes API history as a filterable internal CLI command', async () => {
+it('exposes API history start and status as internal CLI commands', async () => {
   vi.mocked(loadInternalSchema).mockResolvedValue(
     JSON.stringify({
       openapi: '3.1.1',
       paths: {
-        '/apiHistory/list': {
+        '/apiHistory/start': {
           post: {
             requestBody: { content: { 'application/json': { schema: { $ref: '#/components/schemas/Input' } } } },
           },
@@ -83,7 +83,7 @@ it('exposes API history as a filterable internal CLI command', async () => {
   )
 
   const endpoints = await loadEndpoints()
-  expect(endpoints.apiHistory!.list!.components.schemas.Input.required).toContain('companyId')
-  expect(endpoints.apiHistory!.list!.components.schemas.Input.properties).toHaveProperty('status')
-  expect(endpoints.apiHistory!.list!.components.schemas.Input.properties).toHaveProperty('endpoint')
+  expect(endpoints.apiHistory!.start!.components.schemas.Input.required).toContain('companyId')
+  expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('status')
+  expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('endpoint')
 })
