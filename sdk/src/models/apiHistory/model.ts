@@ -7,14 +7,12 @@ export type ApiHistoryItem = {
   /** the user who made the request, or the owner of the API key that made it */
   userId?: UserId
   endpoint: string
-  /** HTTP status the caller received */
+  /** HTTP status stored with the completed request; typed API errors are stored as 200 */
   status: number
-  /** false when the request never completed, for example because it timed out */
-  completed: boolean
   latency?: number
   errorType?: string
   error?: string
   timestamp: number
-  /** redacted and truncated; absent for requests that never completed */
+  /** redacted and truncated */
   requestBody?: unknown
 }

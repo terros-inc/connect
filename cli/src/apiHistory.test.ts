@@ -40,3 +40,19 @@ it('requires a company ID before starting a query', async () => {
   await expect(runApiHistoryQuery({ call }, {})).rejects.toThrow('--companyId')
   expect(call).not.toHaveBeenCalled()
 })
+
+it('surfaces a clipped time window from the start response', async () => {
+  const call = vi
+    .fn()
+    .mockResolvedValueOnce({
+      type: 'success',
+      queryId: 'query-1',
+      effectiveSince: '2026-10-03T00:00:00.000Z',
+      sinceClipped: true,
+    })
+    .mockResolvedValueOnce({ type: 'success', state: 'succeeded', requests: [] })
+  await expect(runApiHistoryQuery({ call }, { companyId: 'C:example' })).resolves.toMatchObject({
+    effectiveSince: '2026-10-03T00:00:00.000Z',
+    sinceClipped: true,
+  })
+})

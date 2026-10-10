@@ -4,7 +4,7 @@ import { parseApiLogParams } from './apiLogParams'
 const parse = (args: string[]): ReturnType<typeof parseApiLogParams> => parseApiLogParams(minimist(args))
 
 it('requires a company ID', () => {
-  expect(() => parse(['--status', '503'])).toThrow('--companyId')
+  expect(() => parse(['--errorsOnly'])).toThrow('--companyId')
 })
 
 it('parses the log filters', () => {
@@ -14,8 +14,6 @@ it('parses the log filters', () => {
       'C:example',
       '--endpoint',
       '/account/add',
-      '--status',
-      '503',
       '--errorsOnly',
       '--since',
       '2026-10-01T00:00:00Z',
@@ -25,7 +23,6 @@ it('parses the log filters', () => {
   ).toEqual({
     companyId: 'C:example',
     endpoint: '/account/add',
-    status: 503,
     errorsOnly: true,
     since: '2026-10-01T00:00:00Z',
     limit: 50,
@@ -34,5 +31,5 @@ it('parses the log filters', () => {
 
 it('rejects unknown and malformed flags', () => {
   expect(() => parse(['--companyId', 'C:example', '--apiKey', 'x'])).toThrow('--apiKey')
-  expect(() => parse(['--companyId', 'C:example', '--status', 'error'])).toThrow('--status must be an integer')
+  expect(() => parse(['--companyId', 'C:example', '--status', '503'])).toThrow('--status')
 })

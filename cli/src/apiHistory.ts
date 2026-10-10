@@ -1,10 +1,12 @@
 type ApiCaller = { call(path: string, input: object): Promise<unknown> }
-type StartResponse = { type: 'success'; queryId: string }
+type StartResponse = { type: 'success'; queryId: string; effectiveSince?: string; sinceClipped?: boolean }
 type StatusResponse = {
   type: 'success'
   state: 'running' | 'succeeded' | 'failed'
   error?: string
   requests?: unknown[]
+  effectiveSince?: string
+  sinceClipped?: boolean
 }
 
 const POLL_INTERVAL_MS = 2_000
@@ -19,7 +21,12 @@ export async function runApiHistoryQuery(client: ApiCaller, input: object): Prom
   while (Date.now() < deadline) {
     const status = assertStatus(await client.call('apiHistory/status', { queryId: started.queryId }))
     if (status.state === 'failed') throw new Error(status.error ?? 'API history query failed')
-    if (status.state === 'succeeded') return status
+    if (status.state === 'succeeded')
+      return {
+        ...status,
+        effectiveSince: status.effectiveSince ?? started.effectiveSince,
+        sinceClipped: status.sinceClipped ?? started.sinceClipped,
+      }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
   }
   throw new Error(

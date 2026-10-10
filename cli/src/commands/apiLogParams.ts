@@ -3,13 +3,12 @@ import type { ParsedArgs } from 'minimist'
 export type ApiLogInput = {
   companyId: string
   endpoint?: string
-  status?: number
   errorsOnly?: boolean
   since?: string
   limit?: number
 }
 
-const API_LOG_FLAGS = new Set(['companyId', 'endpoint', 'status', 'errorsOnly', 'since', 'limit'])
+const API_LOG_FLAGS = new Set(['companyId', 'endpoint', 'errorsOnly', 'since', 'limit'])
 
 export function parseApiLogParams(params: ParsedArgs): ApiLogInput {
   const unknown = Object.keys(params).filter((name) => name !== '_' && !API_LOG_FLAGS.has(name))
@@ -19,7 +18,6 @@ export function parseApiLogParams(params: ParsedArgs): ApiLogInput {
   return {
     companyId,
     endpoint: optionalString(params.endpoint, 'endpoint'),
-    status: optionalInteger(params.status, 'status'),
     errorsOnly: optionalBoolean(params.errorsOnly),
     since: optionalString(params.since, 'since'),
     limit: optionalInteger(params.limit, 'limit'),

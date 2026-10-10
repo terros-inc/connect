@@ -72,7 +72,6 @@ it('exposes API history start as an internal CLI command that requires a company
             required: ['companyId'],
             properties: {
               companyId: { type: 'string' },
-              status: { type: 'integer' },
               errorsOnly: { type: 'boolean' },
               endpoint: { type: 'string' },
               since: { type: 'string' },
@@ -88,7 +87,7 @@ it('exposes API history start as an internal CLI command that requires a company
   const start = endpoints.apiHistory?.start
   expect(start?.path).toBe('/apiHistory/start')
   expect(start?.components).toHaveProperty('schemas.Input.required', ['companyId'])
-  for (const name of ['status', 'errorsOnly', 'endpoint', 'since']) {
+  for (const name of ['errorsOnly', 'endpoint', 'since']) {
     expect(start?.components).toHaveProperty(['schemas', 'Input', 'properties', name])
   }
 })
