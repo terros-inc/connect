@@ -11,6 +11,7 @@ import { buildEndpointInput } from './crud/input'
 import type { Endpoint, Endpoints } from './crud/endpoint'
 import { loadEndpoints } from './crud'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
+import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
 async function main(): Promise<void> {
@@ -90,7 +91,10 @@ async function main(): Promise<void> {
 
   const input = buildEndpointInput(endpoint, params)
   const client = buildTerrosClient()
-  const response = await client.call(endpoint.path, input)
+  const response =
+    endpoint.path === '/apiHistory/start'
+      ? await runApiHistoryQuery(client, input)
+      : await client.call(endpoint.path, input)
   console.log(JSON.stringify(response, null, 2))
 }
 

@@ -3,6 +3,7 @@ import packageJson from '../package.json'
 import {
   UserClient,
   AccountClient,
+  ApiHistoryClient,
   AreaClient,
   CalendarClient,
   CompanyClient,
@@ -12,6 +13,7 @@ import {
 
 export class TerrosClient {
   readonly account: AccountClient
+  readonly apiHistory: ApiHistoryClient
   readonly area: AreaClient
   readonly calendar: CalendarClient
   readonly company: CompanyClient
@@ -27,6 +29,7 @@ export class TerrosClient {
       },
     })
     this.account = new AccountClient(api)
+    this.apiHistory = new ApiHistoryClient(api)
     this.area = new AreaClient(api)
     this.calendar = new CalendarClient(api)
     this.company = new CompanyClient(api)
