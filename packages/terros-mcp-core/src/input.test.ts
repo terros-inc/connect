@@ -1,7 +1,6 @@
 import { expect } from 'vitest'
-import type { ParsedArgs } from 'minimist'
-import { buildEndpointInput } from './input'
-import type { Endpoint } from './endpoint'
+import { buildEndpointInput, type ParsedArgs } from './input.ts'
+import type { Endpoint } from './endpoint.ts'
 
 describe('buildEndpointInput', () => {
   it('should not add a hidden wrapper prefix for a single non-object property', () => {

@@ -1,6 +1,7 @@
-import type { ParsedArgs } from 'minimist'
-import { getEndpointParameters } from './parameters'
-import type { Endpoint, EndpointParameter } from './endpoint'
+import { getEndpointParameters } from './parameters.ts'
+import type { Endpoint, EndpointParameter } from './endpoint.ts'
+
+export type ParsedArgs = { _: string[]; [key: string]: unknown }
 
 export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): object {
   const parameters = getEndpointParameters(endpoint.properties, endpoint.components)

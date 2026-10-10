@@ -1,4 +1,11 @@
 import minimist from 'minimist'
+import {
+  buildEndpointInput,
+  DEFAULT_TYPE_DEPTH,
+  getEndpoint,
+  getEndpointParameters,
+  getEndpointSubcommandNames,
+} from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
 import {
   formatCommandsHelp,
@@ -6,10 +13,7 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
-import { DEFAULT_TYPE_DEPTH, getEndpointParameters } from './crud/parameters'
-import { buildEndpointInput } from './crud/input'
-import type { Endpoint, Endpoints } from './crud/endpoint'
-import { loadEndpoints } from './crud'
+import { loadEndpoints } from './loadEndpoints'
 import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
 import { buildTerrosClient } from './api/query'
 
@@ -131,24 +135,6 @@ async function showHelp(commands: string[], requestedAlias: string, requestedDep
 
   const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
   console.log(formatCommandsHelp(commandList))
-}
-
-function isDirectEndpoint(endpoint: Endpoint | undefined, command: string): endpoint is Endpoint {
-  return endpoint?.path === `/${command}`
-}
-
-function getEndpoint(endpoints: Endpoints, command: string, subcommand: string | undefined): Endpoint | undefined {
-  const endpoint = endpoints[subcommand ?? command]
-  const directEndpoint = isDirectEndpoint(endpoint, command)
-  if (subcommand === undefined) return directEndpoint ? endpoint : undefined
-  return directEndpoint ? undefined : endpoint
-}
-
-function getEndpointSubcommandNames(endpoints: Endpoints, command: string): string[] {
-  return Object.entries(endpoints)
-    .filter(([, endpoint]) => !isDirectEndpoint(endpoint, command))
-    .map(([alias]) => alias)
-    .sort()
 }
 
 function getHelpDepth(requestedDepth: unknown): number {
