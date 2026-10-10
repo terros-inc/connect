@@ -19,7 +19,9 @@ export async function runApiHistoryQuery(client: ApiCaller, input: object): Prom
     if (status.state === 'succeeded') return status
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
   }
-  throw new Error(`API history query timed out after ${TIMEOUT_MS / 1000} seconds`)
+  throw new Error(
+    `API history query ${started.queryId} timed out after ${TIMEOUT_MS / 1000} seconds; resume it with apiHistory status --queryId ${started.queryId}`
+  )
 }
 
 function assertStart(value: unknown): StartResponse {

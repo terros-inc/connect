@@ -4,11 +4,12 @@ import type { CompanyId } from '../company'
 import type { ApiHistoryItem } from './model'
 
 export type ApiHistoryStartInput = {
-  companyId: CompanyId
+  companyId?: CompanyId
   apiKeyOwnerId?: UserId
   apiKeyCreatedAt?: number
   status?: number
   endpoint?: string
+  since?: string
   limit?: number
 }
 

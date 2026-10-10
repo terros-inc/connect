@@ -21,3 +21,16 @@ it('reports Athena failure', async () => {
     .mockResolvedValueOnce({ state: 'failed', error: 'scan failed' })
   await expect(runApiHistoryQuery({ call }, {})).rejects.toThrow('scan failed')
 })
+
+it('includes the query ID when polling times out', async () => {
+  vi.useFakeTimers()
+  const call = vi
+    .fn()
+    .mockResolvedValueOnce({ type: 'success', queryId: 'query-resumable' })
+    .mockResolvedValue({ type: 'success', state: 'running' })
+  const result = runApiHistoryQuery({ call }, {})
+  const expectation = expect(result).rejects.toThrow('query-resumable')
+  await vi.advanceTimersByTimeAsync(120_000)
+  await expectation
+  vi.useRealTimers()
+})

@@ -69,11 +69,11 @@ it('exposes API history start and status as internal CLI commands', async () => 
         schemas: {
           Input: {
             type: 'object',
-            required: ['companyId'],
             properties: {
               companyId: { type: 'string' },
               status: { type: 'integer' },
               endpoint: { type: 'string' },
+              since: { type: 'string' },
               limit: { type: 'integer' },
             },
           },
@@ -83,7 +83,8 @@ it('exposes API history start and status as internal CLI commands', async () => 
   )
 
   const endpoints = await loadEndpoints()
-  expect(endpoints.apiHistory!.start!.components.schemas.Input.required).toContain('companyId')
+  expect(endpoints.apiHistory!.start!.components.schemas.Input.required ?? []).not.toContain('companyId')
   expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('status')
   expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('endpoint')
+  expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('since')
 })

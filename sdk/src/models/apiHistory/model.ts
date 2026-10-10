@@ -8,6 +8,7 @@ export type ApiHistoryItem = {
   apiKeyCreatedAt?: number
   endpoint: string
   status: number
+  latency?: number
   error?: string
   timestamp: number
   requestBody: unknown
