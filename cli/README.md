@@ -86,6 +86,11 @@ Single-segment API endpoints are direct commands. For example:
 terros search --query "Jane Doe"
 ```
 
+Nested endpoints use their last two segments, such as `terros event list` for
+`/calendar/event/list`. If that command name is also the first segment of
+another endpoint, the parent segment is prefixed instead. For example, `/program/user/list` becomes
+`terros programUser list` so it does not replace `terros user list`.
+
 List available commands:
 
 ```sh
