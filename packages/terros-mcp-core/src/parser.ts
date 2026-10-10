@@ -20,7 +20,7 @@ export function parseEndpoints(file: string): EndpointGroups {
     }
 
     endpoints[group] ??= {}
-    const duplicate = endpoints[group][alias]
+    const duplicate = Object.hasOwn(endpoints[group], alias) ? endpoints[group][alias] : undefined
     if (duplicate) {
       throw new Error(`Paths ${duplicate.path} and ${path} both map to command: ${group} ${alias}`)
     }
