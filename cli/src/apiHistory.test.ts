@@ -19,7 +19,7 @@ it('reports Athena failure', async () => {
     .fn()
     .mockResolvedValueOnce({ queryId: 'query-1' })
     .mockResolvedValueOnce({ state: 'failed', error: 'scan failed' })
-  await expect(runApiHistoryQuery({ call }, {})).rejects.toThrow('scan failed')
+  await expect(runApiHistoryQuery({ call }, { companyId: 'C:example' })).rejects.toThrow('scan failed')
 })
 
 it('includes the query ID when polling times out', async () => {
@@ -28,9 +28,15 @@ it('includes the query ID when polling times out', async () => {
     .fn()
     .mockResolvedValueOnce({ type: 'success', queryId: 'query-resumable' })
     .mockResolvedValue({ type: 'success', state: 'running' })
-  const result = runApiHistoryQuery({ call }, {})
+  const result = runApiHistoryQuery({ call }, { companyId: 'C:example' })
   const expectation = expect(result).rejects.toThrow('query-resumable')
   await vi.advanceTimersByTimeAsync(120_000)
   await expectation
   vi.useRealTimers()
+})
+
+it('requires a company ID before starting a query', async () => {
+  const call = vi.fn()
+  await expect(runApiHistoryQuery({ call }, {})).rejects.toThrow('--companyId')
+  expect(call).not.toHaveBeenCalled()
 })

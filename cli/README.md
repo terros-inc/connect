@@ -72,6 +72,20 @@ For an MCP client that accepts `mcpServers` configuration:
 
 Standard output is reserved for MCP messages; errors are written to standard error.
 
+## API Request Log
+
+Users with internal access can list a company's recent API requests, newest
+first, from the last seven days:
+
+```sh
+terros api log --companyId <companyId> [--endpoint /account/add] [--status 503] [--errorsOnly] [--since 2026-01-01T00:00:00Z] [--limit 25]
+```
+
+Each request includes its timestamp, endpoint, user, the HTTP status the caller
+received, latency, error type and message, and a redacted, truncated request
+body. Requests that never completed, such as gateway timeouts, are included
+with `completed: false`; `--status 503` or `--errorsOnly` finds them.
+
 ## Find Commands
 
 Terros CLI uses the pattern:

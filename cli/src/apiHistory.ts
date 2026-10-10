@@ -11,6 +11,9 @@ const POLL_INTERVAL_MS = 2_000
 const TIMEOUT_MS = 120_000
 
 export async function runApiHistoryQuery(client: ApiCaller, input: object): Promise<StatusResponse> {
+  if (!('companyId' in input) || typeof input.companyId !== 'string' || input.companyId === '') {
+    throw new Error('API history requires --companyId')
+  }
   const started = assertStart(await client.call('apiHistory/start', input))
   const deadline = Date.now() + TIMEOUT_MS
   while (Date.now() < deadline) {

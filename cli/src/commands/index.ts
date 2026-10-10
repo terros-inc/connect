@@ -2,8 +2,13 @@ import { startMcpServer } from '../mcp'
 import type { CommandGroup, CommandRegistry, Subcommand } from './types'
 import { connectCommands } from './connect'
 import { authCommands } from './auth'
+import { apiCommands } from './api'
 
 export const commandRegistry: CommandRegistry = {
+  api: {
+    description: 'Inspect API usage',
+    subcommands: apiCommands,
+  },
   auth: {
     description: 'Manage authentication',
     subcommands: authCommands,

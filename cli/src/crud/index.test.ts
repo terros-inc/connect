@@ -54,7 +54,7 @@ it('replaces the bundled schema entirely with the internal JSON schema', async (
   expect(endpoints.company!.list!.components).toHaveProperty('schemas.Input.properties.archived')
 })
 
-it('exposes API history start and status as internal CLI commands', async () => {
+it('exposes API history start as an internal CLI command that requires a company ID', async () => {
   vi.mocked(loadInternalSchema).mockResolvedValue(
     JSON.stringify({
       openapi: '3.1.1',
@@ -69,9 +69,11 @@ it('exposes API history start and status as internal CLI commands', async () => 
         schemas: {
           Input: {
             type: 'object',
+            required: ['companyId'],
             properties: {
               companyId: { type: 'string' },
               status: { type: 'integer' },
+              errorsOnly: { type: 'boolean' },
               endpoint: { type: 'string' },
               since: { type: 'string' },
               limit: { type: 'integer' },
@@ -83,8 +85,10 @@ it('exposes API history start and status as internal CLI commands', async () => 
   )
 
   const endpoints = await loadEndpoints()
-  expect(endpoints.apiHistory!.start!.components.schemas.Input.required ?? []).not.toContain('companyId')
-  expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('status')
-  expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('endpoint')
-  expect(endpoints.apiHistory!.start!.components.schemas.Input.properties).toHaveProperty('since')
+  const start = endpoints.apiHistory?.start
+  expect(start?.path).toBe('/apiHistory/start')
+  expect(start?.components).toHaveProperty('schemas.Input.required', ['companyId'])
+  for (const name of ['status', 'errorsOnly', 'endpoint', 'since']) {
+    expect(start?.components).toHaveProperty(['schemas', 'Input', 'properties', name])
+  }
 })

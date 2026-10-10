@@ -1,14 +1,16 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { UserId } from '../user'
 import type { CompanyId } from '../company'
 import type { ApiHistoryItem } from './model'
 
 export type ApiHistoryStartInput = {
-  companyId?: CompanyId
-  apiKeyOwnerId?: UserId
-  apiKeyCreatedAt?: number
+  companyId: CompanyId
+  /** HTTP status the caller received, for example 503 for a gateway timeout */
   status?: number
+  /** only error responses and statuses of 400 or more */
+  errorsOnly?: boolean
+  /** API path, for example `/account/add` */
   endpoint?: string
+  /** ISO 8601 timestamp; the query covers at most the last seven days */
   since?: string
   limit?: number
 }
