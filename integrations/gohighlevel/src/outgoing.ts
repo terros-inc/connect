@@ -114,6 +114,14 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   let createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
   if (createsOpportunity && !account.closer) {
     const fresh = await rereadAccount(client, account.id)
+    if (fresh?.closer) {
+      // The save that assigned the closer sends its own event, which syncs the account; syncing here too would
+      // repeat every write.
+      console.log(
+        `Skipping sync for ${account.id}: its closer was assigned since this save, the closer's save syncs it`
+      )
+      return
+    }
     if (fresh) {
       account = fresh
       workflowStageName = account.workflowState?.stageName
@@ -129,8 +137,11 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
         stage: workflowStageName!,
         message: `Terros account ${account.id} is in ${workflowStageName} with no closer, so it was not synced to GoHighLevel.`,
       })
-      const authorId = await findAlertAuthor(client, account)
-      await saveAlertNote(client, account.id, noCloserAlert, authorId)
+      // A dry run writes nothing, so it must not leave the note that would silence the live run's alert.
+      if (!isSwitchOn('dryRun', scriptConfig.dryRun)) {
+        const authorId = await findAlertAuthor(client, account)
+        await saveAlertNote(client, account.id, noCloserAlert, authorId)
+      }
     }
     return
   }
@@ -269,13 +280,7 @@ async function rereadAccount(client: TerrosClient, accountId: AccountId): Promis
   await new Promise((resolve) => setTimeout(resolve, CLOSER_RECHECK_DELAY_MS))
   try {
     const { account } = await client.account.get({ accountId })
-    const fresh = fromAccountData(account)
-    // The booking flow saves only closerId, so the closer's email is looked up for the GoHighLevel user match.
-    if (fresh.closer?.userId && !fresh.closer.email) {
-      const { users } = await client.user.list({ showArchived: 'all', userIds: [fresh.closer.userId] })
-      fresh.closer.email = users.find((user) => user.userId === fresh.closer?.userId)?.email
-    }
-    return fresh
+    return fromAccountData(account)
   } catch (error) {
     console.warn(`Could not read ${accountId} again: ${error instanceof Error ? error.message : error}`)
   }

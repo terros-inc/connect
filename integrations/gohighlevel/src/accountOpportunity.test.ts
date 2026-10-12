@@ -225,7 +225,7 @@ describe('Account Sync re-checks a missing closer before alerting', () => {
     expect(fake.accountWebhook('Account.1').data).not.toHaveProperty('closerId')
   })
 
-  test('a closer that appears a moment later sends no alert and syncs', async () => {
+  test('a closer that appears a moment later sends no alert and leaves the sync to the closer save', async () => {
     account({ closer: undefined })
     const webhook = fake.accountWebhook('Account.1')
     // As in production, the booking flow saves only closerId; account.closer stays empty.
@@ -233,14 +233,38 @@ describe('Account Sync re-checks a missing closer before alerting', () => {
     fake.terros.users.set(closer.userId, closer)
     await syncWebhook(alertConfig, webhook)
 
+    expect(fake.reads).toEqual(['TERROS account/get Account.1'])
     expect(alertPosts).toEqual([])
     expect(error).not.toHaveBeenCalled()
     expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([])
-    expect(fake.ghl.contacts.get('c-1')).toMatchObject({ assignedTo: 'ghl-closer' })
-    expect([...fake.ghl.opps.values()]).toEqual([
-      expect.objectContaining({ pipelineStageId: 'st-appt', assignedTo: 'ghl-closer' }),
-    ])
-    expect(fake.terros.accounts.get('Account.1')!.externalLeadId).toBeDefined()
+    expect(fake.log).toEqual([])
+    expect(fake.ghl.opps.size).toBe(0)
+  })
+
+  test('the two saves of a booking sync once: the closer save syncs, the delayed first save does not repeat it', async () => {
+    account({ closer: undefined })
+    const firstSave = fake.accountWebhook('Account.1')
+    fake.terros.accounts.get('Account.1')!.closerId = closer.userId
+    fake.terros.accounts.get('Account.1')!.closer = closer
+    const secondSave = fake.accountWebhook('Account.1')
+
+    await Promise.all([syncWebhook(alertConfig, secondSave), syncWebhook(alertConfig, firstSave)])
+
+    expect(fake.log.filter((line) => line.startsWith('GHL PUT /contacts/c-1'))).toHaveLength(1)
+    expect(fake.ghl.opps.size).toBe(1)
+    expect(alertPosts).toEqual([])
+  })
+
+  test('a closer found by the re-read does not depend on looking up the closer user', async () => {
+    account({ closer: undefined })
+    const webhook = fake.accountWebhook('Account.1')
+    fake.terros.accounts.get('Account.1')!.closerId = closer.userId
+    // user/list is denied and no user is known, so any lookup would fail.
+    fake.permissions = new Set(['account:list', 'account:save'])
+    await syncWebhook(alertConfig, webhook)
+
+    expect(alertPosts).toEqual([])
+    expect(error).not.toHaveBeenCalled()
   })
 
   test('a closer that never appears alerts once and records the note as the owner', async () => {
@@ -277,13 +301,14 @@ describe('Account Sync re-checks a missing closer before alerting', () => {
   test('an account that already has a closer is not re-read', async () => {
     account()
     await sync(alertConfig)
-    expect(fake.log.some((line) => line.includes('account/get'))).toBe(false)
+    expect(fake.reads).toEqual([])
     expect(alertPosts).toEqual([])
   })
 
   test('a stage that does not create an opportunity is not re-read or alerted', async () => {
     account({ closer: undefined, workflowStageName: 'Sat' })
     await sync(alertConfig)
+    expect(fake.reads).toEqual([])
     expect(alertPosts).toEqual([])
   })
 
@@ -308,6 +333,16 @@ describe('Account Sync re-checks a missing closer before alerting', () => {
     await syncWebhook({ ...alertConfig, dryRun: 'true' }, fake.accountWebhook('Account.1'))
     expect(alertPosts).toHaveLength(1)
     expect(fake.ghl.opps.size).toBe(0)
+    expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([])
+    expect(fake.log).toEqual([])
+  })
+
+  test('a dry run does not silence the live run that follows it', async () => {
+    account({ closer: undefined })
+    await syncWebhook({ ...alertConfig, dryRun: 'true' }, fake.accountWebhook('Account.1'))
+    await syncWebhook(alertConfig, fake.accountWebhook('Account.1'))
+    expect(alertPosts).toHaveLength(2)
+    expect(fake.terros.accounts.get('Account.1')!.notes).toHaveLength(1)
   })
 
   test('disabled does nothing, not even a re-read', async () => {

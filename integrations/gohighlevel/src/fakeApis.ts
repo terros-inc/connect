@@ -21,6 +21,8 @@ type Json = Record<string, any>
 export class FakeApis {
   /** Mutating calls only, in order, e.g. `GHL PUT /opportunities/opp-1 {...}` */
   log: string[] = []
+  /** Account reads (account/get), which the mutating `log` leaves out. */
+  reads: string[] = []
   blocked: string[] = []
   ghl = {
     contacts: new Map<string, Json>(),
@@ -240,6 +242,7 @@ export class FakeApis {
     }
     switch (route) {
       case 'account/get': {
+        this.reads.push(`TERROS account/get ${body.accountId}`)
         if (this.lacks('account:list')) return err('PermissionDenied', 'account:list required')
         const account = this.terros.accounts.get(body.accountId)
         return account ? ok({ account }) : err('NotFound', `no account ${body.accountId}`)
