@@ -1,4 +1,4 @@
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose'
+import { SignJWT, createLocalJWKSet, decodeProtectedHeader, exportJWK, generateKeyPair } from 'jose'
 import * as core from '@terros-inc/mcp-core'
 import type { EndpointGroups } from '@terros-inc/mcp-core'
 import { createRemoteMcpHandler, type RemoteMcpHandler } from './handler.ts'
@@ -40,12 +40,26 @@ const endpoints: EndpointGroups = {
 const { privateKey, publicKey } = await generateKeyPair('RS256')
 const keys = createLocalJWKSet({ keys: [{ ...(await exportJWK(publicKey)), alg: 'RS256', kid: 'test' }] })
 
-function token(
-  subject: string,
-  overrides: { audience?: string; issuer?: string; expires?: boolean; expiresAt?: number } = {}
-): Promise<string> {
-  const jwt = new SignJWT({ scope: 'openid', azp: 'test-client' })
-    .setProtectedHeader({ alg: 'RS256', kid: 'test' })
+type TokenOverrides = {
+  audience?: string
+  issuer?: string
+  expires?: boolean
+  expiresAt?: number
+  /** Header `typ`; RFC 9068 access tokens carry `at+jwt`, Auth0-profile tokens `JWT`. */
+  typ?: string
+  /** Claims to set or, with `undefined`, to leave out. */
+  claims?: Record<string, unknown>
+}
+
+/** An Auth0 access token in the RFC 9068 profile (the MCP APIs' JWT profile), unless overridden. */
+function token(subject: string, overrides: TokenOverrides = {}): Promise<string> {
+  const claims = Object.fromEntries(
+    Object.entries({ client_id: 'test-client', jti: crypto.randomUUID(), ...overrides.claims }).filter(
+      ([, value]) => value !== undefined
+    )
+  )
+  const jwt = new SignJWT(claims)
+    .setProtectedHeader({ alg: 'RS256', kid: 'test', typ: overrides.typ ?? 'at+jwt' })
     .setSubject(subject)
     .setIssuer(overrides.issuer ?? ISSUER)
     .setAudience(overrides.audience ?? AUDIENCE)
@@ -160,11 +174,15 @@ describe('authentication', () => {
     expect(core.createMcpServer).not.toHaveBeenCalled()
   })
 
-  it.each([
+  it.each<[string, TokenOverrides]>([
     ['another audience', { audience: 'https://api.example.test' }],
     ['another issuer', { issuer: 'https://evil.example.test/' }],
     ['no expiry', { expires: false }],
     ['an expired token', { expiresAt: Math.floor(Date.now() / 1000) - 60 }],
+    [
+      'the Auth0 profile instead of RFC 9068',
+      { typ: 'JWT', claims: { client_id: undefined, jti: undefined, azp: 'test-client' } },
+    ],
   ])('rejects a token for %s', async (_, overrides) => {
     const response = await handle(rpc('initialize', initialize, await token('user-1', overrides)))
     expect(response.status).toBe(401)
@@ -359,16 +377,47 @@ describe('host and origin protection', () => {
 describe('createAuth0Verifier', () => {
   const verifier = createAuth0Verifier({ issuer: ISSUER, audience: AUDIENCE, keys })
 
-  it('returns the expiry of a valid token', async () => {
-    const info = await verifier.verifyAccessToken(await token('user-1'))
+  it('accepts an RFC 9068 access token (typ at+jwt, client_id, jti)', async () => {
+    const accessToken = await token('user-1')
+    expect(decodeProtectedHeader(accessToken)).toMatchObject({ typ: 'at+jwt' })
+    const info = await verifier.verifyAccessToken(accessToken)
+    expect(info).toMatchObject({ token: accessToken, clientId: 'test-client', scopes: [] })
     expect(info.expiresAt).toBeGreaterThan(Date.now() / 1000)
   })
 
-  it.each([
+  it('accepts the application/at+jwt spelling of the header type', async () => {
+    await expect(
+      verifier.verifyAccessToken(await token('user-1', { typ: 'application/at+jwt' }))
+    ).resolves.toMatchObject({ clientId: 'test-client' })
+  })
+
+  it.each<[string, TokenOverrides]>([
     ['without exp', { expires: false }],
     ['past its exp', { expiresAt: Math.floor(Date.now() / 1000) - 60 }],
+    ['for another audience', { audience: 'https://api.example.test' }],
+    ['from another issuer', { issuer: 'https://other.example.test/' }],
+    [
+      'in the Auth0 profile (typ JWT, azp, no jti)',
+      { typ: 'JWT', claims: { client_id: undefined, jti: undefined, azp: 'test-client' } },
+    ],
+    ['without a typ header of at+jwt', { typ: 'JWT' }],
+    ['without client_id', { claims: { client_id: undefined, azp: 'test-client' } }],
+    ['without jti', { claims: { jti: undefined } }],
   ])('rejects a token %s itself, not only through the SDK check', async (_, overrides) => {
     await expect(verifier.verifyAccessToken(await token('user-1', overrides))).rejects.toThrow('Invalid access token')
+  })
+
+  it('rejects a token signed with another key', async () => {
+    const other = await generateKeyPair('RS256')
+    const forged = await new SignJWT({ client_id: 'test-client', jti: 'forged' })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test', typ: 'at+jwt' })
+      .setSubject('user-1')
+      .setIssuer(ISSUER)
+      .setAudience(AUDIENCE)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(other.privateKey)
+    await expect(verifier.verifyAccessToken(forged)).rejects.toThrow('Invalid access token')
   })
 })
 

@@ -8,7 +8,11 @@ export type Auth0VerifierOptions = {
   keys?: JWTVerifyGetKey
 }
 
-/** Verify Auth0-issued JWT access tokens: signature, issuer, audience and a required, unexpired `exp`. */
+/**
+ * Verify Auth0-issued JWT access tokens in the RFC 9068 profile (the MCP APIs' JWT profile): an `at+jwt` header,
+ * signature, issuer, audience and the profile's required claims, including an unexpired `exp`. A token in Auth0's
+ * own profile (`typ: JWT`, client ID in `azp`, no `jti`) is rejected, as is an ID token, which lacks `at+jwt`.
+ */
 export function createAuth0Verifier(options: Auth0VerifierOptions): OAuthTokenVerifier {
   const keys = options.keys ?? createRemoteJWKSet(new URL('.well-known/jwks.json', options.issuer))
   return {
@@ -18,13 +22,13 @@ export function createAuth0Verifier(options: Auth0VerifierOptions): OAuthTokenVe
           issuer: options.issuer,
           audience: options.audience,
           algorithms: ['RS256'],
-          requiredClaims: ['exp'],
+          typ: 'at+jwt',
+          requiredClaims: ['exp', 'iat', 'sub', 'client_id', 'jti'],
         })
         const scope = typeof payload.scope === 'string' ? payload.scope : ''
-        const clientId = typeof payload.azp === 'string' ? payload.azp : payload.client_id
         return {
           token,
-          clientId: typeof clientId === 'string' ? clientId : '',
+          clientId: String(payload.client_id),
           scopes: scope.split(' ').filter(Boolean),
           expiresAt: payload.exp,
         }

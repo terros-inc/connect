@@ -12,7 +12,8 @@ and Cursor. Private: it is deployed, not published to npm.
 - `GET` and `DELETE /` (session streams and termination) return `405` with a JSON-RPC error body. Other paths,
   including `/mcp`, return `404`.
 - Clients present Auth0 access tokens issued for the server itself (audience: its own URL, `https://mcp.terros.com`
-  in prod and `https://mcp.staging.terros.com` in staging). Tokens are checked for signature (the issuer's JWKS),
+  in prod and `https://mcp.staging.terros.com` in staging). Tokens must be in Auth0's RFC 9068 access token
+  profile (header `typ: at+jwt`, with `client_id` and `jti`) and are checked for signature (the issuer's JWKS, RS256),
   issuer, audience and a required, unexpired `exp` before any server is built. Requests without a valid token get
   `401` with a `WWW-Authenticate` challenge carrying a `resource_metadata` URL, `/.well-known/oauth-protected-resource`,
   which names Auth0 as the authorization server (RFC 9728). Neither carries OAuth scopes: Terros puts no permissions in
@@ -29,7 +30,7 @@ and Cursor. Private: it is deployed, not published to npm.
 | File                            | Purpose                                                                    |
 | ------------------------------- | -------------------------------------------------------------------------- |
 | `src/handler.ts`                | Web-standard `fetch(Request)` handler: routing, auth, per-request server   |
-| `src/auth.ts`                   | Auth0 JWT verifier                                                         |
+| `src/auth.ts`                   | Auth0 JWT verifier (RFC 9068 access token profile)                         |
 | `src/exchange.ts`               | Auth0 token exchange: MCP token → Terros API token for the same user       |
 | `src/client.ts`                 | Per-request Terros API client (exchanged token, at most one exchange)      |
 | `src/config.ts`                 | Environment configuration                                                  |

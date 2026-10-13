@@ -68,15 +68,68 @@ scopes (its `401` challenge and protected resource metadata carry none). What a 
 existing permission checks of `api.terros.com` for the user of the exchanged token. Leave the Terros API's own
 settings (step 1.2) as they are, apart from the consent setting named there.
 
-1. **Create the MCP API** (Applications → APIs → Create API), one per stage.
+1. **Create the MCP API** (Applications → APIs → Create API), one per stage: `https://mcp.staging.terros.com` and
+   `https://mcp.terros.com` (in a shared tenant both live there; in a separate staging tenant, staging's lives there).
    - Name `Terros MCP (<stage>)`. Identifier: exactly the stage's MCP URL from the table, with no path and no trailing
      slash. The server derives its audience from its own URL, so there is no separate audience setting; if the
      identifier differs (for example `https://mcp.terros.com/` or `…/mcp`), every login ends in `401`.
-   - Signing algorithm: RS256.
-   - Settings: **RBAC off**, **Add Permissions in the Access Token off**; **Allow Offline Access on**, so a client
-     that asks Auth0 for `offline_access` (listed in Auth0's own metadata, not by the server) gets a refresh token;
-     **Allow Skipping User Consent** may stay off (the MCP clients are third-party and show consent).
-   - Permissions tab: leave empty.
+   - Set these on **both** MCP APIs. They are the MCP APIs' settings only; the Terros API keeps its own (step 1.2).
+
+     | Setting (dashboard)                                                  | Value                               | Why                                                                                                                                                                                     |
+     | -------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+     | JSON Web Token (JWT) Profile                                         | **RFC 9068**                        | The server only accepts RFC 9068 access tokens: header `typ: at+jwt`, client ID in `client_id` (not `azp`), with `jti` (`src/auth.ts`). An Auth0-profile token (`typ: JWT`) gets `401`. |
+     | JSON Web Token (JWT) Signing Algorithm                               | **RS256**                           | The server and the Action verify RS256 only, against the tenant's JWKS.                                                                                                                 |
+     | Maximum Access Token Lifetime                                        | **3600** seconds                    | One hour; connectors renew with a refresh token (below).                                                                                                                                |
+     | Allow Offline Access                                                 | **On**                              | Lets the connectors get refresh tokens (see "Refresh tokens" below).                                                                                                                    |
+     | Allow Skipping User Consent                                          | **Off**                             | The connectors are third-party DCR applications; users see Auth0's consent screen on first sign-in.                                                                                     |
+     | Sender-Constraining                                                  | **None**; **Require**: **Never**    | Claude, ChatGPT and Cursor send plain bearer tokens (no mTLS or DPoP).                                                                                                                  |
+     | RBAC (Enable RBAC) and Add Permissions in the Access Token           | **Off**                             | No scopes or permissions (see "No scopes, no RBAC" above). Permissions tab: leave empty.                                                                                                |
+     | Add-ons: JSON Web Encryption (JWE), consent policy, anonymous access | **Off**                             | The server reads a signed, unencrypted JWT and requires a user's token; consent stays Auth0's default.                                                                                  |
+     | Application Access → User-Delegated Access                           | **All apps allowed**                | Needed for the DCR clients, which cannot be authorized one by one. It does not on its own admit third-party applications; see the next row.                                             |
+     | Application Access → Client Access                                   | **No apps allowed**                 | No client-credentials (machine) tokens for the MCP API; every token is for a user.                                                                                                      |
+     | Default Permissions for Third Party Apps → User-Delegated Access     | **Authorized**, with no permissions | See below. The Auth0 default is **Unauthorized**, which blocks Claude, ChatGPT and Cursor.                                                                                              |
+     | Default Permissions for Third Party Apps → Client Access             | leave **Unauthorized**              | As Client Access above.                                                                                                                                                                 |
+
+     With the Management API, the API settings above are (check the result in the dashboard; the dashboard names are
+     the reference):
+
+     ```sh
+     curl -s -X PATCH "https://<tenant domain>/api/v2/resource-servers/<MCP API ID>" \
+       -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
+       -d '{"token_dialect":"rfc9068_profile","signing_alg":"RS256","token_lifetime":3600,
+            "allow_offline_access":true,"skip_consent_for_verifiable_first_party_clients":false,
+            "enforce_policies":false,"scopes":[],
+            "subject_type_authorization":{"user":{"policy":"allow_all"},"client":{"policy":"deny_all"}}}'
+     ```
+
+   - **Default permissions for third-party applications.** Applications created by Dynamic Client Registration
+     (step 1.4) are third-party applications in Auth0. Auth0 documents that third-party applications always need an
+     explicit client grant for an API, regardless of the API's access policy (so **All apps allowed** alone is not
+     enough), and that before enabling DCR you must configure default permissions for third-party applications on the
+     APIs DCR clients should reach, or they cannot reach any API. The setting is on the MCP API: Settings → **Default
+     Permissions for Third Party Apps** → **User-Delegated Access**: **Authorized**, select no permissions (there are
+     none to select), Save. With the Management API it is a default client grant:
+     ```sh
+     curl -s -X POST "https://<tenant domain>/api/v2/client-grants" \
+       -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
+       -d '{"default_for":"third_party_clients","audience":"<stage MCP URL>","subject_type":"user","scope":[]}'
+     ```
+     Auth0's docs (checked 2026-10-13: "Configure Third-Party Applications", "Dynamic Client Registration", "API
+     Access Policies for Applications", "Application Access to APIs: Client Grants") confirm the requirement, the
+     setting's location, the **Unauthorized** default and the `default_for: third_party_clients` grant. They do not
+     say whether **Authorized** with an empty permission list is accepted; their examples always pick scopes. If the
+     dashboard will not save it, or the live check (step 6) shows Auth0 refusing the connector's authorization
+     (`access_denied` / "Client is not authorized to access …" in the tenant logs), stop and ask before adding any
+     permission: Terros does not put permissions in scopes. Grant only the default permissions on the MCP APIs,
+     never on the Terros API: the connectors must not get tokens for `api.terros.com`.
+   - **Refresh tokens.** The server advertises no scopes (no `scope` in its `401` challenge, no `scopes_supported` in
+     its protected resource metadata), so it never asks for `offline_access` on a client's behalf. A connector gets a
+     refresh token when it requests the `offline_access` scope itself, which Auth0's own discovery document lists;
+     **Allow Offline Access** on the MCP API is what lets Auth0 honour that request. DCR applications may use the
+     `refresh_token` grant. A connector that does not ask for `offline_access` gets no refresh token and sends the
+     user through the sign-in again after the 3600-second token expires. Check in step 6 which case each connector
+     is in (the tenant logs show `sertft`/`fertft` for refresh token exchanges).
+
 2. **Find the Terros API's identifier** (Applications → APIs → the API that `api.terros.com` validates tokens for, in
    the stage's tenant). It is the `apiAudience` deploy value. On that API, **Allow Skipping User Consent** must be on:
    token exchange is non-interactive, so Auth0 cannot ask for consent. Change nothing else; the Terros API only ever
@@ -95,9 +148,10 @@ settings (step 1.2) as they are, apart from the consent setting named there.
    registration endpoint is open, so watch Applications for unexpected registrations; Auth0's tenant logs record them.
    If DCR is not acceptable, create one Regular Web Application per client by hand, add the callback URLs of step
    1.6, and enter its client ID and secret in the client's advanced connector settings.
-5. **Make the login connection domain-level.** Third-party (DCR) applications can only use domain-level connections.
-   For each connection Terros users sign in with (Authentication → Database / Social / Enterprise; note its ID
-   `con_…`):
+5. **Make the login connection domain-level.** Required: Auth0 lets third-party (DCR) applications sign users in only
+   through domain-level connections, so without at least one the connectors cannot sign anyone in. Do this for each
+   connection Terros users sign in with (Authentication → Database / Social / Enterprise; note its ID `con_…`), in
+   each tenant that holds an MCP API:
    ```sh
    curl -s -X PATCH "https://<tenant domain>/api/v2/connections/<connection ID>" \
      -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
@@ -144,7 +198,8 @@ settings (step 1.2) as they are, apart from the consent setting named there.
          issuer: event.secrets.ISSUER,
          audience,
          algorithms: ['RS256'],
-         requiredClaims: ['exp', 'sub'],
+         typ: 'at+jwt',
+         requiredClaims: ['exp', 'sub', 'client_id', 'jti'],
        }))
      } catch {
        api.access.rejectInvalidSubjectToken('Invalid subject_token')
@@ -347,13 +402,14 @@ Record the outcome (client, date, user, tool called, result) on the issue. Then 
 
 ## Troubleshooting
 
-| Symptom                                                                 | Likely cause                                                                                                                                       |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Client loops on login, server logs `401`                                | The Auth0 API identifier is not exactly the MCP URL (step 1.1), or an opaque token (enable the Resource Parameter Compatibility Profile, step 1.3) |
-| Tool calls fail with `Terros API authorization failed (…)`              | The token exchange was refused; the reason is in the message and in the Auth0 `fecte` log (steps 1.7 to 1.9)                                       |
-| Tool calls fail with `AccessDeniedException` / secret errors in the log | The Secrets Manager secret is missing, empty or named differently from `tokenExchangeSecretName` (step 1.10)                                       |
-| Tool calls fail with the Terros API's 401 message                       | `apiAudience` is not the identifier the Terros API validates (step 1.2), or the M2M application lacks access to that API (step 1.9)                |
-| `403 Invalid Host` / WAF blocks                                         | Request did not use the custom domain, or a CDN rewrote `Host`                                                                                     |
-| `403 Invalid Origin`                                                    | A browser client's origin is not in `-c allowedOrigins`                                                                                            |
-| Health check alarm, `/health` fine by hand                              | DNS or certificate mismatch seen from Route 53 checkers; check the record and certificate                                                          |
-| `TERROS_API_KEY must not be set` in the function log                    | Someone added a server-wide key; remove it. Each request must use its caller's token                                                               |
+| Symptom                                                                 | Likely cause                                                                                                                                                                                             |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Client loops on login, server logs `401`                                | The Auth0 API identifier is not exactly the MCP URL (step 1.1), the MCP API's JWT profile is not RFC 9068 (step 1.1), or an opaque token (enable the Resource Parameter Compatibility Profile, step 1.3) |
+| Auth0 refuses the connector's authorization (`access_denied`)           | The MCP API's Default Permissions for Third Party Apps → User-Delegated Access is still Unauthorized, or the login connection is not domain-level (steps 1.1, 1.5)                                       |
+| Tool calls fail with `Terros API authorization failed (…)`              | The token exchange was refused; the reason is in the message and in the Auth0 `fecte` log (steps 1.7 to 1.9)                                                                                             |
+| Tool calls fail with `AccessDeniedException` / secret errors in the log | The Secrets Manager secret is missing, empty or named differently from `tokenExchangeSecretName` (step 1.10)                                                                                             |
+| Tool calls fail with the Terros API's 401 message                       | `apiAudience` is not the identifier the Terros API validates (step 1.2), or the M2M application lacks access to that API (step 1.9)                                                                      |
+| `403 Invalid Host` / WAF blocks                                         | Request did not use the custom domain, or a CDN rewrote `Host`                                                                                                                                           |
+| `403 Invalid Origin`                                                    | A browser client's origin is not in `-c allowedOrigins`                                                                                                                                                  |
+| Health check alarm, `/health` fine by hand                              | DNS or certificate mismatch seen from Route 53 checkers; check the record and certificate                                                                                                                |
+| `TERROS_API_KEY must not be set` in the function log                    | Someone added a server-wide key; remove it. Each request must use its caller's token                                                                                                                     |
