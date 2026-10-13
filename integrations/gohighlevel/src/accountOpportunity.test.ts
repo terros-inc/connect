@@ -144,7 +144,7 @@ describe('default opportunity stages', () => {
 })
 
 describe('Account Sync alerts on a qualifying account with no closer', () => {
-  const alertConfig = { ...config, alertWebhookUrl: ALERT_URL, alertRecipients: 'a@hq.test, b@hq.test' }
+  const alertConfig = { ...config, alertWebhookUrl: ALERT_URL, alertRecipients: 'a@example.test, b@example.test' }
 
   test('logs, posts to the webhook and records a note once', async () => {
     account({ closer: undefined })
@@ -152,7 +152,7 @@ describe('Account Sync alerts on a qualifying account with no closer', () => {
 
     expect(error).toHaveBeenCalledWith(expect.stringContaining('GHL_SYNC_ALERT'))
     expect(alertPosts).toEqual([
-      expect.objectContaining({ accountId: 'Account.1', recipients: ['a@hq.test', 'b@hq.test'] }),
+      expect.objectContaining({ accountId: 'Account.1', recipients: ['a@example.test', 'b@example.test'] }),
     ])
     expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([
       expect.objectContaining({ text: expect.stringContaining(ALERT_NOTE_PREFIX), userId: 'U.owner' }),
@@ -196,7 +196,7 @@ describe('Account Sync alerts on a qualifying account with no closer', () => {
     fake.addContact('c-1')
     account({ closer: undefined })
     await sync(alertConfig)
-    fake.terros.accounts.get('Account.1')!.closer = { userId: 'U.closer', email: 'closer@hq.test' }
+    fake.terros.accounts.get('Account.1')!.closer = { userId: 'U.closer', email: 'closer@example.test' }
     await sync(alertConfig)
     expect([...fake.ghl.notes.values()].flat()).toEqual([])
   })

@@ -51,7 +51,7 @@ export const handler = wrapConnectHandler<OpportunityWorkflowWebhook, void, Scri
     throw Error(`GoHighLevel location ${locationId} does not match configured location ${scriptConfig.locationId}`)
   }
 
-  // Expected when HQ books an appointment directly in GoHighLevel: that contact was never in Terros. The webhook alone
+  // Expected when someone books an appointment directly in GoHighLevel: that contact was never in Terros. The webhook alone
   // cannot tell that apart from a lost link, so the message stays explicit and nothing alerts.
   const match = await client.account.match({ externalLeadId: contactId })
   const account = match.account

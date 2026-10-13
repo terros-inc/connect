@@ -32,7 +32,12 @@ const hookOpportunity = (stage: string, cfg: Record<string, unknown> = config) =
 /** Terros account and consultation already linked to a GoHighLevel contact, appointment and opportunity. */
 function linked(opportunity: Record<string, unknown> = {}, appointment: Record<string, unknown> = {}) {
   fake.addAccount({ accountId: 'Account.1', workflowStageName: 'Appointment Set', externalLeadId: 'c-1' })
-  fake.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test', sourceId: 'appt-1' })
+  fake.addEvent({
+    eventId: 'Event.1',
+    accountId: 'Account.1',
+    attendeeEmail: 'closer@example.test',
+    sourceId: 'appt-1',
+  })
   fake.addContact('c-1')
   fake.addOpp('opp-1', 'c-1', 'st-sat', opportunity)
   fake.addAppt('appt-1', 'c-1', appointment)
@@ -94,7 +99,7 @@ describe('Appointment Sync leaves an existing opportunity and appointment to GoH
 
   test('creates only the appointment for a new consultation', async () => {
     fake.addAccount({ accountId: 'Account.1', workflowStageName: 'Appointment Set' })
-    fake.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    fake.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@example.test' })
     await syncEvent('Event.1', 'add')
     expect([...fake.ghl.appts.values()]).toEqual([
       expect.objectContaining({ appointmentStatus: 'confirmed', toNotify: true, assignedUserId: 'ghl-closer' }),

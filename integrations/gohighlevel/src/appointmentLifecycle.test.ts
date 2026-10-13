@@ -41,7 +41,7 @@ function linkedSetup() {
   return world.addEvent({
     eventId: 'Event.1',
     accountId: 'Account.1',
-    attendeeEmail: 'closer@hq.test',
+    attendeeEmail: 'closer@example.test',
     sourceId: 'appt-1',
   })
 }
@@ -241,7 +241,7 @@ describe('Appointment Sync: Terros remove', () => {
 
 describe('Appointment Sync: missing event details are quiet skips', () => {
   test('a Consultation without an account', async () => {
-    world.addEvent({ eventId: 'Event.1', attendeeEmail: 'closer@hq.test' })
+    world.addEvent({ eventId: 'Event.1', attendeeEmail: 'closer@example.test' })
     await runSync(world.eventWebhook('Event.1', 'add'))
     expect(world.log).toEqual([])
   })
@@ -282,22 +282,22 @@ describe('Appointment Sync: closer validation', () => {
   }
 
   test('an unmatched closer email throws before anything is created', async () => {
-    await expect(bookWithCloser('nobody@hq.test')).rejects.toThrow('No GoHighLevel user matches')
+    await expect(bookWithCloser('nobody@example.test')).rejects.toThrow('No GoHighLevel user matches')
 
     expect(world.log).toEqual([])
     expect(world.ghl.contacts.size + world.ghl.appts.size + world.ghl.opps.size).toBe(0)
   })
 
   test('an ambiguous closer email throws before anything is created', async () => {
-    world.ghl.users.push({ id: 'ghl-closer-2', email: 'Closer@hq.test' })
+    world.ghl.users.push({ id: 'ghl-closer-2', email: 'Closer@example.test' })
 
-    await expect(bookWithCloser('closer@hq.test')).rejects.toThrow('Multiple GoHighLevel users')
+    await expect(bookWithCloser('closer@example.test')).rejects.toThrow('Multiple GoHighLevel users')
 
     expect(world.log).toEqual([])
   })
 
   test('a matched closer creates an assigned appointment', async () => {
-    await bookWithCloser('closer@hq.test')
+    await bookWithCloser('closer@example.test')
 
     expect([...world.ghl.appts.values()].map((a) => a.assignedUserId)).toEqual(['ghl-closer'])
     expect(world.terros.events.get('Event.1')!.sourceId).toBeDefined()
@@ -310,7 +310,7 @@ describe('Appointment Sync: link validation', () => {
     world.addEvent({
       eventId: 'Event.1',
       accountId: 'Account.1',
-      attendeeEmail: 'closer@hq.test',
+      attendeeEmail: 'closer@example.test',
       ...event,
     })
     return runSync(world.eventWebhook('Event.1', 'add'))
@@ -362,7 +362,7 @@ describe('Appointment Sync: link validation', () => {
     world.addEvent({
       eventId: 'Event.1',
       accountId: 'Account.1',
-      attendeeEmail: 'closer@hq.test',
+      attendeeEmail: 'closer@example.test',
       sourceId: 'appt-1',
     })
 
@@ -389,7 +389,7 @@ describe('Appointment Sync: contact and appointment only', () => {
     'a %s creates the appointment without reading the stage or touching opportunities',
     async (action) => {
       world.addAccount({ accountId: 'Account.1', workflowStageName: undefined })
-      world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+      world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@example.test' })
 
       await runSync(world.eventWebhook('Event.1', action))
 
