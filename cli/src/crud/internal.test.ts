@@ -156,6 +156,13 @@ it('rejects invalid downloaded schemas without caching them', async () => {
   await expect(readFile(join(home.path, '.config', 'terros', 'openapi.json'))).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
+it('falls back to the bundled schema when the downloaded schema has duplicate commands', async () => {
+  const operation = schema.paths['/company/list']
+  get.mockResolvedValue({ ...schema, paths: { '/a/item/list': operation, '/b/item/list': operation } })
+  expect(await loadInternalSchema()).toBeUndefined()
+  expect(console.error).toHaveBeenCalledWith(expect.stringContaining('both map to command: item list'))
+})
+
 it('clears both runtime caches for login', async () => {
   await loadInternalSchema()
   await clearRuntimeCaches()
