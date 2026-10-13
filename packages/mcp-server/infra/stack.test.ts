@@ -158,6 +158,21 @@ describe('resolveStage', () => {
     expect(() => resolveStage((key) => ({ stage: 'staging' })[key])).toThrow('apiBaseUrl')
   })
 
+  it('serves staging at mcp.staging.terros.com', () => {
+    const context: Record<string, string> = {
+      stage: 'staging',
+      apiBaseUrl: 'https://api.example.test',
+      auth0Issuer: 'https://auth.example.test/',
+      apiAudience: 'https://api.example.test',
+      tokenExchangeClientId: 'exchange-client',
+    }
+    expect(resolveStage((key) => context[key])).toMatchObject({
+      stage: 'staging',
+      domainName: 'mcp.staging.terros.com',
+      tokenExchangeSecretName: 'terros-mcp/staging/auth0-token-exchange',
+    })
+  })
+
   it('rejects an unknown stage', () => {
     expect(() => resolveStage(() => undefined)).toThrow('-c stage=')
   })

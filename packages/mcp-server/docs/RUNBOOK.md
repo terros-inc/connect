@@ -8,14 +8,14 @@ Do every step for **staging** first, finish the live check (step 6) there, then 
 
 |              | staging                                  | prod                                 |
 | ------------ | ---------------------------------------- | ------------------------------------ |
-| MCP URL      | `https://mcp-staging.terros.com`         | `https://mcp.terros.com`             |
+| MCP URL      | `https://mcp.staging.terros.com`         | `https://mcp.terros.com`             |
 | Stack        | `TerrosMcpServer-staging`                | `TerrosMcpServer-prod`               |
 | Terros API   | staging API base URL (`-c apiBaseUrl=…`) | `https://api.terros.com` (default)   |
 | Auth0 issuer | staging tenant (`-c auth0Issuer=…`)      | `https://auth.terros.com/` (default) |
 
 The MCP server is served at the root of its hostname: there is no `/mcp` path and no alias. The MCP URL is also the
-OAuth resource and the Auth0 audience of the tokens clients present. The staging hostname is a default in
-`infra/stages.ts`; pass `-c domainName=…` to use another one.
+OAuth resource and the Auth0 audience of the tokens clients present. Both hostnames are per-stage defaults in
+`infra/stages.ts` (`-c domainName=…` overrides one); nothing in the server code names a hostname.
 
 ## Architecture
 
@@ -51,7 +51,7 @@ Do this in the Auth0 tenant that issues logins for the target environment (prod:
 tenant's plan first.
 
 1. **Create an API** (Applications → APIs → Create API) for the MCP server.
-   - Identifier: exactly the MCP URL, with no path and no trailing slash: `https://mcp-staging.terros.com` (staging) or
+   - Identifier: exactly the MCP URL, with no path and no trailing slash: `https://mcp.staging.terros.com` (staging) or
      `https://mcp.terros.com` (prod). The server derives its audience from its own URL, so there is no separate
      audience setting; if the identifier differs (for example `https://mcp.terros.com/` or `…/mcp`), every login
      ends in `401`.
@@ -150,7 +150,8 @@ Pick one, per stage.
 
 **A. `terros.com` is a Route 53 hosted zone in the deploy account.** Pass `-c hostedZoneId=<zone id>
 -c zoneName=terros.com`. The stack creates the ACM certificate (DNS-validated in that zone) and the alias `A`
-record. Nothing else to do.
+record. Nothing else to do. For staging, if `staging.terros.com` is its own (delegated) hosted zone, pass that
+zone instead: `-c zoneName=staging.terros.com` with its zone ID.
 
 **B. DNS is managed elsewhere.**
 
@@ -237,7 +238,7 @@ should not reach the function (403).
 ## 6. Live check with Claude, ChatGPT and Cursor (staging)
 
 Use a staging Terros user without access to real customer data. The connector URL is the bare origin,
-`https://mcp-staging.terros.com` (prod: `https://mcp.terros.com`), with no path.
+`https://mcp.staging.terros.com` (prod: `https://mcp.terros.com`), with no path.
 
 **OAuth callback URLs.** With DCR (step 1.3) each client registers its own callback. If DCR is off, or callbacks
 are allowlisted, these must be allowed callback URLs of the client's Auth0 application (checked against the vendors'
@@ -254,19 +255,19 @@ Claude Desktop uses the same connector as claude.ai (added under Settings → Co
 
 **Claude** (claude.ai or Claude Desktop, Settings → Connectors → Add custom connector):
 
-1. Name `Terros staging`, URL `https://mcp-staging.terros.com`. If Auth0 DCR is off, open the advanced settings and
+1. Name `Terros staging`, URL `https://mcp.staging.terros.com`. If Auth0 DCR is off, open the advanced settings and
    enter the client ID created for Claude.
 2. Connect, sign in through the Auth0 page, and approve.
 3. In a chat with the connector enabled, ask for a harmless read, e.g. "Use Terros to show my user profile". The
    tool call should succeed and return data for the signed-in user.
 
 **ChatGPT** (Settings → Apps & Connectors → Advanced → developer mode, then Create): URL
-`https://mcp-staging.terros.com`, authentication OAuth. Sign in, then ask for the same harmless read.
+`https://mcp.staging.terros.com`, authentication OAuth. Sign in, then ask for the same harmless read.
 
 **Cursor** (Settings → MCP → Add, or `~/.cursor/mcp.json`):
 
 ```json
-{ "mcpServers": { "terros-staging": { "url": "https://mcp-staging.terros.com" } } }
+{ "mcpServers": { "terros-staging": { "url": "https://mcp.staging.terros.com" } } }
 ```
 
 1. Cursor shows the server as needing login; click **Login** and finish the Auth0 sign-in.

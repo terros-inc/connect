@@ -1,7 +1,7 @@
 # @terros-inc/mcp-server
 
 The hosted remote MCP server for the Terros API, served at the root of `https://mcp.terros.com` (prod) and
-`https://mcp-staging.terros.com` (staging), with no path. It exposes the same endpoint-generated tools as `terros mcp`
+`https://mcp.staging.terros.com` (staging), with no path. It exposes the same endpoint-generated tools as `terros mcp`
 (both are built by `@terros-inc/mcp-core`), but over Streamable HTTP for remote MCP clients such as Claude, ChatGPT
 and Cursor. Private: it is deployed, not published to npm.
 
@@ -11,9 +11,9 @@ and Cursor. Private: it is deployed, not published to npm.
   server-wide API key: the server refuses to start if `TERROS_API_KEY` is set.
 - `GET` and `DELETE /` (session streams and termination) return `405` with a JSON-RPC error body. Other paths,
   including `/mcp`, return `404`.
-- Clients present Auth0 access tokens issued for the server itself (audience `https://mcp.terros.com`). Tokens are
-  checked for signature (the issuer's JWKS), issuer, audience and a required, unexpired `exp` before any server is
-  built. Requests without a valid token get `401` with a `WWW-Authenticate` challenge carrying `scope` and a
+- Clients present Auth0 access tokens issued for the server itself (audience: its own URL, `https://mcp.terros.com`
+  in prod and `https://mcp.staging.terros.com` in staging). Tokens are checked for signature (the issuer's JWKS),
+  issuer, audience and a required, unexpired `exp` before any server is built. Requests without a valid token get `401` with a `WWW-Authenticate` challenge carrying `scope` and a
   `resource_metadata` URL, `/.well-known/oauth-protected-resource`, which names Auth0 as the authorization server and
   lists `scopes_supported` (RFC 9728). Clients read the authorization server metadata from Auth0 itself.
 - No token passthrough: the MCP-audience token never reaches the Terros API. On a request's first API call the

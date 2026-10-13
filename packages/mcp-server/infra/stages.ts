@@ -18,7 +18,7 @@ type StageSettings = Pick<
 
 /** Values known in the repo. Everything else is passed with `-c key=value` (see docs/RUNBOOK.md). */
 const DEFAULTS: Record<StageName, Partial<StageSettings>> = {
-  staging: { domainName: 'mcp-staging.terros.com', tokenExchangeSecretName: 'terros-mcp/staging/auth0-token-exchange' },
+  staging: { domainName: 'mcp.staging.terros.com', tokenExchangeSecretName: 'terros-mcp/staging/auth0-token-exchange' },
   prod: {
     domainName: 'mcp.terros.com',
     apiBaseUrl: 'https://api.terros.com',

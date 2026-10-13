@@ -15,7 +15,7 @@ import { Annotations, CfnOutput, Duration, RemovalPolicy, Stack, type StackProps
 
 export type McpServerStackProps = StackProps & {
   stage: 'staging' | 'prod'
-  /** Public hostname, e.g. mcp.terros.com. The MCP server is served at the root, https://<domainName>, which is also the Auth0 audience. */
+  /** Public hostname, per stage in infra/stages.ts (mcp.staging.terros.com, mcp.terros.com). The MCP server is served at the root, https://<domainName>, which is also the Auth0 audience. */
   domainName: string
   apiBaseUrl: string
   auth0Issuer: string

@@ -60,7 +60,7 @@ function originValidationResponse(origin: string | null, allowedHostnames: strin
 }
 
 /**
- * Stateless Streamable HTTP MCP server at the root of its own origin (`https://mcp.terros.com`). Every POST is served
+ * Stateless Streamable HTTP MCP server at the root of its own origin (`config.resource`, set per stage). Every POST is served
  * by a fresh McpServer whose API client acts for that request's verified caller; nothing about a caller outlives its
  * request.
  */

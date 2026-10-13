@@ -31,7 +31,7 @@ export const handler = createLambdaHandler(
   createRemoteMcpHandler({
     config,
     version,
-    // The server is its own audience: clients get tokens for https://mcp.terros.com, never for the Terros API.
+    // The server is its own audience (MCP_RESOURCE_URL, set per stage): clients never get tokens for the Terros API.
     verifier: createAuth0Verifier({ issuer: config.issuer, audience: config.resource }),
     exchangeToken: createAuth0TokenExchange({
       issuer: config.issuer,

@@ -1,6 +1,7 @@
 export type ServerConfig = {
   /**
-   * Public URL of the MCP server, an origin without a path or trailing slash, e.g. https://mcp.terros.com. It is the
+   * Public URL of the MCP server, an origin without a path or trailing slash, e.g. https://mcp.terros.com (prod) or
+   * https://mcp.staging.terros.com (staging), set per stage by the stack. It is the
    * OAuth resource and the Auth0 audience of the tokens clients present, and its hostname is the only accepted Host.
    */
   resource: string
