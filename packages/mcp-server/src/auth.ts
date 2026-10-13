@@ -24,6 +24,7 @@ export function createAuth0Verifier(options: Auth0VerifierOptions): OAuthTokenVe
           issuer: options.issuer,
           audience: options.audience,
           algorithms: ['RS256'],
+          requiredClaims: ['exp'],
         })
         const scope = typeof payload.scope === 'string' ? payload.scope : ''
         const clientId = typeof payload.azp === 'string' ? payload.azp : payload.client_id

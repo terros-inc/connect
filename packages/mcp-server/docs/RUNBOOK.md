@@ -84,8 +84,7 @@ repository root, and `wget`. Bootstrap CDK once per account: `pnpm cdk bootstrap
 From `packages/mcp-server`:
 
 ```sh
-pnpm --filter @terros-inc/mcp-server... build      # workspace dependencies
-pnpm package                                      # dist/lambda.mjs + dist/terros.yml
+pnpm package   # builds workspace dependencies, then dist/lambda.mjs + dist/terros.yml
 
 # staging
 pnpm cdk diff   -c stage=staging -c apiBaseUrl=<staging API URL> -c auth0Issuer=<staging issuer>/ \

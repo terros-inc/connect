@@ -36,15 +36,17 @@ const endpoints: EndpointGroups = {
 const { privateKey, publicKey } = await generateKeyPair('RS256')
 const keys = createLocalJWKSet({ keys: [{ ...(await exportJWK(publicKey)), alg: 'RS256', kid: 'test' }] })
 
-function token(subject: string, overrides: { audience?: string; issuer?: string } = {}): Promise<string> {
-  return new SignJWT({ scope: 'openid', azp: 'test-client' })
+function token(
+  subject: string,
+  overrides: { audience?: string; issuer?: string; expires?: boolean } = {}
+): Promise<string> {
+  const jwt = new SignJWT({ scope: 'openid', azp: 'test-client' })
     .setProtectedHeader({ alg: 'RS256', kid: 'test' })
     .setSubject(subject)
     .setIssuer(overrides.issuer ?? ISSUER)
     .setAudience(overrides.audience ?? AUDIENCE)
     .setIssuedAt()
-    .setExpirationTime('5m')
-    .sign(privateKey)
+  return (overrides.expires === false ? jwt : jwt.setExpirationTime('5m')).sign(privateKey)
 }
 
 const apiFetch = vi.fn<typeof fetch>()
@@ -137,6 +139,7 @@ describe('authentication', () => {
   it.each([
     ['another audience', { audience: 'https://api.example.test' }],
     ['another issuer', { issuer: 'https://evil.example.test/' }],
+    ['no expiry', { expires: false }],
   ])('rejects a token for %s', async (_, overrides) => {
     const response = await handle(rpc('initialize', initialize, await token('user-1', overrides)))
     expect(response.status).toBe(401)
@@ -225,9 +228,36 @@ describe('host and origin protection', () => {
     expect(response.status).toBe(403)
   })
 
-  it('accepts an allowed browser Origin', async () => {
+  it('accepts an allowed browser Origin and lets it read the response', async () => {
     const response = await handle(request('GET', { path: '/health', headers: { origin: 'https://app.example.test' } }))
     expect(response.status).toBe(200)
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.test')
+    expect(response.headers.get('vary')).toContain('Origin')
+  })
+
+  it('answers a CORS preflight from an allowed origin without authentication', async () => {
+    const response = await handle(request('OPTIONS', { headers: { origin: 'https://app.example.test' } }))
+    expect(response.status).toBe(204)
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.test')
+    expect(response.headers.get('access-control-allow-headers')).toContain('Authorization')
+    expect(response.headers.get('access-control-expose-headers')).toContain('WWW-Authenticate')
+    expect(core.createMcpServer).not.toHaveBeenCalled()
+  })
+
+  it('exposes the auth challenge to an allowed origin', async () => {
+    const response = await handle(
+      request('POST', {
+        headers: { origin: 'https://app.example.test' },
+        body: { jsonrpc: '2.0', id: 1, method: 'ping' },
+      })
+    )
+    expect(response.status).toBe(401)
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.test')
+  })
+
+  it('adds no CORS headers for non-browser clients', async () => {
+    const response = await handle(request('GET', { path: '/health' }))
+    expect(response.headers.get('access-control-allow-origin')).toBeNull()
   })
 })
 

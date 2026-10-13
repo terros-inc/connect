@@ -10,7 +10,7 @@
   "scripts": {
     "fetch-openapi": "rm -f terros.yml && wget https://docs.terros.com/openapi/terros.yml",
     "build": "tsdown",
-    "package": "pnpm fetch-openapi && pnpm build && cp terros.yml dist/terros.yml",
+    "package": "pnpm --filter '@terros-inc/mcp-server^...' build && pnpm fetch-openapi && pnpm build && cp terros.yml dist/terros.yml",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cdk": "cdk"

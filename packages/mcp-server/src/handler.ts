@@ -26,6 +26,14 @@ export type RemoteMcpHandlerOptions = {
 
 export type RemoteMcpHandler = (request: Request) => Promise<Response>
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers':
+    'Authorization, Content-Type, Accept, Mcp-Protocol-Version, Mcp-Session-Id, Last-Event-ID',
+  'Access-Control-Expose-Headers': 'WWW-Authenticate, Mcp-Session-Id',
+  'Access-Control-Max-Age': '600',
+}
+
 function methodNotAllowed(): Response {
   return Response.json(
     { jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null },
@@ -69,6 +77,18 @@ export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): Remote
       originValidationResponse(request, config.allowedOrigins)
     if (rejected) return rejected
 
+    // Only an allowlisted browser origin gets this far, so it may read the response.
+    const origin = request.headers.get('origin')
+    if (!origin) return route(request)
+    const response = request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : await route(request)
+    const headers = new Headers(response.headers)
+    headers.set('Access-Control-Allow-Origin', origin)
+    headers.append('Vary', 'Origin')
+    for (const [name, value] of Object.entries(CORS_HEADERS)) headers.set(name, value)
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
+  }
+
+  async function route(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url)
     if (pathname === '/health') {
       return request.method === 'GET' ? Response.json({ status: 'ok', version: options.version }) : methodNotAllowed()

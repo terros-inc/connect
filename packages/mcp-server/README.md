@@ -32,7 +32,7 @@ Run from this directory:
 - `pnpm test`: handler, adapter and infrastructure (CDK assertion) tests; no AWS access needed
 - `pnpm typecheck`: `tsc --noEmit` over `src` and `infra`
 - `pnpm build`: bundle `src/lambda.ts` and all dependencies into `dist/lambda.mjs`
-- `pnpm package`: download the OpenAPI document, build, and copy it to `dist/terros.yml` (the Lambda asset)
+- `pnpm package`: build the workspace dependencies, download the OpenAPI document, build, and copy it to `dist/terros.yml` (the Lambda asset)
 - `pnpm cdk synth|diff|deploy -c stage=<staging|prod> …`: see the runbook
 
 Deploying, DNS, Auth0 and the live client checks are done by a person: see [docs/RUNBOOK.md](docs/RUNBOOK.md).
