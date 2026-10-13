@@ -19,11 +19,11 @@ export type McpServerStackProps = StackProps & {
   domainName: string
   apiBaseUrl: string
   auth0Issuer: string
-  /** Auth0 API identifier of the Terros API, the audience the token exchange asks for. */
+  /** Auth0 API identifier of the Terros API, the audience the token exchange asks for. The same in both stages. */
   apiAudience: string
-  /** Client ID of the Auth0 Machine to Machine application that performs the token exchange. */
+  /** Client ID of the Auth0 Machine to Machine application that performs the token exchange, shared by both stages. */
   tokenExchangeClientId: string
-  /** Name of the Secrets Manager secret holding that application's client secret (created by a person, see the runbook). */
+  /** Name of the Secrets Manager secret holding that application's client secret in this stage's account (created by a person, see the runbook). */
   tokenExchangeSecretName: string
   /** Extra browser origin hostnames allowed besides the server's own. */
   allowedOrigins: string[]

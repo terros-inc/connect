@@ -3,16 +3,18 @@
 The steps a person does to put `@terros-inc/mcp-server` live: Auth0, DNS and certificates, deploying to staging and
 prod, checking the health check, logs and alarms, and the live check with Claude and Cursor. The code, the tests and
 the infrastructure definition (`infra/`) are in this package. Nothing has been run against AWS yet; in Auth0, the
-per-stage MCP APIs (step 1.1) are configured for both stages and the rest of §1 remains (see "Progress" in §1).
+per-stage MCP APIs (step 1.1) and Dynamic Client Registration (step 1.4) are done and the rest of §1 remains (see
+"Progress" in §1).
 
-Do every step for **staging** first, finish the live check (step 6) there, then repeat steps 1 to 5 for **prod**.
+Do every step for **staging** first, finish the live check (step 6) there, then repeat steps 1.10 and 2 to 5 for
+**prod** (the rest of §1 is shared by both stages and done once).
 
 |              | staging                                  | prod                                 |
 | ------------ | ---------------------------------------- | ------------------------------------ |
 | MCP URL      | `https://mcp.staging.terros.com`         | `https://mcp.terros.com`             |
 | Stack        | `TerrosMcpServer-staging`                | `TerrosMcpServer-prod`               |
 | Terros API   | staging API base URL (`-c apiBaseUrl=…`) | `https://api.terros.com` (default)   |
-| Auth0 issuer | staging tenant (`-c auth0Issuer=…`)      | `https://auth.terros.com/` (default) |
+| Auth0 issuer | `https://auth.terros.com/` (default)     | `https://auth.terros.com/` (default) |
 
 The MCP server is served at the root of its hostname: there is no `/mcp` path and no alias. The MCP URL is also the
 OAuth resource and the Auth0 audience of the tokens clients present. Both hostnames are per-stage defaults in
@@ -47,20 +49,24 @@ between requests.
 
 ## 1. Auth0
 
-Custom Token Exchange is available on Terros's Auth0 Enterprise Agreement. Do these steps once per stage, staging
-first. Values per stage:
+Custom Token Exchange is available on Terros's Auth0 Enterprise Agreement. Staging and prod share **one Auth0
+tenant** (`tantalim`, issuer `https://auth.terros.com/`), one login and one Terros API audience (the existing API that
+`api.terros.com` validates tokens for). Only the MCP resource audience differs per stage. So every step below is done
+once in that tenant, except step 1.1 (one MCP API per stage) and step 1.10 (one Secrets Manager entry per stage's
+deploy account):
 
-|                                      | staging                                                                         | prod                                                                      |
-| ------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Tenant                               | the tenant behind the staging issuer (see "Tenants" below)                      | the tenant behind `https://auth.terros.com/`                              |
-| MCP API identifier (step 1.1)        | `https://mcp.staging.terros.com`                                                | `https://mcp.terros.com`                                                  |
-| M2M application (step 1.9)           | `Terros MCP server (staging)`                                                   | `Terros MCP server (prod)`                                                |
-| Client secret in AWS Secrets Manager | `terros-mcp/staging/auth0-token-exchange` (staging deploy account, `us-east-1`) | `terros-mcp/prod/auth0-token-exchange` (prod deploy account, `us-east-1`) |
+|                                                 | staging                                                                         | prod                                                                      |
+| ----------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Tenant                                          | `tantalim` (shared)                                                             | `tantalim` (shared)                                                       |
+| MCP API identifier (step 1.1)                   | `https://mcp.staging.terros.com`                                                | `https://mcp.terros.com`                                                  |
+| Token exchange target audience (`apiAudience`)  | the existing Terros API identifier (step 1.2), shared                           | the same identifier                                                       |
+| M2M application (step 1.9)                      | `Terros MCP Server` (one application, shared)                                   | the same application                                                      |
+| Its client secret in AWS Secrets Manager (1.10) | `terros-mcp/staging/auth0-token-exchange` (staging deploy account, `us-east-1`) | `terros-mcp/prod/auth0-token-exchange` (prod deploy account, `us-east-1`) |
 
 **Progress (2026-10-13).** Step 1.1, the per-stage MCP API, is **done for both stages** (configured by Trevor):
 
-| Stage   | API name    | Identifier                       | API id                     | Tenant     |
-| ------- | ----------- | -------------------------------- | -------------------------- | ---------- |
+| Stage   | API name     | Identifier                       | API id                     | Tenant     |
+| ------- | ------------ | -------------------------------- | -------------------------- | ---------- |
 | prod    | `Terros MCP` | `https://mcp.terros.com`         | `6acebabc6581d504656df4c3` | `tantalim` |
 | staging | `Terros MCP` | `https://mcp.staging.terros.com` | —                          | —          |
 
@@ -69,16 +75,13 @@ token lifetime, Allow Offline Access on, Allow Skipping User Consent off, Sender
 RBAC and add-ons off, Application Access → User-Delegated Access "All apps allowed", Client Access "No apps allowed",
 and Default Permissions for Third Party Apps → User-Delegated Access **Authorized** with no permissions.
 
-The remaining Auth0 steps are still manual and not done: Dynamic Client Registration plus the domain-level connection
-(steps 1.4, 1.5), the MCP server M2M application with a grant on `api.terros.com` (step 1.9), the Custom Token Exchange
-Action and token exchange profile (steps 1.7, 1.8), the connector callback URLs (step 1.6), and the Secrets Manager
-entries (step 1.10). Steps 1.2, 1.3, 1.11 and 1.12 also remain.
+Step 1.4, open **Dynamic Client Registration** on the `tantalim` tenant, is **done** (enabled by Trevor). See its
+operations note on monitoring and cleaning up DCR-registered applications.
 
-**Tenants.** If staging logins come from the same tenant as prod (issuer `https://auth.terros.com/`), both MCP APIs
-and both M2M applications live in that one tenant, and tenant-wide steps (1.3, 1.4, 1.5, 1.7, 1.8, 1.11) are done once
-and shared: there is one Action and one token exchange profile, whose `MCP_AUDIENCES` secret lists both stages. If
-staging is a separate Auth0 tenant, do every step in each tenant; each tenant's Action lists only its own stage, and
-staging's issuer is the `auth0Issuer` staging deploy value. The issuer is whatever step 1.12 prints for that tenant.
+The remaining Auth0 steps are still manual and not done. **Next:** promote the login connection to domain level (step
+1.5). Then the shared `Terros MCP Server` M2M application with its grant on the Terros API (step 1.9), the Custom Token
+Exchange Action and token exchange profile (steps 1.7, 1.8), the connector callback URLs (step 1.6), and the Secrets
+Manager entries (step 1.10). Steps 1.2, 1.3, 1.11 and 1.12 also remain.
 
 **No scopes, no RBAC.** Terros does not put permissions in OAuth scopes. On the MCP APIs (step 1.1) do not enable
 RBAC or **Add Permissions in the Access Token**, and define no permissions. The server neither advertises nor checks
@@ -86,8 +89,8 @@ scopes (its `401` challenge and protected resource metadata carry none). What a 
 existing permission checks of `api.terros.com` for the user of the exchanged token. Leave the Terros API's own
 settings (step 1.2) as they are, apart from the consent setting named there.
 
-1. **Create the MCP API** (Applications → APIs → Create API), one per stage: `https://mcp.staging.terros.com` and
-   `https://mcp.terros.com` (in a shared tenant both live there; in a separate staging tenant, staging's lives there).
+1. **Create the MCP API** (Applications → APIs → Create API), one per stage, both in the shared tenant:
+   `https://mcp.staging.terros.com` and `https://mcp.terros.com`.
    **Done for both stages** (see "Progress" above): prod `Terros MCP` (id `6acebabc6581d504656df4c3`, tenant `tantalim`)
    and staging `Terros MCP` (`https://mcp.staging.terros.com`), both with the settings below. The steps here are kept as
    the record of what was set and for recreating the APIs.
@@ -152,34 +155,52 @@ settings (step 1.2) as they are, apart from the consent setting named there.
      user through the sign-in again after the 3600-second token expires. Check in step 6 which case each connector
      is in (the tenant logs show `sertft`/`fertft` for refresh token exchanges).
 
-2. **Find the Terros API's identifier** (Applications → APIs → the API that `api.terros.com` validates tokens for, in
-   the stage's tenant). It is the `apiAudience` deploy value. On that API, **Allow Skipping User Consent** must be on:
+2. **Find the Terros API's identifier** (Applications → APIs → the existing API that `api.terros.com` validates
+   tokens for). There is one, shared by staging and prod: it is the `apiAudience` deploy value of **both** stages and
+   the token exchange target audience in both. Do not create a staging copy. On that API, **Allow Skipping User Consent** must be on:
    token exchange is non-interactive, so Auth0 cannot ask for consent. Change nothing else; the Terros API only ever
    receives tokens issued for its own audience.
 3. **Accept the `resource` parameter.** MCP clients send RFC 8707 `resource=<MCP URL>` instead of Auth0's `audience`.
    Settings → Advanced → enable **Resource Parameter Compatibility Profile**, so the token is issued as a JWT for the
    API from step 1.1 rather than an opaque token. Without it the server answers `401`.
-4. **Enable Dynamic Client Registration.** Claude, ChatGPT and Cursor register themselves as OAuth clients (RFC 7591).
+4. **Enable Dynamic Client Registration.** **Done** on the `tantalim` tenant (open registration, enabled by Trevor
+   on 2026-10-13); kept here as the record. Claude, ChatGPT and Cursor register themselves as OAuth clients (RFC 7591).
    Settings → Advanced → enable **Dynamic Client Registration (DCR)**, or with the Management API:
+
    ```sh
    curl -s -X PATCH "https://<tenant domain>/api/v2/tenants/settings" \
      -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
      -d '{"flags":{"enable_dynamic_client_registration":true}}'
    ```
-   Dynamically registered applications are third-party: users see a consent screen on first sign-in. The
-   registration endpoint is open, so watch Applications for unexpected registrations; Auth0's tenant logs record them.
+
+   Dynamically registered applications are third-party: users see a consent screen on first sign-in.
+
+   **Operations: monitor and clean up DCR applications.** Registration is open, so anyone can create an application
+   in the tenant. Such an application cannot get a token without a real Terros user signing in through it (and
+   consenting), and it gets nothing for the Terros API (only the MCP APIs have third-party default grants, step 1.1),
+   but unused registrations pile up and count towards the tenant's application limit. So:
+   - **Monitor:** registrations appear in the tenant logs (Monitoring → Logs) and under Applications as third-party
+     applications. Watch for bursts of registrations or names that impersonate Terros or a known connector; consider
+     a log stream alert on them.
+   - **Clean up periodically** (for example monthly): list third-party applications and delete those not used
+     recently, e.g. with the Management API `GET /api/v2/clients?is_first_party=false&fields=client_id,name,created_at`
+     and the tenant logs for each `client_id`'s last successful login or refresh (`s`, `sertft`). Never delete a
+     first-party application (such as `Terros MCP Server`). Deleting a connector's registration only makes that
+     connector register again and its user sign in again.
+
    If DCR is not acceptable, create one Regular Web Application per client by hand, add the callback URLs of step
    1.6, and enter its client ID and secret in the client's advanced connector settings.
+
 5. **Make the login connection domain-level.** Required: Auth0 lets third-party (DCR) applications sign users in only
    through domain-level connections, so without at least one the connectors cannot sign anyone in. Do this for each
-   connection Terros users sign in with (Authentication → Database / Social / Enterprise; note its ID `con_…`), in
-   each tenant that holds an MCP API:
+   connection Terros users sign in with (Authentication → Database / Social / Enterprise; note its ID `con_…`):
    ```sh
    curl -s -X PATCH "https://<tenant domain>/api/v2/connections/<connection ID>" \
      -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
      -d '{"is_domain_connection":true}'
    ```
-   In the dashboard this is the connection's **Promote Connection to Domain Level** setting.
+   In the dashboard this is the connection's **Promote Connection to Domain Level** setting. This is the **next**
+   manual step (see "Progress").
 6. **Allowed callback URLs.** With DCR each client registers its own redirect URI, and Auth0 stores it as that
    application's allowed callback URL, so nothing needs adding. Check after the live check (step 6) that the
    registered applications carry these URLs, and add them by hand to any application created without DCR (checked
@@ -196,23 +217,23 @@ settings (step 1.2) as they are, apart from the consent setting named there.
 
 7. **Create the Custom Token Exchange Action** (Actions → Library → Create Action → Build from scratch, trigger
    **Custom Token Exchange**), named `terros-mcp-token-exchange`. Add the dependency `jose` (a 4.x version, which
-   ships CommonJS for `require`) and two secrets:
+   ships CommonJS for `require`) and three secrets:
    - `ISSUER`: the tenant's issuer from step 1.12, with its trailing slash.
-   - `MCP_AUDIENCES`: JSON mapping each stage's M2M client ID (step 1.9) to that stage's MCP API identifier, e.g.
-     `{"<prod client ID>":"https://mcp.terros.com","<staging client ID>":"https://mcp.staging.terros.com"}` in a shared
-     tenant, or one entry in a stage's own tenant. Create the Action with a placeholder, and fill this in after step
-     1.9.
+   - `EXCHANGE_CLIENT_ID`: the client ID of the shared `Terros MCP Server` M2M application (step 1.9). Create the
+     Action with a placeholder, and fill this in after step 1.9.
+   - `MCP_AUDIENCES`: JSON array of both stages' MCP API identifiers, exactly
+     `["https://mcp.terros.com","https://mcp.staging.terros.com"]`.
 
    ```js
    const { createRemoteJWKSet, jwtVerify } = require('jose')
 
    exports.onExecuteCustomTokenExchange = async (event, api) => {
-     // Each stage's MCP server may only exchange tokens issued for its own MCP API.
-     const audience = JSON.parse(event.secrets.MCP_AUDIENCES)[event.client.client_id]
-     if (!audience) {
+     // Only the shared MCP server application may exchange, and only tokens issued for one of the MCP APIs.
+     if (event.client.client_id !== event.secrets.EXCHANGE_CLIENT_ID) {
        api.access.deny('unauthorized_client', 'This client may not exchange MCP tokens')
        return
      }
+     const audience = JSON.parse(event.secrets.MCP_AUDIENCES)
      const jwks = createRemoteJWKSet(new URL('.well-known/jwks.json', event.secrets.ISSUER))
      let payload
      try {
@@ -236,6 +257,13 @@ settings (step 1.2) as they are, apart from the consent setting named there.
    }
    ```
 
+   `jwtVerify` accepts the token if its `aud` contains any of the listed identifiers; signature, issuer, RS256,
+   `at+jwt`, the required claims, expiry and the user check are unchanged. With one client shared by both stages the
+   Action cannot tell which stage is calling, so it accepts either stage's MCP token. That is safe: each MCP server
+   verifies a token's audience against its own URL before it exchanges it (`src/auth.ts`), and the exchanged token is
+   for the same shared Terros API audience in both stages. Never add the Terros API's own identifier or any other API
+   to `MCP_AUDIENCES`.
+
    Deploy it and note its ID (shown in the Action's URL). The Action sets no scopes or permissions.
 
 8. **Create the token exchange profile** that routes the server's exchanges to the Action, once per tenant, with the
@@ -248,34 +276,43 @@ settings (step 1.2) as they are, apart from the consent setting named there.
           "action_id":"<Action ID>","type":"custom_authentication"}'
    ```
    The `subject_token_type` must be exactly this value: the server sends it (`src/exchange.ts`). A tenant allows one
-   profile per `subject_token_type`, which is why a shared tenant has one profile and one Action for both stages.
-9. **Create the M2M application** the MCP server uses for the exchange, one per stage. It is a first-party,
-   OIDC-conformant Machine to Machine (`non_interactive`) application that authenticates with `client_secret_post`
-   (the server sends its client ID and secret in the token request body). Create it with the Management API, so it
-   gets no client-credentials grant to any API (the server never uses client credentials):
+   profile per `subject_token_type`; the one profile and Action serve both stages.
+9. **Create the M2M application** the MCP servers use for the exchange: **one** application, `Terros MCP Server`,
+   used by both the staging and the prod MCP server. It is a first-party, OIDC-conformant Machine to Machine
+   (`non_interactive`) application that authenticates with `client_secret_post` (the server sends its client ID and
+   secret in the token request body), authorized on the existing Terros API (step 1.2) with **no permissions**:
    ```sh
    curl -s -X POST "https://<tenant domain>/api/v2/clients" \
      -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
-     -d '{"name":"Terros MCP server (<stage>)","app_type":"non_interactive","is_first_party":true,
+     -d '{"name":"Terros MCP Server","app_type":"non_interactive","is_first_party":true,
           "oidc_conformant":true,"token_endpoint_auth_method":"client_secret_post"}'
    curl -s -X PATCH "https://<tenant domain>/api/v2/clients/<client ID>" \
      -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
      -d '{"token_exchange":{"allow_any_profile_of_type":["custom_authentication"]}}'
+   curl -s -X POST "https://<tenant domain>/api/v2/client-grants" \
+     -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
+     -d '{"client_id":"<client ID>","audience":"<Terros API identifier, step 1.2>","scope":[]}'
    ```
-   (In the dashboard: Applications → Create Application → **Machine to Machine Applications**. If it insists on
-   authorizing an API, pick none or delete that grant afterwards under the application's **APIs** tab, and grant it
-   no permissions.) If the Terros API restricts which applications may get user tokens (its **Application Access** /
-   user access policy), allow this application. Its client ID is the `tokenExchangeClientId` deploy value; add it to
-   the Action's `MCP_AUDIENCES` (step 1.7).
-10. **Store the M2M client secret in AWS Secrets Manager** in the stage's deploy account, `us-east-1`, as a plain-text
-    secret named as in the table above (the stack's default; `-c tokenExchangeSecretName=…` overrides it). Paste the
-    secret in the console, or read it from a file so it stays out of shell history:
+   (In the dashboard: Applications → Create Application → **Machine to Machine Applications**, `Terros MCP Server`,
+   authorize the Terros API and select no permissions.) If the Terros API restricts which applications may get user
+   tokens (its **Application Access** → User-Delegated Access policy), allow this application too. Do not authorize it
+   on the MCP APIs. Its client ID is the `tokenExchangeClientId` deploy value of **both** stages and the Action's
+   `EXCHANGE_CLIENT_ID` (step 1.7). Do not create a per-stage application.
+10. **Store the M2M client secret in AWS Secrets Manager**, once per stage: the **same** `Terros MCP Server` client
+    secret goes into `terros-mcp/staging/auth0-token-exchange` in the staging deploy account and into
+    `terros-mcp/prod/auth0-token-exchange` in the prod deploy account, both in `us-east-1`, as plain-text secrets (the
+    stack's per-stage default names; `-c tokenExchangeSecretName=…` overrides one). The entries stay per stage
+    although the client is shared: each stack grants its Lambda read access to its own stage's secret only, a stage
+    may deploy into its own AWS account (a Lambda cannot read another account's secret without cross-account
+    policies), and staging can be torn down without touching prod's entry. Paste the secret in the console, or read
+    it from a file so it stays out of shell history:
     ```sh
     aws secretsmanager create-secret --region us-east-1 --name terros-mcp/<stage>/auth0-token-exchange \
       --secret-string file://client-secret.txt && rm client-secret.txt
     ```
     The Lambda gets read access to this one secret and reads it on its first token exchange. To rotate, rotate the
-    secret in Auth0, update the Secrets Manager value, and redeploy (or wait for new Lambda containers). Never put it
+    secret in Auth0, then update **both** stages' Secrets Manager values (the old secret stops working in both stages at
+    once), and redeploy both (or wait for new Lambda containers). Never put it
     in `cdk.json`, `-c` arguments or the repository.
 11. **Attack Protection:** failed exchanges count towards **Suspicious IP Throttling**, and every exchange comes from
     the Lambda's few egress IPs. The server only exchanges tokens it has already verified, so failures should be rare;
@@ -318,17 +355,19 @@ From `packages/mcp-server`:
 pnpm package   # builds workspace dependencies, then dist/lambda.mjs + dist/terros.yml
 
 # staging
-pnpm cdk diff   -c stage=staging -c apiBaseUrl=<staging API URL> -c auth0Issuer=<staging issuer>/ \
+pnpm cdk diff   -c stage=staging -c apiBaseUrl=<staging API URL> \
                 -c apiAudience=<Terros API identifier, step 1.2> -c tokenExchangeClientId=<M2M client ID, step 1.9> \
                 -c alarmEmail=<on-call list> <DNS option: -c hostedZoneId=… -c zoneName=… | -c certificateArn=…>
 pnpm cdk deploy …same arguments…
 
 # prod (after step 6 passed on staging)
-pnpm cdk deploy -c stage=prod -c apiAudience=<Terros API identifier> -c tokenExchangeClientId=<M2M client ID> \
+pnpm cdk deploy -c stage=prod -c apiAudience=<same Terros API identifier> -c tokenExchangeClientId=<same M2M client ID> \
                 -c alarmEmail=<on-call list> <DNS option>
 ```
 
 The MCP URL (and with it the token audience) is always `https://<domainName>`; there is no audience setting.
+`apiAudience`, `tokenExchangeClientId` and the issuer (default `https://auth.terros.com/`) are the same in both stages:
+one tenant, one Terros API audience, one `Terros MCP Server` application.
 
 Other context values: `-c allowedOrigins=host1,host2` adds browser origins (hostnames) to the allowlist; the server's
 own hostname is always allowed and requests without an `Origin` header (Claude, Cursor) are not affected.

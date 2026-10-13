@@ -9,9 +9,9 @@ export type ServerConfig = {
   apiBaseUrl: string
   /** Auth0 issuer (tenant or custom domain) that signs the access tokens, with a trailing slash. */
   issuer: string
-  /** Auth0 API identifier of the Terros API; exchanged tokens are issued for it. */
+  /** Auth0 API identifier of the Terros API; exchanged tokens are issued for it. The same in both stages. */
   apiAudience: string
-  /** Auth0 Machine to Machine application that performs the token exchange. Its client secret is read from Secrets Manager. */
+  /** Auth0 Machine to Machine application that performs the token exchange, shared by both stages. Its client secret is read from Secrets Manager. */
   tokenExchangeClientId: string
   /** Secrets Manager secret (name or ARN) holding that application's client secret. */
   tokenExchangeSecretId: string

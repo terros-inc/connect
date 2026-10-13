@@ -158,19 +158,32 @@ describe('resolveStage', () => {
     expect(() => resolveStage((key) => ({ stage: 'staging' })[key])).toThrow('apiBaseUrl')
   })
 
-  it('serves staging at mcp.staging.terros.com', () => {
+  it('serves staging at mcp.staging.terros.com from the shared tenant', () => {
     const context: Record<string, string> = {
       stage: 'staging',
       apiBaseUrl: 'https://api.example.test',
-      auth0Issuer: 'https://auth.example.test/',
       apiAudience: 'https://api.example.test',
       tokenExchangeClientId: 'exchange-client',
     }
     expect(resolveStage((key) => context[key])).toMatchObject({
       stage: 'staging',
       domainName: 'mcp.staging.terros.com',
+      auth0Issuer: 'https://auth.terros.com/',
       tokenExchangeSecretName: 'terros-mcp/staging/auth0-token-exchange',
     })
+  })
+
+  it('shares the issuer, Terros API audience and exchange client between stages; only the MCP URL differs', () => {
+    const shared = {
+      apiBaseUrl: 'https://api.example.test',
+      apiAudience: 'https://api.example.test',
+      tokenExchangeClientId: 'exchange-client',
+    }
+    const staging = resolveStage((key) => ({ stage: 'staging', ...shared })[key])
+    const prod = resolveStage((key) => ({ stage: 'prod', ...shared })[key])
+    for (const key of ['auth0Issuer', 'apiAudience', 'tokenExchangeClientId'] as const)
+      expect(staging[key]).toBe(prod[key])
+    expect(staging.domainName).not.toBe(prod.domainName)
   })
 
   it('rejects an unknown stage', () => {

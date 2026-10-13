@@ -22,7 +22,8 @@ and Cursor. Private: it is deployed, not published to npm.
 - No token passthrough: the MCP-audience token never reaches the Terros API. On a request's first API call the
   server exchanges it at Auth0 (RFC 8693 Custom Token Exchange) for a Terros API-audience token for the same user, and
   calls the API with that. The server authenticates the exchange as an Auth0 Machine to Machine application whose
-  client secret is read from AWS Secrets Manager.
+  client secret is read from AWS Secrets Manager. Staging and prod share one Auth0 tenant, one Terros API audience and
+  that one application (`Terros MCP Server`); only the MCP audience (the server's own URL) differs per stage.
 - `GET /health` returns `{"status":"ok","version":"…"}` without authentication.
 - Host and Origin are enforced by WAF at the gateway and again in the handler (DNS-rebinding protection). Browser
   origins must be exactly `https://<allowlisted hostname>`.
