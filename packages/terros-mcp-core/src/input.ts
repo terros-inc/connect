@@ -1,4 +1,4 @@
-import { getEndpointParameters } from './parameters.ts'
+import { getEndpointParameters, resolveSchema } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
 
 export type ParsedArgs = { _: string[]; [key: string]: unknown }
@@ -59,7 +59,7 @@ function flattenValue(flattened: Record<string, unknown>, prefix: string, value:
 }
 
 function getHiddenWrapperPrefix(endpoint: Endpoint): string[] {
-  const schema = endpoint.properties
+  const schema = resolveSchema(endpoint.properties, endpoint.components)
   if (!('type' in schema) || schema.type !== 'object' || !schema.properties) return []
 
   const propertyNames = Object.keys(schema.properties)
@@ -69,7 +69,10 @@ function getHiddenWrapperPrefix(endpoint: Endpoint): string[] {
   if (!wrapperName) return []
 
   const wrapperSchema = schema.properties[wrapperName]
-  if (!wrapperSchema || !('type' in wrapperSchema) || wrapperSchema.type !== 'object') return []
+  if (!wrapperSchema) return []
+
+  const resolvedWrapperSchema = resolveSchema(wrapperSchema, endpoint.components)
+  if (!('type' in resolvedWrapperSchema) || resolvedWrapperSchema.type !== 'object') return []
 
   return [wrapperName]
 }
