@@ -1,0 +1,5 @@
+{
+  "app": "node infra/app.ts",
+  "watch": { "include": ["infra/**"] },
+  "context": {}
+}

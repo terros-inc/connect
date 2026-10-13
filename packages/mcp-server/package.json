@@ -1,0 +1,31 @@
+{
+  "name": "@terros-inc/mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hosted remote MCP server for the Terros API (Streamable HTTP on AWS Lambda)",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "fetch-openapi": "rm -f terros.yml && wget https://docs.terros.com/openapi/terros.yml",
+    "build": "tsdown",
+    "package": "pnpm fetch-openapi && pnpm build && cp terros.yml dist/terros.yml",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "catalog:",
+    "@terros-inc/connect-common": "workspace:^",
+    "@terros-inc/mcp-core": "workspace:^",
+    "@types/node": "catalog:",
+    "aws-cdk": "catalog:",
+    "aws-cdk-lib": "catalog:",
+    "constructs": "catalog:",
+    "jose": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

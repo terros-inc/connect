@@ -5,6 +5,8 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - `sdk` - `@terros-inc/sdk`, API client and `wrapConnectHandler` for integration handlers
 - `cli` - `@terros-inc/cli`, the `terros` command, including `terros connect publish`
 - `packages/connect-common` - private shared package, a dependency of `sdk` and `cli`
+- `packages/terros-mcp-core` - `@terros-inc/mcp-core`, private endpoint-generated tool core shared by `terros mcp` and the hosted server
+- `packages/mcp-server` - `@terros-inc/mcp-server`, private hosted remote MCP server (Streamable HTTP on Lambda) and its AWS CDK infrastructure in `infra/`. Deployed by a person following `packages/mcp-server/docs/RUNBOOK.md`; there is no CI deploy workflow
 - `integrations/*` - one Connect app each (airtable, docusign, gohighlevel, jobnimbus, salesforce, zoho)
 
 ## Setup and commands

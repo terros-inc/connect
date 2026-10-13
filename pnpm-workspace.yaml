@@ -17,7 +17,11 @@ catalog:
   '@types/luxon': ^3.7.1
   '@types/minimist': ^1.2.5
   '@types/node': ^24.13.2
+  aws-cdk: ~2.1144.0
+  aws-cdk-lib: ^2.272.0
+  constructs: ^10.8.1
   html-to-text: ^10.0.1
+  jose: ^6.2.12
   luxon: ^3.7.2
   minimist: ^1.2.8
   open: ^11.0.0
