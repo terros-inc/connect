@@ -72,7 +72,12 @@ function getHiddenWrapperPrefix(endpoint: Endpoint): string[] {
   if (!wrapperSchema) return []
 
   const resolvedWrapperSchema = resolveSchema(wrapperSchema, endpoint.components)
-  if (!('type' in resolvedWrapperSchema) || resolvedWrapperSchema.type !== 'object') return []
+  if (
+    !('type' in resolvedWrapperSchema) ||
+    resolvedWrapperSchema.type !== 'object' ||
+    !resolvedWrapperSchema.properties
+  )
+    return []
 
   return [wrapperName]
 }

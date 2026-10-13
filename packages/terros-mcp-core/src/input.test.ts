@@ -30,6 +30,30 @@ describe('buildEndpointInput', () => {
     expect(result).toEqual(expected)
   })
 
+  it('does not add a hidden wrapper prefix for a generic object property', () => {
+    const endpoint: Endpoint = {
+      path: '/metadata/update',
+      components: { schemas: {} },
+      properties: {
+        type: 'object',
+        properties: {
+          metadata: {
+            type: 'object',
+          },
+        },
+      },
+    }
+
+    const params: ParsedArgs = {
+      _: ['metadata', 'update'],
+      metadata: '{"source":"example"}',
+    }
+
+    expect(buildEndpointInput(endpoint, params)).toEqual({
+      metadata: { source: 'example' },
+    })
+  })
+
   it('wraps user update parameters when the input and wrapper use schema references', () => {
     const endpoint: Endpoint = {
       path: '/user/update',
