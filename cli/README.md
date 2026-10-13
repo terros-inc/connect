@@ -100,10 +100,17 @@ Single-segment API endpoints are direct commands. For example:
 terros search --query "Jane Doe"
 ```
 
-Nested endpoints use their last two segments, such as `terros event list` for
-`/calendar/event/list`. If that command name is also the first segment of
-another endpoint, the parent segment is prefixed instead. For example, `/program/user/list` becomes
-`terros programUser list` so it does not replace `terros user list`.
+Nested endpoints use their last two segments, such as `terros tree list` for
+`/orchard/tree/list`. If that command name is already a top-level command, the
+parent segment is prefixed instead. Only direct (`/lookup`) and two-segment
+(`/bed/list`) endpoints create top-level commands, so `/garden/bed/list` becomes
+`terros gardenBed list` only when an endpoint such as `/bed/list` exists, and it
+does not replace `terros bed list`. A segment that appears only as the first
+segment of longer endpoints, such as `bed` in `/bed/plot/list`, does not count.
+If two endpoints still map to the same command, the CLI reports an error
+instead of keeping one of them.
+
+(These paths are illustrative, not real Terros endpoints.)
 
 List available commands:
 

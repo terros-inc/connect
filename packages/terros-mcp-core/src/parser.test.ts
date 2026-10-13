@@ -7,21 +7,21 @@ function schemaWith(paths: string[]): string {
 
 it('qualifies a nested group that would replace a top-level command', () => {
   const endpoints = parseEndpoints(
-    schemaWith(['/program/get', '/program/user/get', '/program/user/list', '/user/get', '/user/list'])
+    schemaWith(['/garden/get', '/garden/bed/get', '/garden/bed/list', '/bed/get', '/bed/list'])
   )
 
-  expect(endpoints.user).toMatchObject({ get: { path: '/user/get' }, list: { path: '/user/list' } })
-  expect(endpoints.program).toMatchObject({ get: { path: '/program/get' } })
-  expect(endpoints.programUser).toMatchObject({
-    get: { path: '/program/user/get' },
-    list: { path: '/program/user/list' },
+  expect(endpoints.bed).toMatchObject({ get: { path: '/bed/get' }, list: { path: '/bed/list' } })
+  expect(endpoints.garden).toMatchObject({ get: { path: '/garden/get' } })
+  expect(endpoints.gardenBed).toMatchObject({
+    get: { path: '/garden/bed/get' },
+    list: { path: '/garden/bed/list' },
   })
 })
 
 it('keeps the short group for nested paths that do not collide', () => {
-  const endpoints = parseEndpoints(schemaWith(['/calendar/event/list', '/connect/app/version/add', '/team/member/add']))
+  const endpoints = parseEndpoints(schemaWith(['/orchard/tree/list', '/farm/barn/stall/add', '/pond/fish/add']))
 
-  expect(Object.keys(endpoints).sort()).toEqual(['event', 'member', 'version'])
+  expect(Object.keys(endpoints).sort()).toEqual(['fish', 'stall', 'tree'])
 })
 
 it('rejects two paths that map to the same command', () => {
@@ -31,10 +31,10 @@ it('rejects two paths that map to the same command', () => {
 })
 
 it('qualifies only against groups of direct and two-segment paths', () => {
-  const endpoints = parseEndpoints(schemaWith(['/program/user/list', '/user/settings/list']))
+  const endpoints = parseEndpoints(schemaWith(['/garden/bed/list', '/bed/plot/list']))
 
-  expect(endpoints.user).toMatchObject({ list: { path: '/program/user/list' } })
-  expect(endpoints.settings).toMatchObject({ list: { path: '/user/settings/list' } })
+  expect(endpoints.bed).toMatchObject({ list: { path: '/garden/bed/list' } })
+  expect(endpoints.plot).toMatchObject({ list: { path: '/bed/plot/list' } })
 })
 
 it('accepts aliases that match Object.prototype properties', () => {
