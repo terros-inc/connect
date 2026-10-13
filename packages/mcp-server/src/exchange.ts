@@ -11,7 +11,7 @@ export type TokenExchangeOptions = {
   /** Auth0 API identifier of the Terros API, the audience of the exchanged token. */
   audience: string
   clientId: string
-  /** The exchange application's client secret, read once and kept in memory. */
+  /** The Machine to Machine application's client secret, read once and kept in memory. */
   clientSecret: () => Promise<string>
   fetch?: typeof fetch
 }

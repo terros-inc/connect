@@ -13,12 +13,15 @@ and Cursor. Private: it is deployed, not published to npm.
   including `/mcp`, return `404`.
 - Clients present Auth0 access tokens issued for the server itself (audience: its own URL, `https://mcp.terros.com`
   in prod and `https://mcp.staging.terros.com` in staging). Tokens are checked for signature (the issuer's JWKS),
-  issuer, audience and a required, unexpired `exp` before any server is built. Requests without a valid token get `401` with a `WWW-Authenticate` challenge carrying `scope` and a
-  `resource_metadata` URL, `/.well-known/oauth-protected-resource`, which names Auth0 as the authorization server and
-  lists `scopes_supported` (RFC 9728). Clients read the authorization server metadata from Auth0 itself.
+  issuer, audience and a required, unexpired `exp` before any server is built. Requests without a valid token get
+  `401` with a `WWW-Authenticate` challenge carrying a `resource_metadata` URL, `/.well-known/oauth-protected-resource`,
+  which names Auth0 as the authorization server (RFC 9728). Neither carries OAuth scopes: Terros puts no permissions in
+  scopes, and what a user may do is decided by the Terros API's own permission checks. Clients read the authorization
+  server metadata from Auth0 itself.
 - No token passthrough: the MCP-audience token never reaches the Terros API. On a request's first API call the
   server exchanges it at Auth0 (RFC 8693 Custom Token Exchange) for a Terros API-audience token for the same user, and
-  calls the API with that. The exchange application's client secret is read from AWS Secrets Manager.
+  calls the API with that. The server authenticates the exchange as an Auth0 Machine to Machine application whose
+  client secret is read from AWS Secrets Manager.
 - `GET /health` returns `{"status":"ok","version":"…"}` without authentication.
 - Host and Origin are enforced by WAF at the gateway and again in the handler (DNS-rebinding protection). Browser
   origins must be exactly `https://<allowlisted hostname>`.

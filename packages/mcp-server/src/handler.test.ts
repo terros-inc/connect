@@ -156,7 +156,7 @@ describe('authentication', () => {
     expect(response.status).toBe(401)
     const challenge = response.headers.get('www-authenticate')
     expect(challenge).toContain(`resource_metadata="https://${HOST}/.well-known/oauth-protected-resource"`)
-    expect(challenge).toContain('scope="openid offline_access"')
+    expect(challenge).not.toContain('scope=')
     expect(core.createMcpServer).not.toHaveBeenCalled()
   })
 
@@ -178,7 +178,6 @@ describe('authentication', () => {
     expect(await response.json()).toEqual({
       resource: `https://${HOST}`,
       authorization_servers: [ISSUER],
-      scopes_supported: ['openid', 'offline_access'],
       bearer_methods_supported: ['header'],
       resource_name: 'Terros',
     })

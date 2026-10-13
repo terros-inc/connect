@@ -25,12 +25,6 @@ export type RemoteMcpHandlerOptions = {
 
 export type RemoteMcpHandler = (request: Request) => Promise<Response>
 
-/**
- * Scopes MCP clients request at Auth0: `offline_access` so they get a refresh token, `openid` for the login itself.
- * Advertised in the protected resource metadata and in the 401 challenge; not required of tokens.
- */
-export const SCOPES = ['openid', 'offline_access']
-
 const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers':
@@ -74,7 +68,6 @@ export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): Remote
     // Exactly the Auth0 API identifier (no trailing slash): clients send it back as the `resource` parameter.
     resource: config.resource,
     authorization_servers: [config.issuer],
-    scopes_supported: SCOPES,
     bearer_methods_supported: ['header'],
     resource_name: 'Terros',
   }
@@ -138,7 +131,9 @@ export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): Remote
         resourceMetadataUrl,
       })
     } catch (error) {
-      return bearerAuthChallengeResponse(error, { resourceMetadataUrl, requiredScopes: SCOPES })
+      // No scope in the challenge (nor scopes_supported above): Terros grants no permissions through OAuth scopes;
+      // authorization stays with the Terros API's own permission checks for the exchanged token's user.
+      return bearerAuthChallengeResponse(error, { resourceMetadataUrl })
     }
     return mcp.fetch(request, { authInfo })
   }
