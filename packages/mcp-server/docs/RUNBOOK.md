@@ -2,7 +2,8 @@
 
 The steps a person does to put `@terros-inc/mcp-server` live: Auth0, DNS and certificates, deploying to staging and
 prod, checking the health check, logs and alarms, and the live check with Claude and Cursor. The code, the tests and
-the infrastructure definition (`infra/`) are in this package; nothing here has been run against AWS or Auth0 yet.
+the infrastructure definition (`infra/`) are in this package. Nothing has been run against AWS yet; in Auth0, the
+per-stage MCP APIs (step 1.1) are configured for both stages and the rest of §1 remains (see "Progress" in §1).
 
 Do every step for **staging** first, finish the live check (step 6) there, then repeat steps 1 to 5 for **prod**.
 
@@ -56,6 +57,23 @@ first. Values per stage:
 | M2M application (step 1.9)           | `Terros MCP server (staging)`                                                   | `Terros MCP server (prod)`                                                |
 | Client secret in AWS Secrets Manager | `terros-mcp/staging/auth0-token-exchange` (staging deploy account, `us-east-1`) | `terros-mcp/prod/auth0-token-exchange` (prod deploy account, `us-east-1`) |
 
+**Progress (2026-10-13).** Step 1.1, the per-stage MCP API, is **done for both stages** (configured by Trevor):
+
+| Stage   | API name    | Identifier                       | API id                     | Tenant     |
+| ------- | ----------- | -------------------------------- | -------------------------- | ---------- |
+| prod    | `Terros MCP` | `https://mcp.terros.com`         | `6acebabc6581d504656df4c3` | `tantalim` |
+| staging | `Terros MCP` | `https://mcp.staging.terros.com` | —                          | —          |
+
+Both APIs carry the recommended settings from the step 1.1 table: RFC 9068 JWT profile, RS256, 3600 s maximum access
+token lifetime, Allow Offline Access on, Allow Skipping User Consent off, Sender-Constraining None / Require Never,
+RBAC and add-ons off, Application Access → User-Delegated Access "All apps allowed", Client Access "No apps allowed",
+and Default Permissions for Third Party Apps → User-Delegated Access **Authorized** with no permissions.
+
+The remaining Auth0 steps are still manual and not done: Dynamic Client Registration plus the domain-level connection
+(steps 1.4, 1.5), the MCP server M2M application with a grant on `api.terros.com` (step 1.9), the Custom Token Exchange
+Action and token exchange profile (steps 1.7, 1.8), the connector callback URLs (step 1.6), and the Secrets Manager
+entries (step 1.10). Steps 1.2, 1.3, 1.11 and 1.12 also remain.
+
 **Tenants.** If staging logins come from the same tenant as prod (issuer `https://auth.terros.com/`), both MCP APIs
 and both M2M applications live in that one tenant, and tenant-wide steps (1.3, 1.4, 1.5, 1.7, 1.8, 1.11) are done once
 and shared: there is one Action and one token exchange profile, whose `MCP_AUDIENCES` secret lists both stages. If
@@ -70,6 +88,9 @@ settings (step 1.2) as they are, apart from the consent setting named there.
 
 1. **Create the MCP API** (Applications → APIs → Create API), one per stage: `https://mcp.staging.terros.com` and
    `https://mcp.terros.com` (in a shared tenant both live there; in a separate staging tenant, staging's lives there).
+   **Done for both stages** (see "Progress" above): prod `Terros MCP` (id `6acebabc6581d504656df4c3`, tenant `tantalim`)
+   and staging `Terros MCP` (`https://mcp.staging.terros.com`), both with the settings below. The steps here are kept as
+   the record of what was set and for recreating the APIs.
    - Name `Terros MCP (<stage>)`. Identifier: exactly the stage's MCP URL from the table, with no path and no trailing
      slash. The server derives its audience from its own URL, so there is no separate audience setting; if the
      identifier differs (for example `https://mcp.terros.com/` or `…/mcp`), every login ends in `401`.
@@ -117,8 +138,9 @@ settings (step 1.2) as they are, apart from the consent setting named there.
      Auth0's docs (checked 2026-10-13: "Configure Third-Party Applications", "Dynamic Client Registration", "API
      Access Policies for Applications", "Application Access to APIs: Client Grants") confirm the requirement, the
      setting's location, the **Unauthorized** default and the `default_for: third_party_clients` grant. They do not
-     say whether **Authorized** with an empty permission list is accepted; their examples always pick scopes. If the
-     dashboard will not save it, or the live check (step 6) shows Auth0 refusing the connector's authorization
+     say whether **Authorized** with an empty permission list is accepted; their examples always pick scopes. Trevor
+     configured it this way on both MCP APIs (**Authorized**, no permissions; see "Progress" above), so it is accepted in
+     this tenant. If the live check (step 6) still shows Auth0 refusing the connector's authorization
      (`access_denied` / "Client is not authorized to access …" in the tenant logs), stop and ask before adding any
      permission: Terros does not put permissions in scopes. Grant only the default permissions on the MCP APIs,
      never on the Terros API: the connectors must not get tokens for `api.terros.com`.
