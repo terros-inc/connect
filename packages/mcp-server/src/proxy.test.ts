@@ -2,7 +2,7 @@ import { createLambdaHandler, toRequest, type ProxyEvent } from './proxy.ts'
 
 const event: ProxyEvent = {
   httpMethod: 'POST',
-  path: '/mcp',
+  path: '/',
   headers: { Host: 'mcp.example.test', 'Content-Type': 'application/json' },
   multiValueQueryStringParameters: { a: ['1', '2'] },
   body: Buffer.from('{"jsonrpc":"2.0"}').toString('base64'),
@@ -12,7 +12,7 @@ const event: ProxyEvent = {
 
 it('builds a request on the Host the gateway received', async () => {
   const request = toRequest(event)
-  expect(request.url).toBe('https://mcp.example.test/mcp?a=1&a=2')
+  expect(request.url).toBe('https://mcp.example.test/?a=1&a=2')
   expect(request.headers.get('host')).toBe('mcp.example.test')
   expect(await request.text()).toBe('{"jsonrpc":"2.0"}')
 })
@@ -30,7 +30,7 @@ it('returns the response and logs one line without headers or body', async () =>
   expect(result.headers['content-type']).toBe('application/json')
   expect(log).toHaveBeenCalledOnce()
   const line = String(log.mock.calls[0]![0])
-  expect(JSON.parse(line)).toMatchObject({ requestId: 'req-1', method: 'POST', path: '/mcp', status: 201 })
+  expect(JSON.parse(line)).toMatchObject({ requestId: 'req-1', method: 'POST', path: '/', status: 201 })
   expect(line).not.toContain('secret-token')
   log.mockRestore()
 })

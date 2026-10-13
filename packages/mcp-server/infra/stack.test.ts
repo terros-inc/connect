@@ -11,7 +11,9 @@ function synth(overrides: Partial<McpServerStackProps> = {}): Template {
     domainName: 'mcp.example.test',
     apiBaseUrl: 'https://api.example.test',
     auth0Issuer: 'https://auth.example.test/',
-    auth0Audience: 'https://mcp.example.test/mcp',
+    apiAudience: 'https://api.example.test',
+    tokenExchangeClientId: 'exchange-client',
+    tokenExchangeSecretName: 'terros-mcp/test/auth0-token-exchange',
     allowedOrigins: [],
     code: Code.fromInline('export const handler = async () => ({})'),
     version: '1.0.0',
@@ -29,13 +31,25 @@ it('configures the function per request, with no server-wide API key', () => {
   const [fn] = Object.values(functions)
   const variables = fn!.Properties.Environment.Variables as Record<string, string>
   expect(variables).toMatchObject({
-    MCP_RESOURCE_URL: 'https://mcp.example.test/mcp',
+    MCP_RESOURCE_URL: 'https://mcp.example.test',
     TERROS_API_ENDPOINT: 'https://api.example.test',
     AUTH0_ISSUER: 'https://auth.example.test/',
-    AUTH0_AUDIENCE: 'https://mcp.example.test/mcp',
+    TERROS_API_AUDIENCE: 'https://api.example.test',
+    AUTH0_TOKEN_EXCHANGE_CLIENT_ID: 'exchange-client',
+    AUTH0_TOKEN_EXCHANGE_SECRET_ID: 'terros-mcp/test/auth0-token-exchange',
   })
   expect(variables).not.toHaveProperty('TERROS_API_KEY')
   expect(fn!.Properties).toMatchObject({ Runtime: 'nodejs24.x', Handler: 'lambda.handler' })
+})
+
+it('lets the function read only the token exchange secret', () => {
+  const policies = JSON.stringify(template.findResources('AWS::IAM::Policy'))
+  expect(policies).toContain('secretsmanager:GetSecretValue')
+  expect(policies).toContain(':secret:terros-mcp/test/auth0-token-exchange-??????')
+})
+
+it('serves the MCP server at the root of the custom domain', () => {
+  template.hasOutput('McpUrl', { Value: 'https://mcp.example.test' })
 })
 
 it('serves only through the custom domain', () => {
@@ -125,15 +139,18 @@ it('requires a certificate source', () => {
 })
 
 describe('resolveStage', () => {
-  it('fills prod defaults and requires the audience', () => {
+  it('fills prod defaults and requires the token exchange settings', () => {
     const context: Record<string, string> = { stage: 'prod' }
-    expect(() => resolveStage((key) => context[key])).toThrow('auth0Audience')
-    context.auth0Audience = 'https://mcp.example.test/mcp'
+    expect(() => resolveStage((key) => context[key])).toThrow('apiAudience')
+    context.apiAudience = 'https://api.example.test'
+    expect(() => resolveStage((key) => context[key])).toThrow('tokenExchangeClientId')
+    context.tokenExchangeClientId = 'exchange-client'
     expect(resolveStage((key) => context[key])).toMatchObject({
       stage: 'prod',
       domainName: 'mcp.terros.com',
       apiBaseUrl: 'https://api.terros.com',
       auth0Issuer: 'https://auth.terros.com/',
+      tokenExchangeSecretName: 'terros-mcp/prod/auth0-token-exchange',
     })
   })
 

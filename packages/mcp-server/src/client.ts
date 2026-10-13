@@ -3,8 +3,11 @@ import { isResponseError } from '@terros-inc/connect-common'
 
 export type RequestApiClientOptions = {
   baseUrl: string
-  /** The access token of the MCP request being served. */
-  accessToken: string
+  /**
+   * Supplies the Terros API access token for the MCP request being served (obtained by token exchange). Called at
+   * most once per client, on its first API call, so requests that call no tool cost no exchange.
+   */
+  accessToken: () => Promise<string>
   version: string
   fetch?: typeof fetch
 }
@@ -12,14 +15,21 @@ export type RequestApiClientOptions = {
 /** An API client bound to one MCP request's caller. It never falls back to a shared key or a saved CLI login. */
 export function createRequestApiClient(options: RequestApiClientOptions): ApiClient {
   const fetchImpl = options.fetch ?? fetch
+  let accessToken: Promise<string> | undefined
+  const token = (): Promise<string> =>
+    (accessToken ??= options.accessToken().catch((error: unknown) => {
+      accessToken = undefined
+      throw error
+    }))
   return {
     async call<Success>(route: string, input: object): Promise<Success> {
+      const bearer = await token()
       let response: Response
       try {
         response = await fetchImpl(`${options.baseUrl}/${route.replace(/^\//, '')}`, {
           method: 'POST',
           headers: {
-            authorization: `Bearer ${options.accessToken}`,
+            authorization: `Bearer ${bearer}`,
             'Content-Type': 'application/json',
             'Terros-Bundle-Identifier': 'com.terros.mcp',
             'Terros-Platform-Version': options.version,

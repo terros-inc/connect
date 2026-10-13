@@ -4,27 +4,32 @@ import {
   createMcpHandler,
   getOAuthProtectedResourceMetadataUrl,
   hostHeaderValidationResponse,
-  oauthMetadataResponse,
-  originValidationResponse,
   verifyBearerToken,
-  type AuthMetadataOptions,
   type OAuthTokenVerifier,
 } from '@modelcontextprotocol/server'
+import type { TokenExchanger } from './exchange.ts'
 import type { ServerConfig } from './config.ts'
 import { createRequestApiClient } from './client.ts'
-import { auth0Metadata } from './auth.ts'
 
 export type RemoteMcpHandlerOptions = {
   config: ServerConfig
   /** Tool endpoints, loaded once per process and shared by every request's server. */
   endpoints: () => Promise<EndpointGroups>
   verifier: OAuthTokenVerifier
+  /** Turns the caller's verified MCP token into a Terros API token for the same user. */
+  exchangeToken: TokenExchanger
   version: string
   fetch?: typeof fetch
   onerror?: (error: Error) => void
 }
 
 export type RemoteMcpHandler = (request: Request) => Promise<Response>
+
+/**
+ * Scopes MCP clients request at Auth0: `offline_access` so they get a refresh token, `openid` for the login itself.
+ * Advertised in the protected resource metadata and in the 401 challenge; not required of tokens.
+ */
+export const SCOPES = ['openid', 'offline_access']
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
@@ -34,34 +39,56 @@ const CORS_HEADERS = {
   'Access-Control-Max-Age': '600',
 }
 
-function methodNotAllowed(): Response {
+function methodNotAllowed(allow: string): Response {
   return Response.json(
     { jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null },
-    { status: 405, headers: { Allow: 'POST' } }
+    { status: 405, headers: { Allow: allow } }
   )
 }
 
+function forbidden(message: string): Response {
+  return Response.json({ jsonrpc: '2.0', error: { code: -32000, message }, id: null }, { status: 403 })
+}
+
 /**
- * Stateless Streamable HTTP MCP endpoint. Every POST is served by a fresh McpServer whose API client
- * carries that request's verified Auth0 access token; nothing about a caller outlives its request.
+ * Accept no Origin (non-browser clients), or exactly `https://<allowed hostname>`, as the gateway's WAF rule does.
+ * Plain http and other ports are never allowed.
+ */
+function originValidationResponse(origin: string | null, allowedHostnames: string[]): Response | undefined {
+  if (!origin || allowedHostnames.some((hostname) => origin.toLowerCase() === `https://${hostname}`)) return undefined
+  return forbidden('Invalid Origin')
+}
+
+/**
+ * Stateless Streamable HTTP MCP server at the root of its own origin (`https://mcp.terros.com`). Every POST is served
+ * by a fresh McpServer whose API client acts for that request's verified caller; nothing about a caller outlives its
+ * request.
  */
 export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): RemoteMcpHandler {
   const { config } = options
-  const metadata: AuthMetadataOptions = {
-    oauthMetadata: auth0Metadata(config.issuer),
-    resourceServerUrl: config.resourceUrl,
-    resourceName: 'Terros',
+  const hostname = new URL(config.resource).hostname
+  // The RFC 9728 document of a root resource lives at the bare /.well-known/oauth-protected-resource.
+  const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(new URL(config.resource))
+  const resourceMetadataPath = new URL(resourceMetadataUrl).pathname
+  const resourceMetadata = {
+    // Exactly the Auth0 API identifier (no trailing slash): clients send it back as the `resource` parameter.
+    resource: config.resource,
+    authorization_servers: [config.issuer],
+    scopes_supported: SCOPES,
+    bearer_methods_supported: ['header'],
+    resource_name: 'Terros',
   }
-  const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(config.resourceUrl)
   let endpoints: Promise<EndpointGroups> | undefined
 
   const mcp = createMcpHandler(
     async ({ authInfo }) => {
       if (!authInfo) throw new Error('MCP request reached the server without verified credentials')
       endpoints ??= options.endpoints()
+      const subjectToken = authInfo.token
       const client = createRequestApiClient({
         baseUrl: config.apiBaseUrl,
-        accessToken: authInfo.token,
+        // The MCP-audience token goes to Auth0 only; the Terros API gets a token issued for its own audience.
+        accessToken: () => options.exchangeToken(subjectToken),
         version: options.version,
         fetch: options.fetch,
       })
@@ -72,13 +99,12 @@ export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): Remote
 
   return async (request) => {
     // Defense in depth: the gateway already rejects other hosts and origins (see infra/stack.ts).
+    const origin = request.headers.get('origin')
     const rejected =
-      hostHeaderValidationResponse(request, [config.resourceUrl.hostname]) ??
-      originValidationResponse(request, config.allowedOrigins)
+      hostHeaderValidationResponse(request, [hostname]) ?? originValidationResponse(origin, config.allowedOrigins)
     if (rejected) return rejected
 
     // Only an allowlisted browser origin gets this far, so it may read the response.
-    const origin = request.headers.get('origin')
     if (!origin) return route(request)
     const response = request.method === 'OPTIONS' ? new Response(null, { status: 204 }) : await route(request)
     const headers = new Headers(response.headers)
@@ -89,16 +115,21 @@ export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): Remote
   }
 
   async function route(request: Request): Promise<Response> {
-    const { pathname } = new URL(request.url)
+    const pathname = new URL(request.url).pathname
     if (pathname === '/health') {
-      return request.method === 'GET' ? Response.json({ status: 'ok', version: options.version }) : methodNotAllowed()
+      return request.method === 'GET'
+        ? Response.json({ status: 'ok', version: options.version })
+        : methodNotAllowed('GET')
     }
-    const discovery = oauthMetadataResponse(request, metadata)
-    if (discovery) return discovery
-    if (pathname !== config.resourceUrl.pathname) return Response.json({ error: 'Not found' }, { status: 404 })
+    if (pathname === resourceMetadataPath) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') return methodNotAllowed('GET, HEAD')
+      const response = Response.json(resourceMetadata, { headers: { 'Access-Control-Allow-Origin': '*' } })
+      return request.method === 'HEAD' ? new Response(null, { headers: response.headers }) : response
+    }
+    if (pathname !== '/') return Response.json({ error: 'Not found' }, { status: 404 })
 
     // Stateless: there is no session to stream (GET) or terminate (DELETE).
-    if (request.method !== 'POST') return methodNotAllowed()
+    if (request.method !== 'POST') return methodNotAllowed('POST')
 
     let authInfo
     try {
@@ -107,7 +138,7 @@ export function createRemoteMcpHandler(options: RemoteMcpHandlerOptions): Remote
         resourceMetadataUrl,
       })
     } catch (error) {
-      return bearerAuthChallengeResponse(error, { resourceMetadataUrl })
+      return bearerAuthChallengeResponse(error, { resourceMetadataUrl, requiredScopes: SCOPES })
     }
     return mcp.fetch(request, { authInfo })
   }

@@ -2,6 +2,7 @@ import type { Construct } from 'constructs'
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2'
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions'
 import * as sns from 'aws-cdk-lib/aws-sns'
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import * as targets from 'aws-cdk-lib/aws-route53-targets'
 import * as route53 from 'aws-cdk-lib/aws-route53'
 import * as logs from 'aws-cdk-lib/aws-logs'
@@ -14,11 +15,16 @@ import { Annotations, CfnOutput, Duration, RemovalPolicy, Stack, type StackProps
 
 export type McpServerStackProps = StackProps & {
   stage: 'staging' | 'prod'
-  /** Public hostname, e.g. mcp.terros.com. The endpoint is https://<domainName>/mcp. */
+  /** Public hostname, e.g. mcp.terros.com. The MCP server is served at the root, https://<domainName>, which is also the Auth0 audience. */
   domainName: string
   apiBaseUrl: string
   auth0Issuer: string
-  auth0Audience: string
+  /** Auth0 API identifier of the Terros API, the audience the token exchange asks for. */
+  apiAudience: string
+  /** Client ID of the Auth0 application that performs the token exchange. */
+  tokenExchangeClientId: string
+  /** Name of the Secrets Manager secret holding that application's client secret (created by a person, see the runbook). */
+  tokenExchangeSecretName: string
   /** Extra browser origin hostnames allowed besides the server's own. */
   allowedOrigins: string[]
   /** Lambda code: the `dist` directory produced by `pnpm package`. */
@@ -42,7 +48,7 @@ export class McpServerStack extends Stack {
     const prod = props.stage === 'prod'
     const retention = prod ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.ONE_MONTH
     const removalPolicy = prod ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY
-    const resourceUrl = `https://${props.domainName}/mcp`
+    const resourceUrl = `https://${props.domainName}`
 
     const functionLogs = new logs.LogGroup(this, 'FunctionLogs', { retention, removalPolicy })
     const fn = new lambda.Function(this, 'Function', {
@@ -52,6 +58,7 @@ export class McpServerStack extends Stack {
       handler: 'lambda.handler',
       code: props.code,
       memorySize: 1024,
+      // API Gateway REST integrations time out at 29 seconds by default, so a longer function timeout would not help.
       timeout: Duration.seconds(29),
       logGroup: functionLogs,
       environment: {
@@ -61,9 +68,12 @@ export class McpServerStack extends Stack {
         MCP_ALLOWED_ORIGINS: props.allowedOrigins.join(','),
         TERROS_API_ENDPOINT: props.apiBaseUrl,
         AUTH0_ISSUER: props.auth0Issuer,
-        AUTH0_AUDIENCE: props.auth0Audience,
+        TERROS_API_AUDIENCE: props.apiAudience,
+        AUTH0_TOKEN_EXCHANGE_CLIENT_ID: props.tokenExchangeClientId,
+        AUTH0_TOKEN_EXCHANGE_SECRET_ID: props.tokenExchangeSecretName,
       },
     })
+    secretsmanager.Secret.fromSecretNameV2(this, 'TokenExchangeSecret', props.tokenExchangeSecretName).grantRead(fn)
 
     const accessLogs = new logs.LogGroup(this, 'AccessLogs', { retention, removalPolicy })
     const api = new apigateway.LambdaRestApi(this, 'Api', {

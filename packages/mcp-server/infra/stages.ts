@@ -7,7 +7,9 @@ type StageSettings = Pick<
   | 'domainName'
   | 'apiBaseUrl'
   | 'auth0Issuer'
-  | 'auth0Audience'
+  | 'apiAudience'
+  | 'tokenExchangeClientId'
+  | 'tokenExchangeSecretName'
   | 'allowedOrigins'
   | 'certificateArn'
   | 'hostedZone'
@@ -16,8 +18,13 @@ type StageSettings = Pick<
 
 /** Values known in the repo. Everything else is passed with `-c key=value` (see docs/RUNBOOK.md). */
 const DEFAULTS: Record<StageName, Partial<StageSettings>> = {
-  staging: { domainName: 'mcp-staging.terros.com' },
-  prod: { domainName: 'mcp.terros.com', apiBaseUrl: 'https://api.terros.com', auth0Issuer: 'https://auth.terros.com/' },
+  staging: { domainName: 'mcp-staging.terros.com', tokenExchangeSecretName: 'terros-mcp/staging/auth0-token-exchange' },
+  prod: {
+    domainName: 'mcp.terros.com',
+    apiBaseUrl: 'https://api.terros.com',
+    auth0Issuer: 'https://auth.terros.com/',
+    tokenExchangeSecretName: 'terros-mcp/prod/auth0-token-exchange',
+  },
 }
 
 export type ContextReader = (key: string) => string | undefined
@@ -40,7 +47,9 @@ export function resolveStage(read: ContextReader): StageSettings & { stage: Stag
     domainName: need('domainName'),
     apiBaseUrl: need('apiBaseUrl'),
     auth0Issuer: need('auth0Issuer'),
-    auth0Audience: need('auth0Audience'),
+    apiAudience: need('apiAudience'),
+    tokenExchangeClientId: need('tokenExchangeClientId'),
+    tokenExchangeSecretName: need('tokenExchangeSecretName'),
     allowedOrigins: (read('allowedOrigins') ?? '')
       .split(',')
       .map((origin) => origin.trim())

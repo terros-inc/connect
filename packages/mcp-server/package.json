@@ -9,13 +9,14 @@
   },
   "scripts": {
     "fetch-openapi": "rm -f terros.yml && wget https://docs.terros.com/openapi/terros.yml",
-    "build": "tsdown",
-    "package": "pnpm --filter '@terros-inc/mcp-server^...' build && pnpm fetch-openapi && pnpm build && cp terros.yml dist/terros.yml",
+    "build": "pnpm --filter '@terros-inc/mcp-server^...' build && tsdown",
+    "package": "pnpm fetch-openapi && pnpm build && cp terros.yml dist/terros.yml",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "cdk": "cdk"
   },
   "devDependencies": {
+    "@aws-sdk/client-secrets-manager": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@terros-inc/connect-common": "workspace:^",
     "@terros-inc/mcp-core": "workspace:^",
