@@ -1,4 +1,4 @@
-import type { EndpointParameter } from './crud/endpoint'
+import type { EndpointParameter } from '@terros-inc/mcp-core'
 
 export const HELP_PARENT_MESSAGE = `
 usage: terros <command> <subcommand> [parameters]

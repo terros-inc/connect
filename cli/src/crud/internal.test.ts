@@ -1,10 +1,10 @@
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { parseEndpoints } from '@terros-inc/mcp-core'
 import { getTokens } from '@terros-inc/connect-common/auth'
 import { clearRuntimeCaches } from '../cache'
 import { buildTerrosClient } from '../api/query'
-import { parseEndpoints } from './parser'
 import { loadInternalSchema } from './internal'
 
 const home = vi.hoisted(() => ({ path: '' }))

@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
-import { loadInternalSchema } from './internal'
-import { loadEndpoints } from './index'
+import { loadInternalSchema } from './crud/internal'
+import { loadEndpoints } from './loadEndpoints'
 
 vi.mock('node:fs', () => ({ readFileSync: vi.fn() }))
-vi.mock('./internal', () => ({ loadInternalSchema: vi.fn() }))
+vi.mock('./crud/internal', () => ({ loadInternalSchema: vi.fn() }))
 
 const publicSchema = `
 openapi: 3.1.1
