@@ -33,6 +33,7 @@ export async function loadInternalSchema(): Promise<string | undefined> {
     if (!key) return undefined
     return await loadInternalSpec({
       client: buildTerrosClient(),
+      internalCompanyId: 'C:tantalim',
       cache: {
         read: (name) => readCache(name, key),
         write: (name, data) => writeCache(name, key, data),

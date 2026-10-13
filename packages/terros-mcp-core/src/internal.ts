@@ -12,8 +12,8 @@ export type InternalSpecCache = {
 
 export type InternalSpecOptions = {
   client: InternalApiClient
+  internalCompanyId: string
   cache?: InternalSpecCache
-  internalCompanyId?: string
 }
 
 type Profile = { type: 'success'; company: { companyId: string } }
@@ -44,7 +44,7 @@ export async function loadInternalSpec(options: InternalSpecOptions): Promise<st
     await options.cache?.write('profile', profile)
   }
 
-  if (profile.company.companyId !== (options.internalCompanyId ?? 'C:tantalim')) return undefined
+  if (profile.company.companyId !== options.internalCompanyId) return undefined
 
   const cachedSchema = await options.cache?.read('openapi')
   if (cachedSchema !== undefined) {

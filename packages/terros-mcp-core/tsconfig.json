@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "es2023",
     "lib": ["es2023"],
-    "types": ["vitest/globals", "node"],
+    "types": ["node"],
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "rootDir": "src",
@@ -19,5 +19,5 @@
     "rewriteRelativeImportExtensions": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "node_modules", "src/**/*.test.ts"]
 }
