@@ -34,6 +34,9 @@ Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure 
 
 ## Customer data and confidentiality
 
-- Never put real customer names, emails, domains, IDs, configurations, or any other PII or confidential data in code, fixtures, documentation, examples, commit messages, branch names, PR titles, or PR bodies.
-- Use unmistakably fictional placeholders instead, such as `Acme Solar`, addresses under `example.test`, and generic IDs and configuration values.
-- Before committing, search the entire repository for customer identifiers and replace every occurrence with neutral placeholder data.
+This repository is public: anything pushed here, PR text and its edit history included, is permanent public record.
+
+- Never put customer or company names, people's names, Terros IDs (`C.`, `U.`, `Program.`, `Account.` and so on), emails, phone numbers, addresses, internal Slack or Linear links to customer cases, or customer business details into code, tests, fixtures, docs, commit messages, branch names, PR titles or bodies, or review comments.
+- Use synthetic placeholders (`C.example`, `user@example.test`, "Acme Solar") and describe a real case generically ("a customer's CRM sync sent a false alert"). A Linear issue's real case (company, people, IDs, config) stays in Linear.
+- Check before you push: `git config core.hooksPath .githooks` turns on `scripts/check-public-data.mjs` as a pre-push hook, and the `Public data` workflow runs it on every PR's commits, branch name, title and body. It refuses Terros IDs, emails, phone numbers and the customer names in `PUBLIC_DATA_DENYLIST` (kept privately, never committed here); it does not catch everything above, so still read your diff and PR text.
+- The script is a copy of terros-inc/sergeant `packages/runner/container/check-public-data.mjs`; change it there and copy it here unchanged.

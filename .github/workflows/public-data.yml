@@ -1,0 +1,46 @@
+name: Public data
+
+# This repository is public: a PR's commits, branch name, title, and body must carry no customer data
+# (TECH-5914). The check refuses Terros IDs, emails, phone numbers, and the customer names in the
+# PUBLIC_DATA_DENYLIST secret, which is never committed here; it never prints a denylisted name.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  public-data:
+    name: Public data check
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Test the check
+        run: node --test scripts/check-public-data.test.mjs
+
+      - name: Commits
+        env:
+          PUBLIC_DATA_DENYLIST: ${{ secrets.PUBLIC_DATA_DENYLIST }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-public-data.mjs range "$BASE" "$HEAD"
+
+      - name: Branch name, PR title and body
+        if: ${{ !cancelled() }}
+        env:
+          PUBLIC_DATA_DENYLIST: ${{ secrets.PUBLIC_DATA_DENYLIST }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: printf '%s\n%s\n\n%s\n' "$BRANCH" "$TITLE" "$BODY" | node scripts/check-public-data.mjs text "branch, PR title and body"
