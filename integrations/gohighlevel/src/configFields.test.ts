@@ -11,30 +11,26 @@ const scriptNames: Record<ScriptKey, string> = {
   appointmentWebhook: 'GoHighLevel Appointment Webhook',
 }
 
-// HQ Energy's install config, with every id and URL replaced by a placeholder. Keep its shape: the point of this
-// fixture is that a later change cannot start rejecting or reinterpreting what HQ has saved.
-const hqConfig = {
-  goHighLevelCompanyId: 'company-id',
+// Acme Solar's fictional install config. Keep its shape: the point of this fixture is that a later change cannot
+// start rejecting or reinterpreting a representative saved config.
+const acmeConfig = {
+  goHighLevelCompanyId: 'company-id-placeholder',
   contactFieldMappings: {
-    'CF.custom-field-1': '{{ contact.custom_one }}',
+    'CF.field-a': '{{ contact.field_a }}',
     'account.owner.email': '{{ contact.owner_email }}',
   },
-  pipelineId: 'pipeline-id',
-  opportunityIdFieldId: 'CF.opportunity-id',
-  locationId: 'location-id',
+  pipelineId: 'pipeline-id-placeholder',
+  opportunityIdFieldId: 'CF.opportunity-id-placeholder',
+  locationId: 'location-id-placeholder',
   stageMappings: {
-    'S.shown': 'Shown',
-    'S.cancelled-appt': 'Cancelled Appt/No Show',
-    'S.declined': 'Declined Proposal',
-    'S.follow-up': 'Follow-up/Nurture',
-    'S.signed': 'Contract Signed',
-    'S.cancelled-contract': 'Cancelled Contract',
-    'S.installed': 'Installed',
+    'stage-id-a': 'Stage A',
+    'stage-id-b': 'Stage B',
+    'stage-id-c': 'Stage C',
   },
-  opportunityStages: 'Appointment Set, Contract Signed',
-  teamPipelines: { 'T.team-one': 'pipeline-one', 'T.team-two': 'pipeline-two', 'T.team-three': 'pipeline-three' },
+  opportunityStages: 'Stage A, Stage B',
+  teamPipelines: { 'team-id-a': 'pipeline-id-a', 'team-id-b': 'pipeline-id-b' },
   dryRun: '',
-  alertWebhookUrl: 'https://alerts.example.com/hook',
+  alertWebhookUrl: 'https://alerts.example.test/hook',
 }
 
 describe('config fields', () => {
@@ -60,9 +56,9 @@ describe('config fields', () => {
   })
 })
 
-describe("HQ Energy's saved config", () => {
+describe("Acme Solar's placeholder config", () => {
   test('has no missing or unknown keys apart from the two unused ones', () => {
-    expect(checkConfig('accountSync', hqConfig)).toEqual([
+    expect(checkConfig('accountSync', acmeConfig)).toEqual([
       'Config key goHighLevelCompanyId is not used by any GoHighLevel script and is ignored',
       'Config key teamPipelines is not used by any GoHighLevel script and is ignored',
     ])
@@ -70,22 +66,22 @@ describe("HQ Energy's saved config", () => {
 
   test('keeps running with its switches off', () => {
     expect(isSwitchOn('disabled', undefined)).toBe(false)
-    expect(isSwitchOn('dryRun', hqConfig.dryRun)).toBe(false)
+    expect(isSwitchOn('dryRun', acmeConfig.dryRun)).toBe(false)
   })
 
   test('still reads its opportunity stages and stage mappings the same way', () => {
-    expect(splitList(hqConfig.opportunityStages)).toEqual(['Appointment Set', 'Contract Signed'])
-    expect(isOpportunityStage('contract signed', hqConfig.opportunityStages)).toBe(true)
-    expect(isOpportunityStage('Shown', hqConfig.opportunityStages)).toBe(false)
+    expect(splitList(acmeConfig.opportunityStages)).toEqual(['Stage A', 'Stage B'])
+    expect(isOpportunityStage('stage b', acmeConfig.opportunityStages)).toBe(true)
+    expect(isOpportunityStage('Stage C', acmeConfig.opportunityStages)).toBe(false)
     // Incoming sends the stage ID key to Terros; outgoing never matches an ID key, so the Terros stage name is used.
-    expect(toTerrosStage('Cancelled Appt/No Show', hqConfig.stageMappings)).toBe('S.cancelled-appt')
-    expect(toGhlStage('Shown', hqConfig.stageMappings)).toBe('Shown')
+    expect(toTerrosStage('Stage B', acmeConfig.stageMappings)).toBe('stage-id-b')
+    expect(toGhlStage('Stage A', acmeConfig.stageMappings)).toBe('Stage A')
   })
 
   test('works for the other scripts too', () => {
     // One shared install config can carry keys another script reads; none of them is a missing required key.
     for (const script of Object.keys(scriptNames) as ScriptKey[]) {
-      const missing = checkConfig(script, { ...hqConfig, calendarId: 'calendar-id' }).filter((problem) =>
+      const missing = checkConfig(script, { ...acmeConfig, calendarId: 'calendar-id-placeholder' }).filter((problem) =>
         problem.startsWith('Missing')
       )
       expect(missing).toEqual([])

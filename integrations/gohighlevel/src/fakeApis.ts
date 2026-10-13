@@ -30,13 +30,13 @@ export class FakeApis {
     users: [
       {
         id: 'ghl-closer',
-        email: 'closer@hq.test',
+        email: 'closer@example.test',
         firstName: 'Cora',
         lastName: 'Closer',
       },
       {
         id: 'ghl-sales',
-        email: 'sales@hq.test',
+        email: 'sales@example.test',
         firstName: 'Sam',
         lastName: 'Sales',
       },
@@ -87,7 +87,7 @@ export class FakeApis {
         countrySubd: 'TX',
         postal1: '78701',
       },
-      closer: { userId: 'U.closer', email: 'closer@hq.test' },
+      closer: { userId: 'U.closer', email: 'closer@example.test' },
       closerId: 'U.closer',
       ownerId: 'U.owner',
       notes: [],

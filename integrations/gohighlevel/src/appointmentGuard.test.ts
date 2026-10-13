@@ -21,7 +21,7 @@ beforeEach(() => {
   world.install()
   world.addContact('contact-1')
   world.addAccount({ accountId: 'Account.1', externalLeadId: 'contact-1' })
-  world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+  world.addEvent({ eventId: 'Event.1', accountId: 'Account.1', attendeeEmail: 'closer@example.test' })
 })
 
 afterEach(() => {
@@ -214,7 +214,7 @@ describe('per-event create cap', () => {
   })
 
   test('another event on the same account has its own count', async () => {
-    world.addEvent({ eventId: 'Event.2', accountId: 'Account.1', attendeeEmail: 'closer@hq.test' })
+    world.addEvent({ eventId: 'Event.2', accountId: 'Account.1', attendeeEmail: 'closer@example.test' })
     for (let run = 0; run < MAX_APPOINTMENT_CREATES; run++) {
       world.terros.events.get('Event.1')!.sourceId = undefined
       await runSync()
@@ -229,7 +229,7 @@ describe('per-event create cap', () => {
   test('without an owner or closer to record the attempt under, it refuses to create', async () => {
     world.terros.accounts.get('Account.1')!.ownerId = undefined
     const webhook = world.eventWebhook('Event.1', 'update')
-    const payload = { ...webhook, data: { ...webhook.data, attendee: { email: 'closer@hq.test' } } }
+    const payload = { ...webhook, data: { ...webhook.data, attendee: { email: 'closer@example.test' } } }
     world.asScript('gohighlevel-appointment-sync')
 
     await appointmentSync(makeInput(payload, config))

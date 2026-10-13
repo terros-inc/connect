@@ -31,3 +31,9 @@ Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure 
 - Integrations are published by the `publish-integrations.yml` workflow (`pnpm run publish` in the integration directory, i.e. `terros connect publish`), not from a developer machine. It bundles with rolldown and does not type-check, so run `tsc --noEmit` before merging.
 - Merging to main does not publish. The workflow is manual (`workflow_dispatch`) and its integration list is hardcoded, so a new integration must be added to it.
 - `sdk` and `cli` publish to npm through the manual `publish.yml` workflow.
+
+## Customer data and confidentiality
+
+- Never put real customer names, emails, domains, IDs, configurations, or any other PII or confidential data in code, fixtures, documentation, examples, commit messages, branch names, PR titles, or PR bodies.
+- Use unmistakably fictional placeholders instead, such as `Acme Solar`, addresses under `example.test`, and generic IDs and configuration values.
+- Before committing, search the entire repository for customer identifiers and replace every occurrence with neutral placeholder data.

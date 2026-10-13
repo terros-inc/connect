@@ -48,7 +48,7 @@ Keys not listed here are ignored; each run logs them. `goHighLevelCompanyId` and
 
 **GoHighLevel → Terros (Opportunity Webhook).** The GoHighLevel stage name is looked up in the `stageMappings` values, ignoring case, and the matching key is sent to Terros as the target stage. With no match the GoHighLevel stage name itself is sent. Terros accepts a stage or action ID, or a name listed in the workflow's integration mappings, and silently ignores anything else. So the key should be a Terros stage ID, or the workflow needs an integration mapping for that name. The webhook also records the GoHighLevel stage name on the account as its source status.
 
-So one table serves both directions only if its keys can be both: a stage name suits outgoing, a stage ID suits incoming. With stage IDs as keys (HQ), incoming works and outgoing falls back to the Terros stage name. If two keys share a value, incoming uses the first.
+So one table serves both directions only if its keys can be both: a stage name suits outgoing, a stage ID suits incoming. With stage IDs as keys (as in the example below), incoming works and outgoing falls back to the Terros stage name. If two keys share a value, incoming uses the first.
 
 ### Alerts
 
@@ -59,9 +59,9 @@ So one table serves both directions only if its keys can be both: a stage name s
 
 Every alert is also logged as `GHL_SYNC_ALERT {…}`. A failed delivery is logged and never fails the sync. Alerts are still sent when `dryRun` is on.
 
-## Worked example: HQ Energy
+## Worked example: Acme Solar
 
-HQ's Account Sync and Opportunity Webhook config, with ids replaced by placeholders:
+Acme Solar's Account Sync and Opportunity Webhook config, using placeholder values:
 
 ```json
 {
@@ -74,13 +74,9 @@ HQ's Account Sync and Opportunity Webhook config, with ids replaced by placehold
   "opportunityIdFieldId": "CF.<custom field id>",
   "opportunityStages": "<comma-separated Terros stage names>",
   "stageMappings": {
-    "<Terros stage id 1>": "Shown",
-    "<Terros stage id 2>": "Cancelled Appt/No Show",
-    "<Terros stage id 3>": "Declined Proposal",
-    "<Terros stage id 4>": "Follow-up/Nurture",
-    "<Terros stage id 5>": "Contract Signed",
-    "<Terros stage id 6>": "Cancelled Contract",
-    "<Terros stage id 7>": "Installed"
+    "<Terros stage id 1>": "Stage A",
+    "<Terros stage id 2>": "Stage B",
+    "<Terros stage id 3>": "Stage C"
   },
   "alertWebhookUrl": "<alert webhook url>",
   "dryRun": "",
@@ -90,7 +86,7 @@ HQ's Account Sync and Opportunity Webhook config, with ids replaced by placehold
 ```
 
 - `dryRun: ""` is off.
-- `stageMappings` uses Terros stage IDs as keys. A GoHighLevel move to `Shown` therefore sends that stage ID to Terros, which accepts it directly. On the Terros → GoHighLevel side these ID keys never match a stage name, so Account Sync uses the Terros stage name (for example `Appointment Set`) as the GoHighLevel stage name; that stage must exist with that name in the pipeline.
+- `stageMappings` uses Terros stage IDs as keys. A GoHighLevel move to `Stage A` therefore sends that stage ID to Terros, which accepts it directly. On the Terros → GoHighLevel side these ID keys never match a stage name, so Account Sync uses the Terros stage name (for example `Appointment Set`) as the GoHighLevel stage name; that stage must exist with that name in the pipeline.
 - `contactFieldMappings` copies one custom field and the owner's email into two GoHighLevel contact fields.
 - `goHighLevelCompanyId` and `teamPipelines` have no effect and can be removed from the install whenever someone is in there; leaving them does no harm.
 
