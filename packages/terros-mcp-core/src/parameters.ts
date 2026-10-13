@@ -87,7 +87,7 @@ function formatObjectShape(schema: ObjectSchema, components: Components, depth: 
   return properties.length > 0 ? `{ ${properties.join(', ')} }` : '{}'
 }
 
-function resolveSchema(schema: Schema, components: Components, seen = new Set<string>()): Schema {
+export function resolveSchema(schema: Schema, components: Components, seen = new Set<string>()): Schema {
   if (!isRefSchema(schema)) return schema
 
   const match = schema.$ref.match(/^#\/components\/schemas\/(.+)$/)

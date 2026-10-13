@@ -30,37 +30,119 @@ describe('buildEndpointInput', () => {
     expect(result).toEqual(expected)
   })
 
-  it('should add a hidden wrapper prefix for a single object property', () => {
+  it('does not add a hidden wrapper prefix for a generic object property', () => {
     const endpoint: Endpoint = {
-      path: '/user/profile',
+      path: '/metadata/update',
       components: { schemas: {} },
       properties: {
         type: 'object',
         properties: {
-          profile: {
+          metadata: {
             type: 'object',
-            properties: {
-              userId: {
-                type: 'string',
-              },
-            },
           },
         },
       },
     }
 
     const params: ParsedArgs = {
-      _: ['user', 'profile'],
-      userId: 'U:dj',
+      _: ['metadata', 'update'],
+      metadata: '{"source":"example"}',
     }
 
-    const expected = {
-      profile: {
-        userId: 'U:dj',
+    expect(buildEndpointInput(endpoint, params)).toEqual({
+      metadata: { source: 'example' },
+    })
+  })
+
+  it('wraps user update parameters when the input and wrapper use schema references', () => {
+    const endpoint: Endpoint = {
+      path: '/user/update',
+      components: {
+        schemas: {
+          UserUpdateInput: {
+            type: 'object',
+            properties: {
+              user: { $ref: '#/components/schemas/UserUpdateData' },
+            },
+            required: ['user'],
+          },
+          UserUpdateData: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string' },
+              firstName: { type: 'string' },
+              primaryTeam: {
+                type: 'object',
+                properties: {
+                  teamId: { type: 'string' },
+                  staleAfter: { type: 'integer' },
+                },
+              },
+            },
+            required: ['userId'],
+          },
+        },
+      },
+      properties: { $ref: '#/components/schemas/UserUpdateInput' },
+    }
+
+    const params: ParsedArgs = {
+      _: ['user', 'update'],
+      userId: 'U:placeholder',
+      firstName: 'Example',
+      primaryTeam: {
+        teamId: 'Team.placeholder',
+        staleAfter: 60000,
       },
     }
 
-    const result = buildEndpointInput(endpoint, params)
-    expect(result).toEqual(expected)
+    expect(buildEndpointInput(endpoint, params)).toEqual({
+      user: {
+        userId: 'U:placeholder',
+        firstName: 'Example',
+        primaryTeam: {
+          teamId: 'Team.placeholder',
+          staleAfter: 60000,
+        },
+      },
+    })
+  })
+
+  it('wraps account update parameters when the wrapper uses a schema reference', () => {
+    const endpoint: Endpoint = {
+      path: '/account/update',
+      components: {
+        schemas: {
+          AccountUpdateData: {
+            type: 'object',
+            properties: {
+              accountId: { type: 'string' },
+              title: { type: 'string' },
+            },
+            required: ['accountId'],
+          },
+        },
+      },
+      properties: {
+        type: 'object',
+        properties: {
+          account: { $ref: '#/components/schemas/AccountUpdateData' },
+        },
+        required: ['account'],
+      },
+    }
+
+    const params: ParsedArgs = {
+      _: ['account', 'update'],
+      accountId: 'Account.placeholder',
+      title: 'Example account',
+    }
+
+    expect(buildEndpointInput(endpoint, params)).toEqual({
+      account: {
+        accountId: 'Account.placeholder',
+        title: 'Example account',
+      },
+    })
   })
 })

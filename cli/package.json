@@ -59,7 +59,7 @@
     "start": "node src/index.ts"
   },
   "type": "module",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
