@@ -3,8 +3,9 @@
 The steps a person does to put `@terros-inc/mcp-server` live: Auth0, DNS and certificates, deploying to staging and
 prod, checking the health check, logs and alarms, and the live check with Claude and Cursor. The code, the tests and
 the infrastructure definition (`infra/`) are in this package. Nothing has been run against AWS yet; in Auth0, the
-per-stage MCP APIs (step 1.1) and Dynamic Client Registration (step 1.4) are done and the rest of §1 remains (see
-"Progress" in §1).
+per-stage MCP APIs (step 1.1), Dynamic Client Registration (step 1.4), the domain-level login connections (step 1.5)
+and the shared `Terros MCP Server` M2M application (step 1.9) are done and the rest of §1 remains (see "Progress" in
+§1).
 
 Do every step for **staging** first, finish the live check (step 6) there, then repeat steps 1.10 and 2 to 5 for
 **prod** (the rest of §1 is shared by both stages and done once).
@@ -78,10 +79,26 @@ and Default Permissions for Third Party Apps → User-Delegated Access **Authori
 Step 1.4, open **Dynamic Client Registration** on the `tantalim` tenant, is **done** (enabled by Trevor). See its
 operations note on monitoring and cleaning up DCR-registered applications.
 
-The remaining Auth0 steps are still manual and not done. **Next:** promote the login connection to domain level (step
-1.5). Then the shared `Terros MCP Server` M2M application with its grant on the Terros API (step 1.9), the Custom Token
-Exchange Action and token exchange profile (steps 1.7, 1.8), the connector callback URLs (step 1.6), and the Secrets
-Manager entries (step 1.10). Steps 1.2, 1.3, 1.11 and 1.12 also remain.
+Step 1.5 is **done** (by Trevor): the login connections Terros users sign in with are promoted to domain level, both
+the main login connection and a customer's Okta Workforce enterprise connection.
+
+Step 1.9 is **done** (by Trevor): the `Terros MCP Server` Machine to Machine application exists, authorized on the
+existing Terros API audience with **no permissions**, and is the one exchange client shared by the staging and prod
+MCP servers.
+
+The remaining Auth0 steps are still manual and not done:
+
+- The **Custom Token Exchange Action and token exchange profile** (steps 1.7, 1.8). Trevor does these once the server
+  code is final, so that the Action and profile match it (the `subject_token_type` in `src/exchange.ts`, the RFC 9068
+  claims in `src/auth.ts`). Turning on token exchange for the `Terros MCP Server` application (the
+  `token_exchange` PATCH in step 1.9) was not part of the status; check it is set when doing step 1.8.
+- The **connector callback URLs** (step 1.6): check after the live check that the DCR-registered Claude, ChatGPT and
+  Cursor applications carry them.
+- Storing the `Terros MCP Server` client secret in **AWS Secrets Manager** (step 1.10), in `us-east-1`, under exactly
+  `terros-mcp/staging/auth0-token-exchange` (staging deploy account) and `terros-mcp/prod/auth0-token-exchange` (prod
+  deploy account).
+- Steps 1.2 (confirm the Terros API identifier and turn on its **Allow Skipping User Consent**), 1.3 (Resource
+  Parameter Compatibility Profile), 1.11 (Attack Protection check) and 1.12 (discovery check).
 
 **No scopes, no RBAC.** Terros does not put permissions in OAuth scopes. On the MCP APIs (step 1.1) do not enable
 RBAC or **Add Permissions in the Access Token**, and define no permissions. The server neither advertises nor checks
@@ -199,8 +216,9 @@ settings (step 1.2) as they are, apart from the consent setting named there.
      -H "authorization: Bearer $MGMT_TOKEN" -H 'content-type: application/json' \
      -d '{"is_domain_connection":true}'
    ```
-   In the dashboard this is the connection's **Promote Connection to Domain Level** setting. This is the **next**
-   manual step (see "Progress").
+   In the dashboard this is the connection's **Promote Connection to Domain Level** setting. **Done** (by Trevor on
+   2026-10-13; see "Progress") for both connections Terros users sign in with: the main login connection and a
+   customer's Okta Workforce enterprise connection. Promote any connection added later the same way.
 6. **Allowed callback URLs.** With DCR each client registers its own redirect URI, and Auth0 stores it as that
    application's allowed callback URL, so nothing needs adding. Check after the live check (step 6) that the
    registered applications carry these URLs, and add them by hand to any application created without DCR (checked
@@ -219,8 +237,8 @@ settings (step 1.2) as they are, apart from the consent setting named there.
    **Custom Token Exchange**), named `terros-mcp-token-exchange`. Add the dependency `jose` (a 4.x version, which
    ships CommonJS for `require`) and three secrets:
    - `ISSUER`: the tenant's issuer from step 1.12, with its trailing slash.
-   - `EXCHANGE_CLIENT_ID`: the client ID of the shared `Terros MCP Server` M2M application (step 1.9). Create the
-     Action with a placeholder, and fill this in after step 1.9.
+   - `EXCHANGE_CLIENT_ID`: the client ID of the shared `Terros MCP Server` M2M application (step 1.9, already
+     created; copy the client ID from its Settings tab).
    - `MCP_AUDIENCES`: JSON array of both stages' MCP API identifiers, exactly
      `["https://mcp.terros.com","https://mcp.staging.terros.com"]`.
 
@@ -298,6 +316,9 @@ settings (step 1.2) as they are, apart from the consent setting named there.
    tokens (its **Application Access** → User-Delegated Access policy), allow this application too. Do not authorize it
    on the MCP APIs. Its client ID is the `tokenExchangeClientId` deploy value of **both** stages and the Action's
    `EXCHANGE_CLIENT_ID` (step 1.7). Do not create a per-stage application.
+   **Done** (by Trevor on 2026-10-13; see "Progress"): `Terros MCP Server` exists, authorized on the existing Terros API
+   audience with no permissions, shared by staging and prod. The commands above are kept as the record. The
+   `token_exchange` PATCH was not part of that status; confirm it with step 1.8.
 10. **Store the M2M client secret in AWS Secrets Manager**, once per stage: the **same** `Terros MCP Server` client
     secret goes into `terros-mcp/staging/auth0-token-exchange` in the staging deploy account and into
     `terros-mcp/prod/auth0-token-exchange` in the prod deploy account, both in `us-east-1`, as plain-text secrets (the
