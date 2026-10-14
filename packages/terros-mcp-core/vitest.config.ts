@@ -4,7 +4,7 @@ export default defineProject({
   resolve: { tsconfigPaths: true },
   test: {
     globals: true,
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'eval/**/*.test.ts'],
     exclude: ['**/dist/**'],
     pool: 'threads',
   },

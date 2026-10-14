@@ -24,7 +24,9 @@ export function parseEndpoints(file: string): EndpointGroups {
 
     endpoints[group][alias] = {
       path,
+      summary: config.post.summary,
       description: config.post.description ?? config.post.summary,
+      tags: config.post.tags,
       properties: schema,
       components: data.components,
     }

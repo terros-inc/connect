@@ -5,7 +5,7 @@ import type { EndpointGroups, OpenAPISchema } from '@terros-inc/mcp-core'
 import { getTokens } from '@terros-inc/connect-common/auth'
 import { StdioServerTransport, serveStdio } from '@modelcontextprotocol/server/stdio'
 import type { McpServer, JSONRPCMessage } from '@modelcontextprotocol/server'
-import { createMcpServer, startMcpServer } from './mcp'
+import { createMcpServer, parseMcpToolOptions, startMcpServer } from './mcp'
 import { loadEndpoints } from './loadEndpoints'
 import { buildTerrosClient } from './api/query'
 
@@ -86,7 +86,28 @@ describe('startMcpServer', () => {
   })
 })
 
-async function connect(groups = endpoints): Promise<(method: string, params?: object) => Promise<any>> {
+describe('parseMcpToolOptions', () => {
+  it('reads the tool mode and toolsets', () => {
+    expect(parseMcpToolOptions({ _: [], tools: 'meta', toolsets: 'account, calendar' })).toEqual({
+      mode: 'meta',
+      toolsets: ['account', 'calendar'],
+    })
+    expect(parseMcpToolOptions({ _: [] })).toEqual({})
+  })
+
+  it('rejects an unknown mode or an empty toolset list', () => {
+    expect(() => parseMcpToolOptions({ _: [], tools: 'all' })).toThrow('--tools must be one of: endpoints, meta')
+    expect(() => parseMcpToolOptions({ _: [], toolsets: true })).toThrow('comma-separated')
+    expect(() => parseMcpToolOptions({ _: [], toolsets: ',' })).toThrow('--toolsets needs at least one toolset name')
+  })
+
+  it('rejects a bad option before checking the login', async () => {
+    await expect(startMcpServer({ params: { _: [], tools: 'all' }, args: [] })).rejects.toThrow('--tools')
+    expect(getTokens).not.toHaveBeenCalled()
+  })
+})
+
+async function connect(groups = endpoints, options = {}): Promise<(method: string, params?: object) => Promise<any>> {
   const stdin = new PassThrough()
   const stdout = new PassThrough()
   let nextId = 0
@@ -102,7 +123,7 @@ async function connect(groups = endpoints): Promise<(method: string, params?: ob
       pending.delete(message.id)
     }
   })
-  server = createMcpServer(groups)
+  server = createMcpServer(groups, options)
   await server.connect(new StdioServerTransport(stdin, stdout))
   const request = (method: string, params: object = {}): Promise<any> => {
     const id = ++nextId
@@ -159,6 +180,19 @@ describe('MCP stdio tools', () => {
       isError: true,
       content: [{ type: 'text', text: 'Account not found' }],
     })
+  })
+
+  it('serves the meta-tools when asked', async () => {
+    const request = await connect(endpoints, { mode: 'meta' })
+    const response = await request('tools/list')
+    expect(response.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
+      'terros_search_tools',
+      'terros_describe_tool',
+      'terros_call',
+    ])
+    call.mockResolvedValue({ id: 'A.1' })
+    await request('tools/call', { name: 'terros_call', arguments: { name: 'account_get', args: { id: 'A.1' } } })
+    expect(call).toHaveBeenCalledWith('account/get', { id: 'A.1' })
   })
 
   it('registers and lists every tool from the bundled OpenAPI document', async () => {
