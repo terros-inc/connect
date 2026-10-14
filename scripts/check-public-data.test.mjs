@@ -30,12 +30,12 @@ function repo() {
   return { dir, git, base: commit('README.md', '# Fixture\n'), commit }
 }
 
-function check(dir, args, input = '') {
+function check(dir, args, input = '', denylist = NAME) {
   const r = spawnSync('node', [SCRIPT, ...args], {
     cwd: dir,
     input,
     encoding: 'utf8',
-    env: { ...process.env, PUBLIC_DATA_DENYLIST: NAME },
+    env: { ...process.env, PUBLIC_DATA_DENYLIST: denylist },
   })
   return { code: r.status, out: r.stderr }
 }
@@ -125,4 +125,76 @@ test('PR titles and bodies are checked', () => {
     check(r.dir, ['text', 'PR body'], 'Title\n\nFixes the sync for Zephyr Roofing.\n').out,
     /PR body:3: denylisted customer name/
   )
+})
+
+test("binary files are read as text, a .gitattributes mark hides nothing, and a '++ ' line is an added line", () => {
+  const r = repo()
+  r.commit('logo.bin', `\0\x01PNG\nowner ${COMPANY_ID}\n\0`)
+  assert.match(check(r.dir, ['range', r.base, 'HEAD']).out, /logo\.bin:2: Terros ID/)
+
+  const a = repo()
+  a.commit('.gitattributes', '*.md -diff\n')
+  a.commit('notes.md', 'Zephyr Roofing\n')
+  assert.match(check(a.dir, ['range', a.base, 'HEAD']).out, /notes\.md:1: denylisted customer name/)
+
+  // An added line that starts with '++ ' shows as '+++ ' in the diff, like a file header.
+  const p = repo()
+  p.commit('counter.c', `int a = 1;\n++ zephyr roofing;\n++ ${COMPANY_ID};\n`)
+  const { out } = check(p.dir, ['range', p.base, 'HEAD'])
+  assert.match(out, /counter\.c:2: denylisted customer name/)
+  assert.match(out, /counter\.c:3: Terros ID/)
+})
+
+test("a rename-only or empty file's path is checked, and a path with customer data is never printed", () => {
+  const r = repo()
+  r.git('mv', 'README.md', 'zephyr-roofing-notes.md')
+  r.git('commit', '--quiet', '-m', 'Rename')
+  const renamed = check(r.dir, ['range', r.base, 'HEAD'])
+  assert.equal(renamed.code, 1)
+  assert.match(renamed.out, /\(a file path with customer data\) \(file path\): denylisted customer name/)
+  assert.doesNotMatch(renamed.out, /zephyr/i)
+
+  const e = repo()
+  e.commit('ZephyrRoofing.md', '')
+  assert.match(check(e.dir, ['range', e.base, 'HEAD']).out, /\(file path\): denylisted customer name/)
+
+  // A line finding in such a file does not print its path either.
+  const l = repo()
+  l.commit('zephyr_roofing.ts', `const id = '${COMPANY_ID}'\n`)
+  const { out } = check(l.dir, ['range', l.base, 'HEAD'])
+  assert.match(out, /\(a file path with customer data\):1: Terros ID/)
+  assert.doesNotMatch(out, /zephyr/i)
+})
+
+test("a commit's author and committer are checked, but their own email address is not a finding", () => {
+  // The environment's GIT_AUTHOR_* and GIT_COMMITTER_* would override a -c user.name, so set those.
+  const commitAs = (dir, name, email) =>
+    execFileSync('git', ['commit', '--quiet', '--allow-empty', '-m', 'Empty'], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: name,
+        GIT_AUTHOR_EMAIL: email,
+        GIT_COMMITTER_NAME: 'Test',
+        GIT_COMMITTER_EMAIL: 'test@example.test',
+      },
+    })
+  const r = repo()
+  commitAs(r.dir, 'Zephyr Roofing', 'rep@example.test')
+  assert.match(check(r.dir, ['range', r.base, 'HEAD']).out, /author\/committer:1: denylisted customer name/)
+  const e = repo()
+  commitAs(e.dir, 'A Developer', EMAIL)
+  assert.deepEqual(check(e.dir, ['range', e.base, 'HEAD']), { code: 0, out: '' })
+})
+
+test('a two-character denylist entry is checked in its listed case, and a one-character entry is an error', () => {
+  const r = repo()
+  r.commit('vendors.md', 'Parts from 3M and from Zq.\nzq is lowercase here.\n')
+  const { out } = check(r.dir, ['range', r.base, 'HEAD'], '', 'Zq')
+  assert.match(out, /vendors\.md:1: denylisted customer name/)
+  assert.doesNotMatch(out, /vendors\.md:2:/)
+  assert.equal(check(r.dir, ['range', r.base, 'HEAD'], '', '3M').code, 1)
+  const bad = check(r.dir, ['range', r.base, 'HEAD'], '', 'Zephyr Roofing,Q')
+  assert.equal(bad.code, 2)
+  assert.doesNotMatch(bad.out, /Zephyr/)
 })
