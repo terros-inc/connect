@@ -30,7 +30,7 @@ Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure 
 - An integration's version is its `package.json` `version`. Bump it before publishing; a version already deployed cannot be republished (the CLI errors). A version still in `draft` can be re-uploaded.
 - Integrations are published by the `publish-integrations.yml` workflow (`pnpm run publish` in the integration directory, i.e. `terros connect publish`), not from a developer machine. It bundles with rolldown and does not type-check, so run `tsc --noEmit` before merging.
 - Merging to main does not publish. The workflow is manual (`workflow_dispatch`) and its integration list is hardcoded, so a new integration must be added to it.
-- `sdk` and `cli` publish to npm through the manual `publish.yml` workflow.
+- `sdk` and `cli` publish to npm through the manual `publish.yml` workflow. It only stages the version; a `terros-inc` npm org member must approve it on npmjs.com before it is live. See `RELEASING.md`.
 
 ## Customer data and confidentiality
 
