@@ -1,6 +1,6 @@
 # Releasing
 
-How to release `@terros-inc/cli` and `@terros-inc/sdk` to npm, and how integration publishing differs.
+How to release `@terros-inc/cli`, `@terros-inc/sdk` and `@terros-inc/mcp-core` to npm, and how integration publishing differs.
 
 A green **Publish to npm** run does not mean the release is live. The workflow uses npm staged publishing, so each
 run only stages the version. Someone in the `terros-inc` npm organization has to approve it on npmjs.com before
@@ -66,6 +66,41 @@ For the SDK, `npm view @terros-inc/sdk version` is enough. Both packages publish
 
 Approvers are members of the `terros-inc` npm organization. Membership is managed in that organization's member
 settings on npmjs.com. Ask an organization owner if you need access.
+
+## `@terros-inc/mcp-core`
+
+`packages/terros-mcp-core` is the one OpenAPI-to-MCP tool generator. The CLI bundles it from the workspace
+(`workspace:^`), so a CLI release never needs an `mcp-core` release. The hosted MCP service in `terros-inc/sales`
+cannot import this workspace, so it installs a published version and pins it exactly.
+
+Release it with the same steps as the CLI and SDK: bump `version` in `packages/terros-mcp-core/package.json`, merge to
+`main`, run **Publish to npm** with the package `packages/terros-mcp-core`, approve the staged version, then check
+`npm view @terros-inc/mcp-core version`. Its `prepack` only builds; it does not download a spec.
+
+### Versioning and breaking changes
+
+Use semver on the package's exports (`parseEndpoints`, `loadEndpoints`, `createMcpServer`, `buildTools` and their
+types) and on the tools they generate. A change is breaking (major version) when it removes or renames an export,
+changes a function's options, or changes generated tool names or input schemas, because MCP clients store tool names.
+
+1. Make the change in `packages/terros-mcp-core` and adapt the CLI in the same PR, so `main` always has one
+   implementation that the CLI uses.
+2. Bump the major version and publish. The CLI can be released whenever it is ready; the order does not matter.
+3. Sales keeps its exact pin until someone upgrades it in a Sales PR: change the version, update `pnpm-lock.yaml`,
+   adapt `apps/mcp`, and let Sales CI build and test it. Sales then deploys through its own pipeline. To roll back,
+   revert that Sales PR; the old version stays on npm.
+
+Never fork or copy `mcp-core` into Sales to get a fix out sooner: publish a patch version and bump the Sales pin.
+
+### OpenAPI documents are not part of `mcp-core` releases
+
+The Sales API owns the OpenAPI documents. `mcp-core` contains no spec, so a spec change never needs an `mcp-core`
+release, and an `mcp-core` release never changes which endpoints exist.
+
+- CLI: `terros` and `terros mcp` read the `terros.yml` bundled at publish time (`prepack` downloads the live
+  `https://docs.terros.com/openapi/terros.yml`), or the internal document from the API for staff. A new public endpoint
+  reaches CLI users with the next CLI release.
+- Hosted MCP service (Sales `apps/mcp`): loads the documents from the API at runtime, so a Sales API deploy is enough.
 
 ## Integrations: `publish-integrations.yml`
 
