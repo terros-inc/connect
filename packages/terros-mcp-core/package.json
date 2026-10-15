@@ -1,21 +1,7 @@
 {
   "name": "@terros-inc/mcp-core",
   "version": "1.0.0",
-  "description": "OpenAPI-to-MCP tool generation shared by the Terros CLI and the hosted Terros MCP service",
-  "license": "MIT",
-  "author": "Terros Inc.",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/terros-inc/connect.git",
-    "directory": "packages/terros-mcp-core"
-  },
-  "publishConfig": {
-    "access": "public",
-    "tag": "latest"
-  },
-  "engines": {
-    "node": ">=24"
-  },
+  "private": true,
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -30,8 +16,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "catalog:",
-    "yaml": "catalog:"
+    "@modelcontextprotocol/server": "^2.1.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

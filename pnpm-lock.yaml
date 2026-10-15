@@ -420,10 +420,10 @@ importers:
   packages/terros-mcp-core:
     dependencies:
       '@modelcontextprotocol/server':
-        specifier: 'catalog:'
+        specifier: ^2.1.0
         version: 2.1.0
       yaml:
-        specifier: 'catalog:'
+        specifier: ^2.9.0
         version: 2.9.0
     devDependencies:
       '@types/node':

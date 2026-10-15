@@ -5,7 +5,7 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - `sdk` - `@terros-inc/sdk`, API client and `wrapConnectHandler` for integration handlers
 - `cli` - `@terros-inc/cli`, the `terros` command, including `terros connect publish`
 - `packages/connect-common` - private shared package, a dependency of `sdk` and `cli`
-- `packages/terros-mcp-core` - `@terros-inc/mcp-core`, the one OpenAPI-to-MCP tool generator. The CLI bundles it from the workspace; the hosted MCP service in `terros-inc/sales` installs a pinned npm version (see `RELEASING.md`)
+- `packages/terros-mcp-core` - `@terros-inc/mcp-core`, private, the one OpenAPI-to-MCP tool generator. The CLI bundles it from the workspace; the hosted MCP service in `terros-inc/sales` installs it as a git dependency pinned to a `main` commit, so its `dependencies` use semver ranges, not `catalog:` (see `RELEASING.md`)
 - `integrations/*` - one Connect app each (airtable, docusign, gohighlevel, jobnimbus, salesforce, zoho)
 
 ## Setup and commands
@@ -31,7 +31,7 @@ Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure 
 - An integration's version is its `package.json` `version`. Bump it before publishing; a version already deployed cannot be republished (the CLI errors). A version still in `draft` can be re-uploaded.
 - Integrations are published by the `publish-integrations.yml` workflow (`pnpm run publish` in the integration directory, i.e. `terros connect publish`), not from a developer machine. It bundles with rolldown and does not type-check, so run `tsc --noEmit` before merging.
 - Merging to main does not publish. The workflow is manual (`workflow_dispatch`) and its integration list is hardcoded, so a new integration must be added to it.
-- `sdk`, `cli` and `packages/terros-mcp-core` publish to npm through the manual `publish.yml` workflow. It only stages the version; a `terros-inc` npm org member must approve it on npmjs.com before it is live. See `RELEASING.md`.
+- `sdk` and `cli` publish to npm through the manual `publish.yml` workflow. It only stages the version; a `terros-inc` npm org member must approve it on npmjs.com before it is live. See `RELEASING.md`.
 
 ## Customer data and confidentiality
 
