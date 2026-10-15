@@ -23,6 +23,7 @@ import type {
   UnsavedAccount,
   UnsavedAccountContact,
   UnsavedAccountNote,
+  UpsertAccountNote,
   UnsavedAccountStatus,
   UpsertLatLng,
   UpsertTinyResidentData,
