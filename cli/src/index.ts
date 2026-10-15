@@ -10,7 +10,7 @@ import {
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
 import { buildCliCommandTree, findBuiltin, matchCommand, type CommandLevel } from './commandTree'
-import { getCommandGroup, getSubcommand } from './commands'
+import { commandRegistry, getCommandGroup, getSubcommand } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     return
   }
 
-  const builtin = findBuiltin(words)
+  const builtin = findBuiltin(commandRegistry, words)
   if (builtin) {
     await builtin.run({ params, args: builtin.args })
     return
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
 }
 
 async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
-  return matchCommand(buildCliCommandTree(await loadEndpoints()), words)
+  return matchCommand(buildCliCommandTree(await loadEndpoints(), commandRegistry), commandRegistry, words)
 }
 
 function formatLevelHelp(level: CommandLevel): string {
