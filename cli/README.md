@@ -147,6 +147,22 @@ terros <command> <subcommand> --metadata '{"source":"cli"}'
 
 Responses are printed as formatted JSON.
 
+### Example: Export Data
+
+Exports run asynchronously. Create one, check its status by ID until it is
+`Completed`, then download its files:
+
+```sh
+terros export add --export '{"type":"Account","format":"csv","compression":"none","filter":{}}'
+terros export get --exportId Export.example
+terros export download --exportId Export.example
+```
+
+`terros export get` returns the export, including its `status` and progress,
+or a `NotFound` error if the export does not exist or you cannot access it.
+The MCP server exposes the same endpoints as the `export_add`, `export_get` and
+`export_download` tools.
+
 ## Local Development
 
 Install dependencies:
