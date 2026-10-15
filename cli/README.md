@@ -88,17 +88,36 @@ older than seven days, the CLI prints the effective clipped start time.
 
 ## Find Commands
 
-Terros CLI uses the pattern:
+Each API command follows its endpoint's full path, one word per path segment, at
+any depth:
 
 ```sh
-terros <command> <subcommand> [parameters]
+terros <command> [<subcommand> ...] [parameters]
 ```
 
-Single-segment API endpoints are direct commands. For example:
+For example (made-up paths):
+
+| Endpoint              | Command                     |
+| --------------------- | --------------------------- |
+| `/bed/list`           | `terros bed list`           |
+| `/garden/bed/list`    | `terros garden bed list`    |
+| `/garden/bed/tag/add` | `terros garden bed tag add` |
+| `/search`             | `terros search`             |
+
+Single-segment API endpoints are direct commands:
 
 ```sh
 terros search --query "Jane Doe"
 ```
+
+Two endpoints that would map to the same command (for example `/garden/bed/list`
+and `/garden/bed/list/`), or an endpoint that would land on a built-in command
+such as `terros auth login` or `terros connect publish`, make the CLI exit with an
+error that names both. A path segment named `help` is rejected the same way,
+because `help` is reserved for help text.
+
+CLI 2.0.0 changed command names; see [CHANGELOG.md](CHANGELOG.md) for the
+renamed commands.
 
 List available commands:
 
@@ -106,23 +125,24 @@ List available commands:
 terros help
 ```
 
-List subcommands for a command:
+List the subcommands at any level:
 
 ```sh
 terros <command> help
+terros <command> <subcommand> help
 ```
 
-Show parameters for a subcommand:
+Show parameters for a command (and any subcommands nested below it):
 
 ```sh
-terros <command> <subcommand> help
+terros <command> [<subcommand> ...] help
 ```
 
 Use `--depth` to show additional nested object type detail. The default depth is
 one layer:
 
 ```sh
-terros <command> <subcommand> help --depth 2
+terros <command> [<subcommand> ...] help --depth 2
 ```
 
 ## Run a Command
@@ -130,7 +150,7 @@ terros <command> <subcommand> help --depth 2
 Pass parameters as flags:
 
 ```sh
-terros <command> <subcommand> --name "Acme Inc." --active true
+terros <command> [<subcommand> ...] --name "Acme Inc." --active true
 ```
 
 Parameter values are validated based on the Terros API schema. Supported values
@@ -139,10 +159,10 @@ include strings, numbers, booleans, arrays, and JSON objects.
 Examples:
 
 ```sh
-terros <command> <subcommand> --count 10
-terros <command> <subcommand> --active true
-terros <command> <subcommand> --ids id_1,id_2,id_3
-terros <command> <subcommand> --metadata '{"source":"cli"}'
+terros <command> [<subcommand> ...] --count 10
+terros <command> [<subcommand> ...] --active true
+terros <command> [<subcommand> ...] --ids id_1,id_2,id_3
+terros <command> [<subcommand> ...] --metadata '{"source":"cli"}'
 ```
 
 Responses are printed as formatted JSON.

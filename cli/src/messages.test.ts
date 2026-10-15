@@ -1,15 +1,41 @@
 import { expect } from 'vitest'
-import { formatCommandsHelp, formatSubcommandParametersHelp } from './messages'
+import {
+  formatCommandsHelp,
+  formatCommandUsage,
+  formatSubcommandParametersHelp,
+  formatSubcommandsHelp,
+} from './messages'
 
 describe('formatCommandsHelp', () => {
   it('includes version help after the command list', () => {
-    expect(formatCommandsHelp(['account'])).toBe(`usage: terros <command> <subcommand> [parameters]
+    expect(formatCommandsHelp(['account'])).toBe(`usage: terros <command> [<subcommand> ...] [parameters]
 
 Commands:
   account
 
 Run "terros <command> help" to see subcommands.
 Run "terros --version" to print the installed CLI version.`)
+  })
+})
+
+describe('formatSubcommandsHelp', () => {
+  it('prints the full command path at a nested level', () => {
+    expect(formatSubcommandsHelp('garden bed', ['list', 'tag']))
+      .toBe(`usage: terros garden bed <subcommand> [parameters]
+
+Subcommands:
+  list
+  tag
+
+Run "terros garden bed <subcommand> help" to see its parameters or nested subcommands.`)
+  })
+})
+
+describe('formatCommandUsage', () => {
+  it('points at help for a nested endpoint command', () => {
+    expect(formatCommandUsage('garden bed list')).toBe(`usage: terros garden bed list [parameters]
+
+Run "terros garden bed list help" to see its parameters.`)
   })
 })
 
@@ -66,5 +92,19 @@ Use "--depth <number>" to control nested object type detail.`
 
 Parameters:
   none`)
+  })
+
+  it('lists nested subcommands below an endpoint that also has them', () => {
+    expect(formatSubcommandParametersHelp('garden', undefined, [], undefined, true, ['bed'])).toBe(
+      `usage: terros garden [parameters]
+
+Parameters:
+  none
+
+Use "--depth <number>" to control nested object type detail.
+
+Subcommands:
+  bed`
+    )
   })
 })

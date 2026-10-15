@@ -1,27 +1,23 @@
 import minimist from 'minimist'
-import {
-  buildEndpointInput,
-  DEFAULT_TYPE_DEPTH,
-  getEndpoint,
-  getEndpointParameters,
-  getEndpointSubcommandNames,
-} from '@terros-inc/mcp-core'
+import { buildEndpointInput, DEFAULT_TYPE_DEPTH, getEndpointParameters } from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
 import {
   formatCommandsHelp,
+  formatCommandUsage,
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
-import { getCommandGroup, getCommandNames, getSubcommand, getSubcommandNames } from './commands'
+import { buildCliCommandTree, findBuiltin, matchCommand, type CommandLevel } from './commandTree'
+import { getCommandGroup, getSubcommand } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
 async function main(): Promise<void> {
   const params = minimist(process.argv.slice(2))
-  const commands = params._
-  if (commands.length === 0) {
+  const words = params._.map(String)
+  if (words.length === 0) {
     if (params.v === true || params.version === true) {
       console.log(packageJson.version)
       return
@@ -31,65 +27,28 @@ async function main(): Promise<void> {
     return
   }
 
-  const requestedAlias = commands.at(0)
-  if (!requestedAlias) {
-    console.log(HELP_PARENT_MESSAGE)
+  if (words.at(-1) === 'help') {
+    await showHelp(words.slice(0, -1), params.depth)
     return
   }
 
-  if (commands.at(-1) === 'help') {
-    await showHelp(commands, requestedAlias, params.depth)
+  const builtin = findBuiltin(words)
+  if (builtin) {
+    await builtin.run({ params, args: builtin.args })
     return
   }
 
-  const commandGroup = getCommandGroup(requestedAlias)
-  if (commandGroup) {
-    const subcommand = commands.at(1)
-    if (!subcommand) {
-      if (commandGroup.run) {
-        await commandGroup.run({ params, args: [] })
-        return
-      }
-      console.log(formatSubcommandsHelp(requestedAlias, getSubcommandNames(requestedAlias)))
-      return
-    }
-
-    const command = getSubcommand(requestedAlias, subcommand)
-    if (!command) {
-      console.error(`Unknown subcommand: ${requestedAlias} ${subcommand}`)
-      console.log(formatSubcommandsHelp(requestedAlias, getSubcommandNames(requestedAlias)))
-      process.exitCode = 1
-      return
-    }
-
-    await command.run({
-      params,
-      args: commands.slice(2),
-    })
-    return
-  }
-
-  const endpoints = await loadEndpoints()
-  const endpointGroup = endpoints[requestedAlias]
-  if (!endpointGroup) {
-    console.error(`Unknown command: ${requestedAlias}`)
-    const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
-    console.log(formatCommandsHelp(commandList))
+  const level = await loadCommandLevel(words)
+  if (level.unmatched.length > 0) {
+    console.error(`Unknown command: terros ${words.join(' ')}`)
+    console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
   }
 
-  const subcommand = commands.at(1)
-  const endpoint = getEndpoint(endpointGroup, requestedAlias, subcommand)
-  if (subcommand === undefined && !endpoint) {
-    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpointGroup, requestedAlias)))
-    return
-  }
-
+  const endpoint = level.node.endpoint
   if (!endpoint) {
-    console.error(`Unknown subcommand: ${requestedAlias} ${subcommand}`)
-    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpointGroup, requestedAlias)))
-    process.exitCode = 1
+    console.log(formatLevelHelp(level))
     return
   }
 
@@ -102,43 +61,56 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(response, null, 2))
 }
 
-async function showHelp(commands: string[], requestedAlias: string, requestedDepth: unknown): Promise<void> {
-  const commandGroup = getCommandGroup(requestedAlias)
-  if (commandGroup) {
-    if (commandGroup.run) {
-      console.log(formatSubcommandParametersHelp(requestedAlias, undefined, [], commandGroup.description))
-      return
-    }
-    const subcommand = commands.at(1)
-    if (subcommand && commands.length >= 3 && getSubcommand(requestedAlias, subcommand)) {
-      console.log(formatSubcommandParametersHelp(requestedAlias, subcommand, []))
-      return
-    }
+async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
+  return matchCommand(buildCliCommandTree(await loadEndpoints()), words)
+}
 
-    console.log(formatSubcommandsHelp(requestedAlias, getSubcommandNames(requestedAlias)))
+function formatLevelHelp(level: CommandLevel): string {
+  if (level.words.length === 0) return formatCommandsHelp(level.subcommands)
+  if (level.node.endpoint && level.subcommands.length === 0) return formatCommandUsage(level.words.join(' '))
+  return formatSubcommandsHelp(level.words.join(' '), level.subcommands)
+}
+
+async function showHelp(words: string[], requestedDepth: unknown): Promise<void> {
+  const [name, subcommand] = words
+  const commandGroup = name === undefined ? undefined : getCommandGroup(name)
+  if (commandGroup && name !== undefined) {
+    if (words.length === 1 && commandGroup.run) {
+      console.log(formatSubcommandParametersHelp(name, undefined, [], commandGroup.description))
+      return
+    }
+    if (words.length === 2 && subcommand !== undefined && getSubcommand(name, subcommand)) {
+      console.log(formatSubcommandParametersHelp(name, subcommand, []))
+      return
+    }
+  }
+
+  const level = await loadCommandLevel(words)
+  if (level.unmatched.length > 0) {
+    console.error(`Unknown command: terros ${words.join(' ')}`)
+    console.log(formatLevelHelp(level))
+    process.exitCode = 1
     return
   }
 
-  const endpoints = await loadEndpoints()
-  const endpoint = endpoints[requestedAlias]
+  const endpoint = level.node.endpoint
   if (endpoint) {
-    const subcommand = commands.length >= 3 ? commands.at(1) : undefined
-    const requestedEndpoint = getEndpoint(endpoint, requestedAlias, subcommand)
-    if (requestedEndpoint) {
-      const depth = getHelpDepth(requestedDepth)
-      const parameters = getEndpointParameters(requestedEndpoint.properties, requestedEndpoint.components, depth)
-      console.log(
-        formatSubcommandParametersHelp(requestedAlias, subcommand, parameters, requestedEndpoint.description, true)
+    const depth = getHelpDepth(requestedDepth)
+    const parameters = getEndpointParameters(endpoint.properties, endpoint.components, depth)
+    console.log(
+      formatSubcommandParametersHelp(
+        level.words.join(' '),
+        undefined,
+        parameters,
+        endpoint.description,
+        true,
+        level.subcommands
       )
-      return
-    }
-
-    console.log(formatSubcommandsHelp(requestedAlias, getEndpointSubcommandNames(endpoint, requestedAlias)))
+    )
     return
   }
 
-  const commandList = [...getCommandNames(), ...Object.keys(endpoints)].sort()
-  console.log(formatCommandsHelp(commandList))
+  console.log(formatLevelHelp(level))
 }
 
 function getHelpDepth(requestedDepth: unknown): number {

@@ -19,6 +19,10 @@ export type Endpoints = {
   [alias: string]: Endpoint
 }
 
+/**
+ * Endpoints keyed by their first path segment (the top-level CLI command), then by the remaining segments joined
+ * with spaces (`/garden/bed/list` → `garden` → `bed list`). A single-segment path such as `/search` uses `''`.
+ */
 export type EndpointGroups = {
-  [alias: string]: Endpoints
+  [group: string]: Endpoints
 }

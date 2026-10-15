@@ -14,6 +14,10 @@ Change `version` in `cli/package.json` or `sdk/package.json`, open a PR, and mer
 The workflow publishes whatever version is in the package's `package.json` on `main`. npm does not accept a version
 that has already been published.
 
+For the CLI, add the version's entry to `cli/CHANGELOG.md` in the same PR; that entry is the release notes. A change
+that renames or removes commands is breaking: bump the major version and mark it **BREAKING**, listing each old →
+new command name.
+
 ### 2. Run the Publish to npm workflow
 
 In GitHub, go to **Actions → Publish to npm** (`.github/workflows/publish.yml`), click **Run workflow**, choose the
