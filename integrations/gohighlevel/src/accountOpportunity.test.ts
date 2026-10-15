@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { handler as accountSync, isOpportunityStage } from './outgoing.ts'
-import { FakeApis, LOCATION_ID, makeInput, PIPELINE_ID } from './fakeApis.ts'
+import { CONNECT_USER, FakeApis, LOCATION_ID, makeInput, PIPELINE_ID } from './fakeApis.ts'
 import { ALERT_NOTE_PREFIX } from './alerts.ts'
 
 const config = { locationId: LOCATION_ID, pipelineId: PIPELINE_ID }
@@ -155,9 +155,40 @@ describe('Account Sync alerts on a qualifying account with no closer', () => {
       expect.objectContaining({ accountId: 'Account.1', recipients: ['a@example.test', 'b@example.test'] }),
     ])
     expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([
-      expect.objectContaining({ text: expect.stringContaining(ALERT_NOTE_PREFIX), userId: 'U.owner' }),
+      expect.objectContaining({ text: expect.stringContaining(ALERT_NOTE_PREFIX), userId: CONNECT_USER }),
     ])
     expect(fake.ghl.contacts.size).toBe(0)
+  })
+
+  test('the note names no author and is recorded for an account with no owner', async () => {
+    account({ closer: undefined, ownerId: undefined })
+    await sync(alertConfig)
+    expect(fake.log).toEqual([expect.not.stringContaining('userId')])
+    expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([expect.objectContaining({ userId: CONNECT_USER })])
+    await sync(alertConfig)
+    expect(alertPosts).toHaveLength(1)
+  })
+
+  test('the alert is decided from the webhook payload, whose owner and closer are objects', async () => {
+    account({ closer: undefined })
+    const webhook = fake.accountWebhook('Account.1')
+    expect(webhook.data).toMatchObject({ owner: { userId: 'U.owner' } })
+    expect(webhook.data).not.toHaveProperty('ownerId')
+    expect(webhook.data).not.toHaveProperty('closerId')
+    await accountSync(makeInput(webhook, alertConfig))
+    expect(alertPosts).toHaveLength(1)
+  })
+
+  test('a dry run alerts but writes no note, so the live run that follows still alerts', async () => {
+    account({ closer: undefined })
+    await sync({ ...alertConfig, dryRun: 'true' })
+    expect(alertPosts).toHaveLength(1)
+    expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([])
+    expect(fake.log).toEqual([])
+
+    await sync(alertConfig)
+    expect(alertPosts).toHaveLength(2)
+    expect(fake.terros.accounts.get('Account.1')!.notes).toHaveLength(1)
   })
 
   test('does not repeat on the next save', async () => {
