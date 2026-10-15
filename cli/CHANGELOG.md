@@ -48,10 +48,12 @@ Commands that only staff accounts load from the internal API document are rename
   endpoint, whose help lists its parameters.
 - Nested endpoints that shared a command name under the old two-segment naming (for example `/bed/list` and
   `/garden/bed/list`) are both available; before, one silently replaced the other.
-- Two endpoint paths that map to the same command (for example `/garden/bed/list` and `/garden/bed/list/`), an
-  endpoint that lands on a built-in command (`terros auth login`, `terros connect publish`, ...), or a path segment
-  named `help` now fail with an error naming both. A staff account's internal API document that fails this way falls
-  back to the bundled document, as other unreadable internal documents already did.
+- Two endpoint paths that map to the same command (for example `/garden/bed/list` and `/garden/bed/list/`), or a
+  path segment named `help`, now fail with an error naming the paths. A staff account's internal API document that
+  fails this way falls back to the bundled document, as other unreadable internal documents already did.
+- An endpoint that lands on a built-in command (`terros auth login`, `terros connect publish`, ...) makes help and
+  endpoint commands fail with an error naming both. The built-in command itself still runs, since built-in commands
+  never load the API schema.
 - Extra words after a command (`terros garden bed list extra`) are now an unknown-command error instead of being
   ignored.
 - MCP tool names are unchanged (`terros mcp` still names tools from the full route, such as `account_get`).

@@ -111,10 +111,12 @@ terros search --query "Jane Doe"
 ```
 
 Two endpoints that would map to the same command (for example `/garden/bed/list`
-and `/garden/bed/list/`), or an endpoint that would land on a built-in command
-such as `terros auth login` or `terros connect publish`, make the CLI exit with an
-error that names both. A path segment named `help` is rejected the same way,
-because `help` is reserved for help text.
+and `/garden/bed/list/`) make the CLI exit with an error that names both paths.
+A path segment named `help` is rejected the same way, because `help` is reserved
+for help text. An endpoint that would land on a built-in command such as
+`terros auth login` or `terros connect publish` makes help and endpoint commands
+exit with an error naming both; the built-in command itself still runs, because
+built-in commands never load the API schema.
 
 CLI 2.0.0 changed command names; see [CHANGELOG.md](CHANGELOG.md) for the
 renamed commands.

@@ -1,5 +1,5 @@
 import minimist from 'minimist'
-import { buildEndpointInput, DEFAULT_TYPE_DEPTH, getEndpointParameters } from '@terros-inc/mcp-core'
+import { buildEndpointInput, DEFAULT_TYPE_DEPTH, getEndpointParameters, type CommandNode } from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
 import {
   formatCommandsHelp,
@@ -62,7 +62,17 @@ async function main(): Promise<void> {
 }
 
 async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
-  return matchCommand(buildCliCommandTree(await loadEndpoints(), commandRegistry), commandRegistry, words)
+  let tree: CommandNode
+  try {
+    tree = buildCliCommandTree(await loadEndpoints(), commandRegistry)
+  } catch (error) {
+    // A built-in group's own subcommands do not need the API schema, so still list them.
+    const [name] = words
+    if (name === undefined || !getCommandGroup(name)) throw error
+    console.error(error instanceof Error ? error.message : error)
+    tree = { children: new Map() }
+  }
+  return matchCommand(tree, commandRegistry, words)
 }
 
 function formatLevelHelp(level: CommandLevel): string {
