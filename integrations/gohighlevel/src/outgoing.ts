@@ -46,21 +46,25 @@ type Secrets = {
   privateIntegrationToken: string
 }
 
+/** A user as the account webhook sends it (SmallUser). */
+type WebhookUser = {
+  userId?: UserId
+  email?: string
+}
+
+/** The account webhook payload: owner and closer are objects; there is no ownerId or closerId. */
 type AccountChangeData = {
   id: AccountId
   workflowState?: {
     stageName?: string
   }
-  closer?: {
-    email?: string
-  }
+  owner?: WebhookUser
+  closer?: WebhookUser
   address?: SmallAddress
   resident?: TinyResidentData
   externalLeadId?: string
   customFieldMap?: CustomFieldMap
   notes?: AccountNote[]
-  closerId?: UserId
-  ownerId?: UserId
 }
 
 type AccountChangeWebhook =
@@ -111,7 +115,8 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
         stage: workflowStageName!,
         message: `Terros account ${account.id} is in ${workflowStageName} with no closer, so it was not synced to GoHighLevel.`,
       })
-      await saveAlertNote(client, account.id, noCloserAlert, account.ownerId)
+      // A dry run writes nothing, so it must not leave the note that would silence the live run's alert.
+      if (!isSwitchOn('dryRun', scriptConfig.dryRun)) await saveAlertNote(client, account.id, noCloserAlert)
     }
     return
   }
@@ -164,8 +169,8 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   const noteChanges = getChanges(
     {
       notes: account.notes,
-      closerId: account.closerId,
-      ownerId: account.ownerId,
+      closerId: closer.userId,
+      ownerId: account.owner?.userId,
     },
     goHighLevelNotes,
     userResponse?.users ?? [],

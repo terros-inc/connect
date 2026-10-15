@@ -116,9 +116,9 @@ export class FakeApis {
       data: {
         id: a.accountId,
         workflowState: { stageName: a.workflowStageName },
+        // Like the backend's webhook: owner and closer are objects, with no ownerId or closerId.
+        owner: a.ownerId ? { userId: a.ownerId, email: `${a.ownerId}@example.test` } : undefined,
         closer: a.closer,
-        closerId: a.closerId,
-        ownerId: a.ownerId,
         address: a.location,
         resident: a.resident,
         externalLeadId: a.externalLeadId,
@@ -248,7 +248,8 @@ export class FakeApis {
         if (!account) return err('NotFound', `no account ${a.accountId}`)
         if (a.externalLeadId) account.externalLeadId = a.externalLeadId
         if (a.customFields) account.customFields = { ...account.customFields, ...a.customFields }
-        if (a.notes) account.notes = [...account.notes, ...a.notes]
+        // Like the backend: a note without an author is written as the authenticated user.
+        if (a.notes) account.notes = [...account.notes, ...a.notes.map((n: Json) => ({ userId: CONNECT_USER, ...n }))]
         if (a.workflowTarget) {
           const hit = [...this.terros.knownStages].find(
             (s) => s.toLowerCase() === String(a.workflowTarget).toLowerCase()
