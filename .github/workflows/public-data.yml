@@ -5,6 +5,12 @@ name: Public data
 # PUBLIC_DATA_DENYLIST secret, which is never committed here; it never prints a denylisted name. Keep the
 # secret on one line, names separated by commas: Actions masks a secret's whole value in this public log,
 # and a multi-line value may not be masked line by line.
+#
+# Trust boundary: no code a PR can change ever runs with the secret. A pull_request run takes this file
+# and the check from the PR, so this workflow tests and runs the PR's own copy of the check with no
+# secret: a change to the check is exercised here, and fork PRs get the ID, email and phone checks. The
+# names are checked by public-data-trusted.yml, which runs default-branch code only.
+# scripts/public-data-workflow.test.mjs asserts both.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
@@ -13,8 +19,8 @@ permissions:
   contents: read
 
 jobs:
-  public-data:
-    name: Public data check
+  pr-code:
+    name: Public data check (PR code, no names)
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +28,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js environment
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
@@ -29,11 +36,10 @@ jobs:
           node-version-file: '.nvmrc'
 
       - name: Test the check
-        run: node --test scripts/check-public-data.test.mjs
+        run: node --test scripts/check-public-data.test.mjs scripts/public-data-workflow.test.mjs
 
       - name: Commits
         env:
-          PUBLIC_DATA_DENYLIST: ${{ secrets.PUBLIC_DATA_DENYLIST }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/check-public-data.mjs range "$BASE" "$HEAD"
@@ -41,7 +47,6 @@ jobs:
       - name: Branch name, PR title and body
         if: ${{ !cancelled() }}
         env:
-          PUBLIC_DATA_DENYLIST: ${{ secrets.PUBLIC_DATA_DENYLIST }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
           TITLE: ${{ github.event.pull_request.title }}
           BODY: ${{ github.event.pull_request.body }}
