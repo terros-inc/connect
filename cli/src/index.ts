@@ -15,7 +15,14 @@ import {
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
 import { readInputFile } from './inputFile'
-import { buildCliCommandTree, findBuiltin, formatBuiltinHelp, matchCommand, type CommandLevel } from './commandTree'
+import {
+  buildCliCommandTree,
+  checkBuiltinCollisions,
+  findBuiltin,
+  formatBuiltinHelp,
+  matchCommand,
+  type CommandLevel,
+} from './commandTree'
 import { commandRegistry, getCommandGroup } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
@@ -40,6 +47,7 @@ async function main(): Promise<void> {
 
   const builtin = findBuiltin(commandRegistry, words)
   if (builtin) {
+    await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
     await builtin.run({ params, args: builtin.args })
     return
   }
@@ -91,6 +99,7 @@ function formatLevelHelp(level: CommandLevel): string {
 async function showHelp(words: string[], requestedDepth: unknown): Promise<void> {
   const builtinHelp = formatBuiltinHelp(commandRegistry, words)
   if (builtinHelp !== undefined) {
+    await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
     console.log(builtinHelp)
     return
   }
