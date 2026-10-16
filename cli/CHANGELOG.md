@@ -56,4 +56,10 @@ Commands that only staff accounts load from the internal API document are rename
   never load the API schema.
 - Extra words after a command (`terros garden bed list extra`) are now an unknown-command error instead of being
   ignored.
-- MCP tool names are unchanged (`terros mcp` still names tools from the full route, such as `account_get`).
+
+### Bug fix: MCP lists every tool of a former collision pair
+
+`terros mcp` used to drop one tool of each pair of nested endpoints that shared a command name under the old
+two-segment naming (for example `/bed/list` and `/garden/bed/list`); only one of the two was listed. It now lists
+both. MCP tool names are unchanged: they still come from the full route (`bed_list`, `garden_bed_list`,
+`account_get`).
