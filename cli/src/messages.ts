@@ -1,17 +1,18 @@
 import type { EndpointParameter } from '@terros-inc/mcp-core'
 
 export const HELP_PARENT_MESSAGE = `
-usage: terros <command> <subcommand> [parameters]
+usage: terros <command> [<subcommand> ...] [parameters]
+Commands follow the API endpoint path, so /garden/bed/list is "terros garden bed list".
 To see help text, you can run:
 
   terros help
   terros <command> help
-  terros <command> <subcommand> help
+  terros <command> <subcommand> ... help
 `.trim()
 
 export function formatCommandsHelp(commands: string[]): string {
   const lines = [
-    `usage: terros <command> <subcommand> [parameters]`,
+    `usage: terros <command> [<subcommand> ...] [parameters]`,
     '',
     'Commands:',
     ...commands.map((command) => `  ${command}`),
@@ -30,10 +31,14 @@ export function formatSubcommandsHelp(command: string, subcommands: string[]): s
     'Subcommands:',
     ...subcommands.map((subcommand) => `  ${subcommand}`),
     '',
-    `Run "terros ${command} <subcommand> help" to see subcommand parameters.`,
+    `Run "terros ${command} <subcommand> help" to see its parameters or nested subcommands.`,
   ]
 
   return lines.join('\n')
+}
+
+export function formatCommandUsage(command: string): string {
+  return [`usage: terros ${command} [parameters]`, '', `Run "terros ${command} help" to see its parameters.`].join('\n')
 }
 
 export function formatSubcommandParametersHelp(
@@ -41,7 +46,8 @@ export function formatSubcommandParametersHelp(
   subcommand: string | undefined,
   parameters: EndpointParameter[],
   description?: string,
-  showDepthHelp = false
+  showDepthHelp = false,
+  subcommands: string[] = []
 ): string {
   const commandParts = [command]
   if (subcommand) commandParts.push(subcommand)
@@ -68,6 +74,10 @@ export function formatSubcommandParametersHelp(
   }
 
   if (showDepthHelp) lines.push('', `Use "--depth <number>" to control nested object type detail.`)
+
+  if (subcommands.length > 0) {
+    lines.push('', 'Subcommands:', ...subcommands.map((name) => `  ${name}`))
+  }
 
   return lines.join('\n')
 }

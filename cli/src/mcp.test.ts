@@ -36,7 +36,7 @@ const endpoints: EndpointGroups = {
     },
   },
   search: {
-    search: {
+    '': {
       path: '/search',
       properties: { type: 'object', properties: { query: { type: 'string' } } },
       components: { schemas: {} },

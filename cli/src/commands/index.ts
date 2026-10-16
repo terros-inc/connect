@@ -25,11 +25,12 @@ export const commandRegistry: CommandRegistry = {
 }
 
 export function getCommandGroup(command: string): CommandGroup | undefined {
-  return commandRegistry[command]
+  return Object.hasOwn(commandRegistry, command) ? commandRegistry[command] : undefined
 }
 
 export function getSubcommand(command: string, subcommand: string): Subcommand | undefined {
-  return getCommandGroup(command)?.subcommands[subcommand]
+  const subcommands = getCommandGroup(command)?.subcommands
+  return subcommands && Object.hasOwn(subcommands, subcommand) ? subcommands[subcommand] : undefined
 }
 
 export function getCommandNames(): string[] {
