@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { InMemoryTransport, type JSONRPCMessage } from '@modelcontextprotocol/server'
 import {
   createMcpServer,
@@ -141,7 +142,7 @@ async function callTool(
 
 function checkApiCalls(task: EvalTask, apiCalls: ApiCall[]): string | undefined {
   const expected = task.steps.map((step) => ({ route: step.tool.replaceAll('_', '/'), input: step.args }))
-  if (JSON.stringify(apiCalls) !== JSON.stringify(expected)) {
+  if (!isDeepStrictEqual(apiCalls, expected)) {
     return `API calls ${JSON.stringify(apiCalls.map((call) => call.route))} differ from the expected ${JSON.stringify(expected.map((call) => call.route))}`
   }
   return undefined

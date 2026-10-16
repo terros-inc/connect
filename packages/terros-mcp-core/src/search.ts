@@ -7,6 +7,7 @@ export type SearchResult = {
   summary: string
   toolset: string
   readOnly: boolean
+  destructive: boolean
 }
 
 const STOP_WORDS = new Set(['a', 'an', 'and', 'by', 'for', 'from', 'in', 'my', 'of', 'on', 'or', 'the', 'to', 'with'])
@@ -30,6 +31,7 @@ export function searchCatalog(catalog: Catalog, query: string, limit = DEFAULT_S
       summary: entry.summary,
       toolset: entry.toolset,
       readOnly: entry.readOnly,
+      destructive: entry.destructive,
     }))
 }
 

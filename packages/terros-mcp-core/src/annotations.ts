@@ -1,6 +1,6 @@
 export type ToolAnnotationHints = { readOnlyHint: boolean; destructiveHint: boolean }
 
-/** Every route is a POST, so a tool is read-only only when its route ends in a read verb. */
-export function getToolAnnotations(readOnly: boolean): ToolAnnotationHints {
-  return { readOnlyHint: readOnly, destructiveHint: !readOnly }
+/** MCP hints from the catalog classification: every route is a POST, so the HTTP method says nothing. */
+export function getToolAnnotations(operation: { readOnly: boolean; destructive: boolean }): ToolAnnotationHints {
+  return { readOnlyHint: operation.readOnly, destructiveHint: operation.destructive }
 }

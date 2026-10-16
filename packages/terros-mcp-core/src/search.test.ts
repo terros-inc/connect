@@ -52,6 +52,7 @@ it('matches input property names and returns compact results', () => {
       summary: 'Lists calendar events within a date range.',
       toolset: 'calendar',
       readOnly: true,
+      destructive: false,
     },
   ])
 })

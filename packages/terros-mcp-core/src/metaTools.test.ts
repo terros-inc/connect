@@ -97,6 +97,7 @@ it('describes an operation with its self-contained input schema', async () => {
     name: 'account_get',
     toolset: 'account',
     readOnly: true,
+    destructive: false,
     description: 'Gets one account.',
   })
   expect(described.inputSchema).toMatchObject({ required: ['id'], components: { schemas: { Id: { type: 'string' } } } })
@@ -144,11 +145,11 @@ it('returns API failures as tool errors', async () => {
   expect(result).toMatchObject({ isError: true, content: [{ type: 'text', text: 'Account not found' }] })
 })
 
-it('filters per-endpoint tools by toolset and annotates reads and writes', async () => {
+it('filters per-endpoint tools by toolset and annotates reads, writes and destructive operations', async () => {
   const request = await connect({ mode: 'endpoints', toolsets: ['account'] })
   const { tools } = (await request('tools/list')).result
   expect(tools.map((tool: { name: string; annotations: object }) => [tool.name, tool.annotations])).toEqual([
     ['account_get', { readOnlyHint: true, destructiveHint: false }],
-    ['account_update', { readOnlyHint: false, destructiveHint: true }],
+    ['account_update', { readOnlyHint: false, destructiveHint: false }],
   ])
 })

@@ -62,7 +62,7 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
       {
         description: entry.endpoint.description,
         inputSchema: getStandardInputSchema(entry.endpoint),
-        annotations: getToolAnnotations(entry.readOnly),
+        annotations: getToolAnnotations(entry),
       },
       async (input) => ({
         content: [{ type: 'text', text: JSON.stringify(await options.client.call(entry.route, input)) }],

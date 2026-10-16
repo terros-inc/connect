@@ -40,7 +40,7 @@ export function registerMetaTools(options: MetaToolsOptions): void {
         },
         required: ['query'],
       }),
-      annotations: getToolAnnotations(true),
+      annotations: getToolAnnotations({ readOnly: true, destructive: false }),
     },
     async ({ query, toolset, limit }) => {
       const scoped = toolset ? scopeCatalog(catalog, toolset) : catalog
@@ -57,7 +57,7 @@ export function registerMetaTools(options: MetaToolsOptions): void {
         properties: { name: { type: 'string', description: 'Operation name, e.g. "account_get".' } },
         required: ['name'],
       }),
-      annotations: getToolAnnotations(true),
+      annotations: getToolAnnotations({ readOnly: true, destructive: false }),
     },
     async ({ name }) => {
       const entry = catalog.find(name)
@@ -80,7 +80,7 @@ export function registerMetaTools(options: MetaToolsOptions): void {
         },
         required: ['name'],
       }),
-      annotations: getToolAnnotations(false),
+      annotations: getToolAnnotations({ readOnly: false, destructive: true }),
     },
     async ({ name, args }) => {
       const entry = catalog.find(name)
@@ -101,6 +101,7 @@ export type OperationDescription = {
   name: string
   toolset: string
   readOnly: boolean
+  destructive: boolean
   description: string
   inputSchema: Record<string, unknown>
 }
@@ -110,19 +111,25 @@ export function describeEntry(entry: CatalogEntry): OperationDescription {
     name: entry.name,
     toolset: entry.toolset,
     readOnly: entry.readOnly,
+    destructive: entry.destructive,
     description: entry.endpoint.description?.trim() ?? entry.summary,
     inputSchema: getInputSchema(entry.endpoint),
   }
 }
 
-/** One line per match: `name (toolset, read|write): summary`. */
+/** One line per match: `name (toolset, read|write|destructive): summary`. */
 export function formatSearchResults(results: SearchResult[], toolsets: string[]): string {
   if (results.length === 0) {
     return `No operations matched. Try other words, or pass one of these toolsets: ${toolsets.join(', ')}.`
   }
   return results
-    .map((result) => `${result.name} (${result.toolset}, ${result.readOnly ? 'read' : 'write'}): ${result.summary}`)
+    .map((result) => `${result.name} (${result.toolset}, ${getAccess(result)}): ${result.summary}`)
     .join('\n')
+}
+
+function getAccess(result: SearchResult): string {
+  if (result.readOnly) return 'read'
+  return result.destructive ? 'destructive' : 'write'
 }
 
 function scopeCatalog(catalog: Catalog, toolset: string): Catalog {

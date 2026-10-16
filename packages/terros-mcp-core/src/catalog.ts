@@ -1,7 +1,12 @@
 import type { Endpoint, EndpointGroups } from './endpoint.ts'
 
-/** Route segments that only read data. Every other route may change data. */
-const READ_VERBS = new Set(['get', 'list', 'search', 'check'])
+/**
+ * Fallback for operations without `x-terros-readOnly` / `x-terros-destructive` in the OpenAPI document.
+ * Every route is a POST, so the last route segment is the only hint. Unknown operations count as write, not destructive.
+ */
+const READ_VERBS = new Set(['get', 'list', 'search', 'check', 'match', 'query', 'profile', 'timeslots'])
+const READ_PREFIXES = ['report/']
+const DESTRUCTIVE_VERBS = new Set(['remove', 'delete', 'rollback', 'bulk'])
 
 export type CatalogEntry = {
   /** MCP tool name, e.g. `account_get`. */
@@ -13,6 +18,8 @@ export type CatalogEntry = {
   /** One-line description for compact listings. */
   summary: string
   readOnly: boolean
+  /** May delete or overwrite data in a way that is hard to undo. Never true for a read-only operation. */
+  destructive: boolean
   endpoint: Endpoint
 }
 
@@ -63,12 +70,16 @@ export function toToolsetName(value: string): string {
 
 function buildEntry(endpoint: Endpoint, group: string): CatalogEntry {
   const route = endpoint.path.replace(/^\//, '')
+  const verb = route.split('/').at(-1) ?? ''
+  const readOnly =
+    endpoint.readOnly ?? (READ_VERBS.has(verb) || READ_PREFIXES.some((prefix) => route.startsWith(prefix)))
   return {
     name: route.replaceAll('/', '_'),
     route,
     toolset: toToolsetName(endpoint.tags?.[0] ?? group),
     summary: getSummary(endpoint),
-    readOnly: READ_VERBS.has(route.split('/').at(-1) ?? ''),
+    readOnly,
+    destructive: !readOnly && (endpoint.destructive ?? DESTRUCTIVE_VERBS.has(verb)),
     endpoint,
   }
 }
