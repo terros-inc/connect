@@ -25,6 +25,12 @@ Handlers are wrapped with `wrapConnectHandler` from `@terros-inc/sdk`, which sup
 
 Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel` has tests so far.
 
+## Testing
+
+Test in proportion to risk, as the Terros-wide [testing policy](https://github.com/terros-inc/terros-wiki/blob/main/engineering/testing.md) says: logic, mapping and parsing of external payloads, auth, idempotency and retries, and a regression test with each bug fix.
+Don't test simple data objects, pass-throughs, routine wiring, help or message wording, or a new schema field, and there is no coverage target.
+Each nontrivial test should name the realistic bug it prevents. Extend an existing test, or add one behavioral test, rather than a new file of mocks.
+
 ## Publishing
 
 - An integration's version is its `package.json` `version`. Bump it before publishing; a version already deployed cannot be republished (the CLI errors). A version still in `draft` can be re-uploaded.
