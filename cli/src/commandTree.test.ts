@@ -1,5 +1,5 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
-import { buildCliCommandTree, findBuiltin, matchCommand } from './commandTree'
+import { buildCliCommandTree, checkBuiltinCollisions, findBuiltin, matchCommand } from './commandTree'
 import type { CommandRegistry } from './commands/types'
 
 const run = vi.fn()
@@ -113,5 +113,36 @@ describe('buildCliCommandTree', () => {
     expect(() => buildCliCommandTree(parseEndpoints(spec('/auth')), registry)).toThrow(
       'Endpoint /auth collides with the built-in command: terros auth'
     )
+  })
+})
+
+describe('checkBuiltinCollisions', () => {
+  const load =
+    (...paths: string[]) =>
+    async () =>
+      parseEndpoints(spec(...paths))
+
+  it('fails before a built-in runs when an endpoint lands on it, naming both', async () => {
+    await expect(checkBuiltinCollisions(load('/connect/publish'), registry, ['connect', 'publish'])).rejects.toThrow(
+      'Endpoint /connect/publish collides with the built-in command: terros connect publish'
+    )
+    await expect(checkBuiltinCollisions(load('/mcp'), registry, ['mcp'])).rejects.toThrow(
+      'Endpoint /mcp collides with the built-in command: terros mcp'
+    )
+  })
+
+  it('only checks the built-in being run', async () => {
+    await expect(checkBuiltinCollisions(load('/connect/publish'), registry, ['auth', 'login'])).resolves.toBeUndefined()
+    await expect(
+      checkBuiltinCollisions(load('/connect/publish'), registry, ['connect', 'pack'])
+    ).resolves.toBeUndefined()
+    await expect(checkBuiltinCollisions(load('/mcp/list'), registry, ['mcp'])).resolves.toBeUndefined()
+  })
+
+  it('lets built-ins run when the schema cannot be loaded', async () => {
+    const failing = async () => {
+      throw new Error('no schema')
+    }
+    await expect(checkBuiltinCollisions(failing, registry, ['auth', 'login'])).resolves.toBeUndefined()
   })
 })
