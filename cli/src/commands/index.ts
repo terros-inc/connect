@@ -18,7 +18,8 @@ export const commandRegistry: CommandRegistry = {
     subcommands: connectCommands,
   },
   mcp: {
-    description: 'Serve Terros API tools over MCP stdio. Run `terros auth login` first.',
+    description:
+      'Serve Terros API tools over MCP stdio. Options: --tools endpoints|meta, --toolsets account,calendar. Run `terros auth login` first.',
     run: startMcpServer,
     subcommands: {},
   },

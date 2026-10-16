@@ -94,6 +94,8 @@ export type OpenAPISchema = {
         summary: string
         tags: string[]
         description: string
+        'x-terros-readOnly'?: boolean
+        'x-terros-destructive'?: boolean
         requestBody: {
           content: {
             'application/json': {

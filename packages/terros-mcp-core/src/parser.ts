@@ -32,7 +32,11 @@ export function parseEndpoints(file: string): EndpointGroups {
 
     groupEndpoints[rest.join(' ')] = {
       path,
+      summary: config.post.summary,
       description: config.post.description ?? config.post.summary,
+      tags: config.post.tags,
+      readOnly: config.post['x-terros-readOnly'],
+      destructive: config.post['x-terros-destructive'],
       properties: schema,
       components: data.components,
     }

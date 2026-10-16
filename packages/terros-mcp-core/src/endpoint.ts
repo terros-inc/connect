@@ -10,7 +10,13 @@ export type EndpointParameter = {
 
 export type Endpoint = {
   path: string
+  summary?: string
   description?: string
+  tags?: string[]
+  /** `x-terros-readOnly` from the OpenAPI operation, when set. */
+  readOnly?: boolean
+  /** `x-terros-destructive` from the OpenAPI operation, when set. */
+  destructive?: boolean
   properties: Schema
   components: Components
 }

@@ -54,7 +54,24 @@ terros mcp
 
 The server communicates over stdio and exposes the Terros API endpoints as
 tools, using names such as `account_get` and `search`. Tool arguments follow the
-API's JSON schemas. The server exits with an error if no saved login is available
+API's JSON schemas.
+
+The full tool list is large (about 125k tokens for the public API), so two options
+keep it smaller:
+
+- `--tools meta` serves three tools instead of one per endpoint:
+  `terros_search_tools` finds operations by keywords, `terros_describe_tool`
+  returns one operation's input schema, and `terros_call` runs it. Arguments are
+  validated against the same schemas, and the call is the same API request.
+- `--toolsets account,calendar` only serves operations in those domains. A
+  toolset is an operation's first OpenAPI tag, for example `account`,
+  `calendar`, `custom-field`, `task`, `team` or `user`. It works with either
+  `--tools` mode.
+
+````sh
+terros mcp --tools meta
+terros mcp --toolsets account,calendar,task
+``` The server exits with an error if no saved login is available
 or the login cannot be refreshed. Sign in separately before starting it.
 
 For an MCP client that accepts `mcpServers` configuration:
@@ -68,7 +85,7 @@ For an MCP client that accepts `mcpServers` configuration:
     }
   }
 }
-```
+````
 
 Standard output is reserved for MCP messages; errors are written to standard error.
 
