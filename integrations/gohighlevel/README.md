@@ -54,7 +54,7 @@ So one table serves both directions only if its keys can be both: a stage name s
 
 `alertWebhookUrl` receives `{ "text", "accountId", "eventId"?, "stage", "message", "recipients" }` as a JSON POST. Triggers:
 
-- Account Sync: an account in an opportunity stage has no closer. Sent once per account, as long as the account has an owner to record it under: a note starting `[GoHighLevel sync alert]` is saved on the account to remember it. These notes are never copied to GoHighLevel.
+- Account Sync: an account in an opportunity stage has no closer. Sent once per account: a note starting `[GoHighLevel sync alert]` is saved on the account to remember it, written by Terros as the user the integration authenticates as. A dry run sends the alert but saves no note. These notes are never copied to GoHighLevel. When a booking assigns the closer, Terros sends one account webhook that already carries it, so the sync needs no re-read.
 - Appointment Sync: it refused to create or change an appointment (the linked appointment is missing, on another contact, or the create limit of 2 per event was reached).
 
 Every alert is also logged as `GHL_SYNC_ALERT {…}`. A failed delivery is logged and never fails the sync. Alerts are still sent when `dryRun` is on.
