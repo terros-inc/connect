@@ -9,7 +9,13 @@ import {
   HELP_PARENT_MESSAGE,
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
-import { buildCliCommandTree, findBuiltin, matchCommand, type CommandLevel } from './commandTree'
+import {
+  buildCliCommandTree,
+  checkBuiltinCollisions,
+  findBuiltin,
+  matchCommand,
+  type CommandLevel,
+} from './commandTree'
 import { commandRegistry, getCommandGroup, getSubcommand } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
@@ -34,6 +40,7 @@ async function main(): Promise<void> {
 
   const builtin = findBuiltin(commandRegistry, words)
   if (builtin) {
+    await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
     await builtin.run({ params, args: builtin.args })
     return
   }
@@ -86,10 +93,12 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   const commandGroup = name === undefined ? undefined : getCommandGroup(name)
   if (commandGroup && name !== undefined) {
     if (words.length === 1 && commandGroup.run) {
+      await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
       console.log(formatSubcommandParametersHelp(name, undefined, [], commandGroup.description))
       return
     }
     if (words.length === 2 && subcommand !== undefined && getSubcommand(name, subcommand)) {
+      await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
       console.log(formatSubcommandParametersHelp(name, subcommand, []))
       return
     }
