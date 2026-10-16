@@ -3,6 +3,10 @@ import { DateTime } from 'luxon'
 import { pollForToken } from './auth0'
 
 vi.mock('open', () => ({ default: vi.fn() }))
+vi.mock('@terros-inc/connect-common/auth', () => ({
+  AUTH0_CLIENT_ID: 'client-id',
+  AUTH0_DOMAIN: 'https://login.example.test',
+}))
 
 function tokenError(error: string, error_description?: string): Response {
   return new Response(JSON.stringify({ error, error_description }), { status: 400 })
