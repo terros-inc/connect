@@ -147,6 +147,25 @@ terros <command> <subcommand> --metadata '{"source":"cli"}'
 
 Responses are printed as formatted JSON.
 
+## Act as Another User
+
+Terros staff can run CLI commands as another user by setting
+`TERROS_IMPERSONATE` to that user's `userId`. Look the user up by name first:
+
+```sh
+terros search --query "Jane Admin"
+```
+
+The same name can exist in several companies. Keep the `User` result whose
+company matches the request; its `userId` is the ID to use (for example
+`U.example`). Then confirm who you are:
+
+```sh
+TERROS_IMPERSONATE=U.example terros user profile
+```
+
+Never guess an ID such as `U:jane`; always take it from a search result.
+
 ## Local Development
 
 Install dependencies:
