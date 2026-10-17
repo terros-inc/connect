@@ -33,7 +33,10 @@ function sleep(seconds: number): Promise<void> {
   })
 }
 
-async function pollForToken(deadline: DateTime, interval: number, deviceCode: string): Promise<TokenResponse> {
+const DEVELOPER_MODE_HINT =
+  "You may need developer mode turned on for your Terros account. Ask your company admin if you can't turn it on."
+
+export async function pollForToken(deadline: DateTime, interval: number, deviceCode: string): Promise<TokenResponse> {
   await sleep(interval)
   if (deadline < DateTime.now()) throw new Error('Token was not approved in time')
   const res = await fetch(`${AUTH0_DOMAIN}/oauth/token`, {
@@ -49,9 +52,13 @@ async function pollForToken(deadline: DateTime, interval: number, deviceCode: st
   })
 
   if (!res.ok) {
-    const body = (await res.json()) as { error: string; error_description: string }
-    if (body.error === 'access_denied') throw new Error('Authorization request denied')
-    return pollForToken(deadline, interval, deviceCode)
+    const body = (await res.json().catch(() => ({}))) as { error?: string; error_description?: string }
+    if (body.error === 'authorization_pending') return pollForToken(deadline, interval, deviceCode)
+    // RFC 8628: on slow_down, add 5 seconds to the polling interval
+    if (body.error === 'slow_down') return pollForToken(deadline, interval + 5, deviceCode)
+    const reason = body.error_description || body.error || `HTTP ${res.status}`
+    if (body.error === 'access_denied') throw new Error(`Sign-in denied: ${reason}\n${DEVELOPER_MODE_HINT}`)
+    throw new Error(`Sign-in failed: ${reason}`)
   }
   return (await res.json()) as TokenResponse
 }

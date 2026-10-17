@@ -29,7 +29,9 @@ terros -v
 
 ## Sign In
 
-Authenticate before running Terros API commands:
+Turn on developer mode in Terros first at <https://app.terros.com/integration/cli>
+(it needs the `user:developer` permission; ask your company admin if you can't
+turn it on). Then authenticate before running Terros API commands:
 
 ```sh
 terros auth login
