@@ -20,6 +20,15 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
 `terros auth login`. A schema that cannot be loaded at all still lets every built-in command run, so
 `terros auth login` works without one.
 
+### Bug fixes: help and parameter parsing (#101)
+
+- Help for a built-in command shows its description and the flags it accepts (`terros api log help` lists
+  `--companyId`, `--endpoint`, `--errorsOnly`, `--since` and `--limit`) instead of `Parameters: none`.
+- Endpoint help shows a field's description when the schema puts it beside a `$ref`, and prints a union of identical
+  types once (`string` rather than `string | string | string`).
+- Enum and string-literal parameters accept a plain value, a comma-separated list or a JSON array, not only a quoted
+  JSON string. An unknown value fails before the request and lists the valid values.
+
 ## 2.0.0
 
 ### BREAKING: API commands follow the full endpoint path
