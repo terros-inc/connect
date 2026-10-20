@@ -115,6 +115,9 @@ function parseParameterValue(value: unknown, parameter: EndpointParameter): unkn
 }
 
 function parseValue(value: unknown, type: string, parameterName: string): unknown {
+  const literal = getStringLiteral(type)
+  if (literal !== undefined) return parseStringLiteralValue(value, literal, parameterName)
+
   const members = splitTopLevelUnion(type)
   if (members.length > 1) {
     return parseUnionValue(value, members, parameterName)
@@ -123,9 +126,6 @@ function parseValue(value: unknown, type: string, parameterName: string): unknow
   if (type.endsWith('[]')) {
     return parseArrayValue(value, unwrapParens(type.slice(0, -2)), parameterName)
   }
-
-  const literal = getStringLiteral(type)
-  if (literal !== undefined) return parseStringLiteralValue(value, literal, parameterName)
 
   switch (type) {
     case 'string':
