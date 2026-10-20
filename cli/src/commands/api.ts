@@ -1,13 +1,13 @@
 import type { ParsedArgs } from 'minimist'
 import { runApiHistoryQuery } from '../apiHistory'
 import { buildTerrosClient } from '../api/query'
-import { parseApiLogParams } from './apiLogParams'
+import { apiLogParameters, parseApiLogParams } from './apiLogParams'
 
 export const apiCommands = {
   log: {
     description:
-      "Show a company's recent API requests, newest first. Requires internal access. " +
-      'Flags: --companyId (required), --endpoint /path, --errorsOnly, --since <ISO time>, --limit <1-100>',
+      "Show a company's recent API requests from the last seven days, newest first. Requires internal access.",
+    parameters: apiLogParameters,
     async run({ params }: { params: ParsedArgs }): Promise<void> {
       const result = await runApiHistoryQuery(buildTerrosClient(), parseApiLogParams(params))
       if (result.sinceClipped)

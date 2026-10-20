@@ -9,8 +9,8 @@ import {
   HELP_PARENT_MESSAGE,
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
-import { buildCliCommandTree, findBuiltin, matchCommand, type CommandLevel } from './commandTree'
-import { commandRegistry, getCommandGroup, getSubcommand } from './commands'
+import { buildCliCommandTree, findBuiltin, formatBuiltinHelp, matchCommand, type CommandLevel } from './commandTree'
+import { commandRegistry, getCommandGroup } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
@@ -82,17 +82,10 @@ function formatLevelHelp(level: CommandLevel): string {
 }
 
 async function showHelp(words: string[], requestedDepth: unknown): Promise<void> {
-  const [name, subcommand] = words
-  const commandGroup = name === undefined ? undefined : getCommandGroup(name)
-  if (commandGroup && name !== undefined) {
-    if (words.length === 1 && commandGroup.run) {
-      console.log(formatSubcommandParametersHelp(name, undefined, [], commandGroup.description))
-      return
-    }
-    if (words.length === 2 && subcommand !== undefined && getSubcommand(name, subcommand)) {
-      console.log(formatSubcommandParametersHelp(name, subcommand, []))
-      return
-    }
+  const builtinHelp = formatBuiltinHelp(commandRegistry, words)
+  if (builtinHelp !== undefined) {
+    console.log(builtinHelp)
+    return
   }
 
   const level = await loadCommandLevel(words)

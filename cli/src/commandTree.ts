@@ -7,6 +7,7 @@ import {
   type CommandNode,
   type EndpointGroups,
 } from '@terros-inc/mcp-core'
+import { formatSubcommandParametersHelp } from './messages'
 import type { CommandGroup, CommandRegistry, Subcommand } from './commands/types'
 
 export type BuiltinMatch = {
@@ -52,6 +53,19 @@ export function findBuiltin(registry: CommandRegistry, words: string[]): Builtin
   if (subcommand === undefined) return group.run ? { run: group.run, args: [] } : undefined
   if (!Object.hasOwn(group.subcommands, subcommand)) return undefined
   return { run: (group.subcommands[subcommand] as Subcommand).run, args: words.slice(2) }
+}
+
+/** Help for the built-in command named by `words`, or undefined when they name an endpoint level instead. */
+export function formatBuiltinHelp(registry: CommandRegistry, words: string[]): string | undefined {
+  const [name, subcommand] = words
+  const group = name === undefined ? undefined : getGroup(registry, name)
+  if (!group || name === undefined) return undefined
+  if (words.length === 1 && group.run) {
+    return formatSubcommandParametersHelp(name, undefined, group.parameters ?? [], group.description)
+  }
+  if (words.length !== 2 || subcommand === undefined || !Object.hasOwn(group.subcommands, subcommand)) return undefined
+  const command = group.subcommands[subcommand] as Subcommand
+  return formatSubcommandParametersHelp(name, subcommand, command.parameters ?? [], command.description)
 }
 
 /** Match `words` against the endpoint tree, listing built-in commands at the levels they share with it. */

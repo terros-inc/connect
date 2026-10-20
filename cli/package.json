@@ -4,7 +4,7 @@
     "terros": "./cli.js"
   },
   "bugs": {
-    "url": "https://github.com/terros-inc/cli/issues"
+    "url": "https://github.com/terros-inc/connect/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "catalog:",
