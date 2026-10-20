@@ -49,7 +49,7 @@ function toPath(prefix: string[], parameterName: string): string[] {
 function getNestedValue(input: Record<string, unknown>, path: string[]): unknown {
   let current: unknown = input
   for (const key of path) {
-    if (!isRecord(current)) return undefined
+    if (!isRecord(current) || !Object.hasOwn(current, key)) return undefined
     current = current[key]
   }
   return current
