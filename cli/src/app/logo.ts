@@ -1,5 +1,5 @@
 import { extname } from 'node:path'
-import { access, readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 
 const CONTENT_TYPES: Record<string, string> = {
   '.gif': 'image/gif',
@@ -19,9 +19,10 @@ export function logoContentType(path: string): string {
 /** Check the logo before changing the app, so a bad path fails before anything is sent. */
 export async function checkLogoFile(path: string): Promise<void> {
   logoContentType(path)
-  await access(path).catch(() => {
+  const info = await stat(path).catch(() => {
     throw new Error(`--logo file not found: ${path}`)
   })
+  if (!info.isFile()) throw new Error(`--logo is not a file: ${path}`)
 }
 
 /** Upload a local image to the app's `uploadAvatarUrl`, as the web developer pages do. */

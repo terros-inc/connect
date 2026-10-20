@@ -43,13 +43,25 @@ describe('textToTiptapDoc', () => {
 })
 
 describe('updateApp', () => {
-  // The update schema requires appId, companyId and permissions, and the server stores what it is sent.
-  it('sends the stored app with only the requested fields changed', async () => {
+  // The schema requires appId, companyId, permissions and name; sending other stored fields back could overwrite a
+  // newer value saved since the get.
+  it('sends the required fields and only the requested changes', async () => {
     const client = fakeClient()
     await updateApp(client, 'App.example', { status: 'internal' })
     expect(client.calls).toEqual([
       ['connect/app/get', { appId: 'App.example' }],
-      ['connect/app/update', { app: { ...storedApp, status: 'internal' } }],
+      [
+        'connect/app/update',
+        {
+          app: {
+            appId: 'App.example',
+            companyId: 'C.example',
+            permissions: ['account:list'],
+            name: 'Acme CRM',
+            status: 'internal',
+          },
+        },
+      ],
     ])
   })
 

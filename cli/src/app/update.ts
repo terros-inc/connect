@@ -18,24 +18,29 @@ function hasChanges(changes: AppChanges): boolean {
   return Object.values(changes).some((value) => value !== undefined)
 }
 
-/** The stored app with only the requested fields changed, so `appId`, `companyId` and `permissions` come along. */
-export function mergeAppChanges(app: AppData, changes: AppChanges): AppData {
-  const { name, description, status } = changes
+/**
+ * The update to send: the fields the schema requires, taken from the stored app, plus the requested changes. The API
+ * merges it onto the stored app, so every other field keeps its stored value even if it changed since the get.
+ */
+export function buildAppUpdate(app: AppData, changes: AppChanges): AppData {
+  const { appId, companyId, permissions, name } = app
   return {
-    ...app,
-    ...(name === undefined ? {} : { name }),
-    ...(description === undefined ? {} : { description: textToTiptapDoc(description) }),
-    ...(status === undefined ? {} : { status }),
+    appId,
+    companyId,
+    permissions,
+    name: changes.name ?? name,
+    ...(changes.description === undefined ? {} : { description: textToTiptapDoc(changes.description) }),
+    ...(changes.status === undefined ? {} : { status: changes.status }),
   }
 }
 
 /**
- * Fetch the app, then send it back with the changes. The API enforces its own rules (publishing needs an approved
+ * Fetch the app, then send the update. The API enforces its own rules (publishing needs an approved
  * review and a deployed current version) and its errors are thrown as they are. With no changes, nothing is sent and
  * the fetched app is returned, whose `uploadAvatarUrl` still accepts a logo.
  */
 export async function updateApp(client: ApiCaller, appId: string, changes: AppChanges): Promise<AppData> {
   const { app } = assertAppResponse(await client.call('connect/app/get', { appId }))
   if (!hasChanges(changes)) return app
-  return assertAppResponse(await client.call('connect/app/update', { app: mergeAppChanges(app, changes) })).app
+  return assertAppResponse(await client.call('connect/app/update', { app: buildAppUpdate(app, changes) })).app
 }
