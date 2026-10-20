@@ -32,8 +32,8 @@ export const handler = wrapConnectHandler<AccountWebhook, void, AccuLynxSendConf
 // already has an externalLeadId is not sent again.
 //
 // A delivery can fail between steps and be retried, so each step first looks for what an earlier attempt created
-// (the contact by its crossReference, then the contact's job, then the job's Terros reference) and creates only what
-// is missing. externalLeadId is saved last, so a linked account always has its job reference in AccuLynx.
+// (the contact by its crossReference, then the job on it that is provably this account's) and creates only what is
+// missing. externalLeadId is saved last, so a linked account always has its job reference in AccuLynx.
 export async function sendAccount(
   account: AccountWebhookData,
   config: AccuLynxSendConfig,
@@ -92,11 +92,15 @@ async function findOrCreateJob(
   config: AccuLynxSendConfig,
   accuLynx: AccuLynxClient
 ): Promise<string> {
-  // The contact was created for this account, so a job on it is the one an earlier attempt created.
-  const existingJobId = contact.existed ? (await accuLynx.getContactJobIds(contact.id))[0] : undefined
-  let jobId = existingJobId
+  const existing = contact.existed ? await findEarlierJob(account, contact.id, accuLynx) : undefined
+  if (existing?.referenced) {
+    console.log(`Reusing AccuLynx job ${existing.id} created earlier for account ${account.id}`)
+    return existing.id
+  }
+
+  let jobId = existing?.id
   if (jobId) {
-    console.log(`Reusing AccuLynx job ${jobId} created earlier for account ${account.id}`)
+    console.log(`Reusing unreferenced AccuLynx job ${jobId}, the only job on account ${account.id}'s contact`)
   } else {
     const job = await accuLynx.createJob(toAccuLynxJob(account, contact.id, config))
     if (!job.id) throw Error(`AccuLynx job create for account ${account.id} returned no id`)
@@ -105,9 +109,24 @@ async function findOrCreateJob(
   }
 
   // The webhook finds the account through this reference, so a failure here fails the delivery before linking.
-  const references = existingJobId ? await accuLynx.getJobExternalReferences(jobId) : []
-  if (!references.some((reference) => reference.projectId === account.id)) {
-    await accuLynx.createJobExternalReference(jobId, account.id)
-  }
+  await accuLynx.createJobExternalReference(jobId, account.id)
   return jobId
+}
+
+// The job an earlier attempt created on this account's contact, if one can be proven. People can add more jobs to the
+// contact in AccuLynx, so a job counts only when its Terros reference names this account, or, when that reference
+// create failed, when it is the contact's only job and has no Terros reference at all: Send creates one job per
+// contact. Anything else is ambiguous and a new job is created rather than linking a job of unknown origin.
+async function findEarlierJob(
+  account: AccountWebhookData,
+  contactId: string,
+  accuLynx: AccuLynxClient
+): Promise<{ id: string; referenced: boolean } | undefined> {
+  const jobIds = await accuLynx.getContactJobIds(contactId)
+  for (const id of jobIds) {
+    const references = await accuLynx.getJobExternalReferences(id)
+    if (references.some((reference) => reference.projectId === account.id)) return { id, referenced: true }
+    if (jobIds.length === 1 && references.length === 0) return { id, referenced: false }
+  }
+  return undefined
 }

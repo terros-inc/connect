@@ -18,7 +18,8 @@ export function fakeClock(start = 0): Clock & { slept: number[] } {
   }
 }
 
-// AccuLynx client against canned replies keyed by "METHOD /path". A key with several replies answers them in order.
+// AccuLynx client against canned replies keyed by "METHOD /path", or "METHOD /path?query" to answer one query only.
+// A key with several replies answers them in order.
 export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>) {
   const calls: FakeCall[] = []
   const queues = new Map(
@@ -26,11 +27,12 @@ export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>) {
   )
 
   const fakeFetch = (async (url: string, init: RequestInit) => {
-    const path = new URL(url).pathname.replace('/api/v2', '')
+    const { pathname, search } = new URL(url)
+    const path = pathname.replace('/api/v2', '')
     const method = init.method ?? 'GET'
     calls.push({ method, path, body: init.body ? JSON.parse(String(init.body)) : undefined })
 
-    const queue = queues.get(`${method} ${path}`)
+    const queue = queues.get(`${method} ${path}${search}`) ?? queues.get(`${method} ${path}`)
     const reply = (queue && queue.length > 1 ? queue.shift() : queue?.[0]) ?? { status: 404 }
     const status = reply.status ?? 200
     return new Response(reply.body === undefined ? null : JSON.stringify(reply.body), {

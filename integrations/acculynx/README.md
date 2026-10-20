@@ -27,14 +27,18 @@ So the webhook treats an event as a hint. It takes only the job ID from the body
 A delivery can fail partway and be retried, so Send looks for what an earlier attempt created before creating anything:
 
 1. The contact: contacts created since the account was, searched by the contact's last name (or first or company name) newest first, matching the account ID in `crossReference`. Up to four pages of 25.
-2. With `recordType: job` and a contact found in step 1, the contact's job (`GET /contacts/{id}/jobs`).
-3. For a job found in step 2, its `Terros` external reference. A new job gets the reference straight away. A failure here fails the delivery.
+2. With `recordType: job` and a contact found in step 1, the job an earlier attempt created on it. People can add jobs to the contact in AccuLynx, so Send reads each job's `Terros` external references (`GET /contacts/{id}/jobs`, then one lookup per job) and reuses a job only when:
+   - its reference names this account (project ID = account ID), or
+   - it is the contact's only job and has no `Terros` reference, which is what a failed reference create leaves behind (Send creates one job per contact).
+
+   Otherwise no job is provably this account's, and Send creates a new one rather than link a job of unknown origin.
+3. A new or unreferenced job gets the `Terros` reference. A failure here fails the delivery.
 
 `externalLeadId` is saved on the account last, so a linked account always has its reference and a failed save is repaired by the retry without a second contact or job.
 
 ## Rate limit
 
-AccuLynx allows 10 requests per second per key. Every call waits for a slot in a per-key one-second window, and a `429` is retried up to three times after `Retry-After` (capped at 5 seconds). The window is shared by runs in the same runtime only; separate runtimes do not coordinate. A Send run makes at most seven AccuLynx calls (up to four contact searches, then three lookups or creates), a Webhook run at most three.
+AccuLynx allows 10 requests per second per key. Every call waits for a slot in a per-key one-second window, and a `429` is retried up to three times after `Retry-After` (capped at 5 seconds). The window is shared by runs in the same runtime only; separate runtimes do not coordinate. A Send run makes up to four contact searches, then a job list and one reference lookup per job on a contact found again, then up to two creates, a Webhook run at most three.
 
 ## Linking jobs and accounts
 
@@ -47,6 +51,6 @@ With `recordType: job`, Send also adds an AccuLynx job external reference (sourc
 
 - Changes to an account after it is linked are not sent; AccuLynx owns the record from then on.
 - Contact mailing addresses go without state and country, which AccuLynx takes as numeric IDs.
-- Retry lookups rely on behavior the AccuLynx docs do not state and that was not tried against a live account: that contact search finds a contact created moments earlier and pages by page number, and that a contact's jobs include a new, unassigned job. If a lookup misses, a retry creates a second record as before.
+- Retry lookups rely on behavior the AccuLynx docs do not state and that was not tried against a live account: that contact search finds a contact created moments earlier and pages by page number, and that a contact's jobs include a new, unassigned job. If a lookup misses, a retry creates a second record as before. A retry also creates a second job when the job it created earlier has no reference and someone added another job to the contact meanwhile.
 - A webhook for a job AccuLynx does not return through the current-milestone endpoint (it may hide unassigned jobs, as `GET /jobs/{id}` does) is ignored.
 - `appId` in `terros.json` is a placeholder until the Connect app record exists, and the app is not yet in the `publish-integrations.yml` list.

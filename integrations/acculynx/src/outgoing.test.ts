@@ -146,6 +146,46 @@ describe('sendAccount', () => {
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'job-1' } }])
   })
 
+  // Prevents a retry linking (and tagging) a job someone else added to the contact in AccuLynx instead of the job
+  // created for this account.
+  test("a retry reuses only the job proven to be this account's when the contact has several", async () => {
+    const recovered = {
+      ...created,
+      'POST /contacts/search': { body: { items: [{ id: 'contact-1', crossReference: 'Account.example' }] } },
+      'GET /contacts/contact-1/jobs': { body: { items: [{ id: 'job-0' }, { id: 'job-1' }, { id: 'job-2' }] } },
+      'GET /jobs/external-references?jobId=job-0&source=Terros': { body: [] },
+      'GET /jobs/external-references?jobId=job-2&source=Terros': { body: [] },
+    }
+
+    const tagged = fakeAccuLynx({
+      ...recovered,
+      'GET /jobs/external-references?jobId=job-1&source=Terros': {
+        body: [{ jobId: 'job-1', source: 'Terros', projectId: 'Account.example' }],
+      },
+    })
+    const taggedTerros = fakeTerros()
+    await sendAccount(account(), { recordType: 'job' }, tagged.client, taggedTerros.terros)
+    expect(tagged.calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual(['/contacts/search'])
+    expect(taggedTerros.updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'job-1' } }])
+
+    // No job names this account and several have no reference, so none is provably its own: create one.
+    const untagged = fakeAccuLynx({
+      ...recovered,
+      'GET /jobs/external-references?jobId=job-1&source=Terros': {
+        body: [{ jobId: 'job-1', source: 'Terros', projectId: 'Account.other' }],
+      },
+      'POST /jobs': { status: 201, body: { id: 'job-3' } },
+    })
+    const untaggedTerros = fakeTerros()
+    await sendAccount(account(), { recordType: 'job' }, untagged.client, untaggedTerros.terros)
+    expect(untagged.calls.filter((call) => call.method === 'POST').map((call) => call.body)).toContainEqual({
+      jobId: 'job-3',
+      source: 'Terros',
+      projectId: 'Account.example',
+    })
+    expect(untaggedTerros.updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'job-3' } }])
+  })
+
   // Prevents a linked account whose job the webhook can never map back, because the reference failed once and
   // linked accounts are not sent again.
   test('a failed job reference fails the delivery unlinked, and the retry adds it', async () => {
