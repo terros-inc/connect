@@ -1,4 +1,5 @@
 import { startMcpServer } from '../mcp'
+import { whoamiCommand } from './whoami'
 import type { CommandGroup, CommandRegistry } from './types'
 import { connectCommands } from './connect'
 import { authCommands } from './auth'
@@ -20,6 +21,10 @@ export const commandRegistry: CommandRegistry = {
   mcp: {
     description: 'Serve Terros API tools over MCP stdio. Run `terros auth login` first.',
     run: startMcpServer,
+    subcommands: {},
+  },
+  whoami: {
+    ...whoamiCommand,
     subcommands: {},
   },
 }

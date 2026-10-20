@@ -7,6 +7,7 @@ export type TerrosClientConfig = {
   authType?: 'ApiKey' | 'ConnectKey'
   baseUrl?: string
   analytics?: TerrosHeaderMetadata
+  /** The user to act as; defaults to `TERROS_IMPERSONATE`. An empty string acts as the signed-in user. */
   impersonateUserId?: string
 }
 
