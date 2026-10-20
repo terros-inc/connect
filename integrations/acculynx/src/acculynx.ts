@@ -8,6 +8,9 @@ export const externalReferenceSource = 'Terros'
 
 const maxAttempts = 3
 const maxRetryWaitMs = 5000
+const searchPageSize = 25
+const maxSearchPages = 4
+const dayMs = 24 * 60 * 60 * 1000
 
 export type AccuLynxCreated = { id?: string; _link?: string }
 export type AccuLynxExternalReference = { jobId?: string; source?: string; projectId?: string }
@@ -18,6 +21,8 @@ export type AccuLynxAddress = {
   zipCode?: string
   state?: { abbreviation?: string }
 }
+export type AccuLynxContact = { id?: string; crossReference?: string }
+export type AccuLynxMilestone = { name?: string; duration?: { startDate?: string } }
 export type AccuLynxJob = {
   id?: string
   locationAddress?: AccuLynxAddress
@@ -63,6 +68,47 @@ export class AccuLynxClient {
 
   async createJobExternalReference(jobId: string, projectId: string): Promise<void> {
     await this.request('POST', '/jobs/external-references', { jobId, source: externalReferenceSource, projectId })
+  }
+
+  // A contact created by AccuLynx Send carries the Terros account ID as its crossReference. AccuLynx cannot look a
+  // contact up by crossReference, so this searches contacts created since the account was, newest first, by name.
+  async findContactByCrossReference(
+    crossReference: string,
+    searchTerm: string | undefined,
+    createdSince: number
+  ): Promise<AccuLynxContact | undefined> {
+    const body = {
+      ...(searchTerm ? { searchTerm } : {}),
+      startDate: new Date(createdSince).toISOString(),
+      endDate: new Date(this.clock.now() + dayMs).toISOString(),
+      sort: { sortColumn: 'CreatedDate', sortDirection: 'Descending' },
+    }
+    for (let page = 0; page < maxSearchPages; page++) {
+      const query = new URLSearchParams({ pageSize: String(searchPageSize), pageStartIndex: String(page) })
+      const result = (await this.request('POST', `/contacts/search?${query}`, body)) as { items?: AccuLynxContact[] }
+      const items = result?.items ?? []
+      const match = items.find((contact) => contact.crossReference === crossReference)
+      if (match) return match
+      if (items.length < searchPageSize) return undefined
+    }
+    return undefined
+  }
+
+  async getContactJobIds(contactId: string): Promise<string[]> {
+    const result = (await this.request('GET', `/contacts/${encodeURIComponent(contactId)}/jobs`)) as {
+      items?: { id?: string }[]
+    }
+    return (result?.items ?? []).map((job) => job.id).filter((id): id is string => !!id)
+  }
+
+  // Undefined when this key cannot see the job: it is in another location, does not exist, or is not returned.
+  async getCurrentJobMilestone(jobId: string): Promise<AccuLynxMilestone | undefined> {
+    try {
+      return (await this.request('GET', `/jobs/${encodeURIComponent(jobId)}/milestones/current`)) as AccuLynxMilestone
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 404) return undefined
+      throw error
+    }
   }
 
   async getJobExternalReferences(jobId: string): Promise<AccuLynxExternalReference[]> {

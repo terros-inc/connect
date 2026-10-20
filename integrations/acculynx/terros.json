@@ -33,6 +33,11 @@
           "name": "accountFilterValues",
           "type": "string",
           "description": "Comma-separated values of accountFilterField that this install (this location) sends."
+        },
+        {
+          "name": "addressCountry",
+          "type": "string",
+          "description": "Optional. Two-letter country code (such as US or CA) of this location's job addresses. Terros addresses carry no country and AccuLynx needs one, so without it jobs are created with no address."
         }
       ],
       "authSchema": {
@@ -60,7 +65,7 @@
         {
           "name": "subscriptionId",
           "type": "string",
-          "description": "Optional. AccuLynx webhook subscription ID of this location. Events from any other subscription are refused."
+          "description": "Optional. AccuLynx webhook subscription ID of this location. Events naming any other subscription are refused. This routes events between locations; it is not authentication."
         },
         {
           "name": "accountSource",

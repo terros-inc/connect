@@ -9,6 +9,7 @@ export type AccuLynxSendConfig = {
   leadSourceId?: string
   accountFilterField?: string
   accountFilterValues?: string
+  addressCountry?: string
 }
 
 // Neither record type is a default: the install must say which one it sends.
@@ -62,24 +63,48 @@ export function toAccuLynxJob(
   config: AccuLynxSendConfig
 ): Record<string, unknown> {
   const address = account.location
-  const hasFullAddress = address?.line1 && address.locality && address.countrySubd && address.postal1
+  const country = getAddressCountry(config.addressCountry)
+  const hasFullAddress = address?.line1 && address.locality && address.countrySubd && address.postal1 && country
 
   return removeEmpty({
     contact: { id: contactId },
     leadSource: config.leadSourceId ? { id: config.leadSourceId } : undefined,
-    // AccuLynx requires street, city, state, country and ZIP together. Terros addresses carry no country.
+    // AccuLynx requires street, city, state, country and ZIP together. Terros addresses carry no country, so the
+    // address is sent only when the install names its country.
     locationAddress: hasFullAddress
       ? removeEmpty({
           street1: address.line1,
           street2: address.line2,
           city: address.locality,
           state: address.countrySubd,
-          country: 'US',
+          country,
           zipCode: address.postal1,
         })
       : undefined,
     notes: account.notes?.[0]?.text?.slice(0, 1000),
   })
+}
+
+// An ISO 3166-1 alpha-2 code such as US or CA, or undefined when the install sets none.
+export function getAddressCountry(value: string | undefined): string | undefined {
+  const country = String(value || '')
+    .trim()
+    .toUpperCase()
+  if (!country) return undefined
+  if (!/^[A-Z]{2}$/.test(country)) throw Error(`addressCountry must be a two-letter country code, got "${value}"`)
+  return country
+}
+
+// One name field of the contact, to narrow the search for a contact an earlier attempt created.
+export function getContactSearchTerm(contact: Record<string, unknown>): string | undefined {
+  const term = contact.lastName || contact.firstName || contact.companyName
+  return typeof term === 'string' ? term : undefined
+}
+
+// The contact cannot predate its account. A day of slack covers clock and time zone differences.
+export function getContactSearchStart(account: AccountWebhookData): number {
+  const createdAt = Date.parse(String(account.createdAt ?? ''))
+  return Number.isFinite(createdAt) ? Math.max(createdAt - 24 * 60 * 60 * 1000, 0) : 0
 }
 
 // AccuLynx accepts exactly 10 digits. A US number with a leading country code 1 is shortened; anything else is dropped.
@@ -95,31 +120,22 @@ export const milestoneChangedTopic = 'job.milestone.current_changed'
 export type MilestoneChange = {
   subscriptionId?: string
   jobId: string
-  milestoneName: string
-  changedAt?: number
 }
 
-// Reads a job.milestone.current_changed webhook. Returns undefined for any other topic.
+// Reads a job.milestone.current_changed webhook. Returns undefined for any other topic. AccuLynx does not sign
+// webhooks, so only the job ID is taken from the body; the milestone itself is read back from AccuLynx.
 export function parseMilestoneChange(body: unknown): MilestoneChange | undefined {
   const payload = (body || {}) as {
     topicName?: string
     subscriptionId?: string
-    event?: { job?: { id?: string; milestone?: { name?: string; date?: string } } }
+    event?: { job?: { id?: string } }
   }
   if (payload.topicName !== milestoneChangedTopic) return undefined
 
-  const job = payload.event?.job
-  if (!job?.id) throw Error('AccuLynx milestone webhook has no job id')
-  if (!job.milestone?.name) throw Error(`AccuLynx milestone webhook for job ${job.id} has no milestone name`)
+  const jobId = payload.event?.job?.id
+  if (!jobId) throw Error('AccuLynx milestone webhook has no job id')
 
-  const changedAt = job.milestone.date ? Date.parse(job.milestone.date) : NaN
-
-  return {
-    subscriptionId: payload.subscriptionId,
-    jobId: job.id,
-    milestoneName: job.milestone.name,
-    changedAt: Number.isFinite(changedAt) ? changedAt : undefined,
-  }
+  return { subscriptionId: payload.subscriptionId, jobId }
 }
 
 // The Terros account fields that a job fetched from AccuLynx can fill in when the webhook creates an account.

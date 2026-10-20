@@ -43,10 +43,20 @@ export async function receiveWebhook(
   }
 
   // Each AccuLynx location has its own subscription. Pinning it keeps one location's install from acting on
-  // another location's events.
+  // another location's events. The ID comes from the body, so this routes events; it does not authenticate them.
   if (config.subscriptionId && change.subscriptionId !== config.subscriptionId) {
     throw Error(`AccuLynx webhook is from subscription ${change.subscriptionId}, not ${config.subscriptionId}`)
   }
+
+  // AccuLynx does not sign webhooks and Connect gives this script only the body, so anyone with the URL could post
+  // one. The body is therefore only a hint: the milestone is read back from AccuLynx with this location's key. A
+  // forged event can at most re-apply a real job's current milestone, and a job this key cannot see is ignored.
+  const milestone = await accuLynx.getCurrentJobMilestone(change.jobId)
+  if (!milestone?.name) {
+    console.log(`Ignoring AccuLynx job ${change.jobId}: this location's key cannot read its current milestone`)
+    return
+  }
+  const changedAt = Date.parse(milestone.duration?.startDate ?? '')
 
   const references = await accuLynx.getJobExternalReferences(change.jobId)
   const accountId = references.find((reference) => reference.projectId)?.projectId as AccountId | undefined
@@ -58,7 +68,7 @@ export async function receiveWebhook(
 
   const jobDetails = accountId ? {} : fromAccuLynxJob(await accuLynx.getJob(change.jobId))
 
-  console.log(`Sending AccuLynx job ${change.jobId} milestone ${change.milestoneName} to Terros (${requestType})`)
+  console.log(`Sending AccuLynx job ${change.jobId} milestone ${milestone.name} to Terros (${requestType})`)
 
   const result = await terros.account.upsert({
     requestType: accountId ? 'update' : 'upsert',
@@ -66,12 +76,12 @@ export async function receiveWebhook(
       ...jobDetails,
       accountId,
       workflowId: workflowId as WorkflowId,
-      workflowTarget: change.milestoneName,
+      workflowTarget: milestone.name,
       sourceId: change.jobId,
-      sourceStatus: change.milestoneName,
+      sourceStatus: milestone.name,
       accountSource: config.accountSource || 'AccuLynx',
       externalLeadId: change.jobId,
-      lastActionDate: change.changedAt ?? Date.now(),
+      lastActionDate: Number.isFinite(changedAt) ? changedAt : Date.now(),
     },
   })
 
