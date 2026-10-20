@@ -47,6 +47,23 @@ describe('getTokens', () => {
     expect(writeFile).toHaveBeenCalled()
   })
 
+  // Guards against concurrent API calls (e.g. `terros whoami` while impersonating) each spending the rotating
+  // refresh token, where the losing refresh fails or saves a superseded login to auth.json.
+  it('shares one refresh between concurrent callers', async () => {
+    vi.mocked(readFile).mockResolvedValue(JSON.stringify({ refresh_token: 'refresh-token', expires_at: 0 }))
+    vi.mocked(refreshTokens).mockResolvedValue({
+      access_token: 'new-token',
+      refresh_token: 'rotated-refresh-token',
+      id_token: undefined,
+      token_type: 'Bearer',
+      expires_in: 3600,
+    })
+    const results = await Promise.all([getTokens(), getTokens()])
+    expect(results.map((tokens) => tokens?.access_token)).toEqual(['new-token', 'new-token'])
+    expect(refreshTokens).toHaveBeenCalledOnce()
+    expect(writeFile).toHaveBeenCalledOnce()
+  })
+
   it('reuses tokens that remain valid beyond the refresh window', async () => {
     vi.mocked(readFile).mockResolvedValue(
       JSON.stringify({ access_token: 'valid-token', expires_at: Date.now() + 3600000 })

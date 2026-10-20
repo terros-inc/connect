@@ -46,6 +46,18 @@ To print the current API access token (for usage in scripts):
 terros auth token
 ```
 
+To show who the CLI is signed in as (and whether it is impersonating someone):
+
+```sh
+$ terros whoami
+jane@acme-solar
+user:          U.example (Jane)
+company:       C.example (Acme Solar)
+impersonating: no
+```
+
+In scripts: `terros whoami | awk '$1 == "user:" { print $2 }'` prints the user ID.
+
 ## MCP Server
 
 After signing in with `terros auth login`, start the MCP server with:
@@ -185,7 +197,7 @@ company matches the request; its `userId` is the ID to use (for example
 `U.example`). Then confirm who you are:
 
 ```sh
-TERROS_IMPERSONATE=U.example terros user profile
+TERROS_IMPERSONATE=U.example terros whoami
 ```
 
 Never guess an ID such as `U:jane`; always take it from a search result.
