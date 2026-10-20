@@ -1,5 +1,6 @@
 import {
   buildCommandTree,
+  CommandCollisionError,
   findCommand,
   getChildCommandNames,
   getEndpointPaths,
@@ -31,12 +32,14 @@ export function buildCliCommandTree(endpoints: EndpointGroups, registry: Command
     const node = tree.children.get(name)
     if (!node) continue
     if (node.endpoint) {
-      throw new Error(`Endpoint ${node.endpoint.path} collides with the built-in command: terros ${name}`)
+      throw new CommandCollisionError(
+        `Endpoint ${node.endpoint.path} collides with the built-in command: terros ${name}`
+      )
     }
     for (const subcommand of Object.keys(group.subcommands)) {
       const child = node.children.get(subcommand)
       if (child) {
-        throw new Error(
+        throw new CommandCollisionError(
           `Endpoint ${getEndpointPaths(child)[0]} collides with the built-in command: terros ${name} ${subcommand}`
         )
       }
@@ -48,7 +51,8 @@ export function buildCliCommandTree(endpoints: EndpointGroups, registry: Command
 /**
  * Fail if an endpoint path lands on the built-in command named by `words`, so running that built-in (or its help)
  * cannot silently hide the endpoint. A schema that cannot be loaded does not block built-in commands
- * (`terros auth login` must work without one).
+ * (`terros auth login` must work without one), but a schema whose own paths collide does: the parser stops at the
+ * first collision, so it cannot tell whether a later path would land on this built-in.
  */
 export async function checkBuiltinCollisions(
   loadEndpoints: () => Promise<EndpointGroups>,
@@ -61,7 +65,8 @@ export async function checkBuiltinCollisions(
   let endpoints: EndpointGroups
   try {
     endpoints = await loadEndpoints()
-  } catch {
+  } catch (error) {
+    if (error instanceof CommandCollisionError) throw error
     return
   }
   const subcommands: CommandGroup['subcommands'] =

@@ -2,6 +2,20 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## 2.0.1
+
+### Bug fix: built-in commands no longer hide an endpoint that lands on them
+
+In 2.0.0 a built-in command (`terros auth login`, `terros connect publish`, `terros mcp`, ...) ran before any
+endpoint was checked against it, so an endpoint path that maps to the same command was silently hidden whenever the
+built-in was run. Now, before a built-in command or its help runs, the CLI loads the API schema and fails with an
+error naming the endpoint and the built-in command. It fails the same way when two endpoint paths map to one command
+or a path uses `help`, since such a schema could hide an endpoint behind any built-in.
+
+Only the built-in being run is checked: an endpoint that lands on `terros connect publish` does not stop
+`terros auth login`. A schema that cannot be loaded at all still lets every built-in command run, so
+`terros auth login` works without one.
+
 ## 2.0.0
 
 ### BREAKING: API commands follow the full endpoint path
@@ -51,9 +65,9 @@ Commands that only staff accounts load from the internal API document are rename
 - Two endpoint paths that map to the same command (for example `/garden/bed/list` and `/garden/bed/list/`), or a
   path segment named `help`, now fail with an error naming the paths. A staff account's internal API document that
   fails this way falls back to the bundled document, as other unreadable internal documents already did.
-- An endpoint that lands on a built-in command (`terros auth login`, `terros connect publish`, ...) makes that
-  built-in command, its help and endpoint commands fail with an error naming both. Other built-in commands still run,
-  and so do all built-in commands when the API schema cannot be loaded.
+- An endpoint that lands on a built-in command (`terros auth login`, `terros connect publish`, ...) makes help and
+  endpoint commands fail with an error naming both. The built-in command itself still runs, since built-in commands
+  never load the API schema.
 - Extra words after a command (`terros garden bed list extra`) are now an unknown-command error instead of being
   ignored.
 

@@ -9,6 +9,14 @@ export type CommandNode = {
   children: Map<string, CommandNode>
 }
 
+/**
+ * Two endpoint paths, or an endpoint path and a reserved or built-in command, map to the same CLI command. Unlike a
+ * schema that cannot be read, this means the schema itself would hide a command, so callers must never ignore it.
+ */
+export class CommandCollisionError extends Error {
+  name = 'CommandCollisionError'
+}
+
 export type CommandMatch = {
   /** Deepest node reached. */
   node: CommandNode
@@ -34,7 +42,7 @@ export function buildCommandTree(endpoints: EndpointGroups): CommandNode {
         node = child
       }
       if (node.endpoint) {
-        throw new Error(
+        throw new CommandCollisionError(
           `Endpoints ${node.endpoint.path} and ${endpoint.path} both map to the command: terros ${words.join(' ')}`
         )
       }

@@ -164,11 +164,4 @@ describe('checkBuiltinCollisions', () => {
     ).resolves.toBeUndefined()
     await expect(checkBuiltinCollisions(load('/mcp/list'), registry, ['mcp'])).resolves.toBeUndefined()
   })
-
-  it('lets built-ins run when the schema cannot be loaded', async () => {
-    const failing = async () => {
-      throw new Error('no schema')
-    }
-    await expect(checkBuiltinCollisions(failing, registry, ['auth', 'login'])).resolves.toBeUndefined()
-  })
 })

@@ -130,8 +130,9 @@ A path segment named `help` is rejected the same way, because `help` is reserved
 for help text. An endpoint that would land on a built-in command such as
 `terros auth login` or `terros connect publish` makes that built-in command, its
 help and endpoint commands exit with an error naming both. Other built-in
-commands still run, and so do all built-in commands when the API schema cannot
-be loaded.
+commands still run, unless two endpoints collide or a path uses `help`, which
+stops every command. A schema that cannot be loaded at all lets every built-in
+command run.
 
 CLI 2.0.0 changed command names; see [CHANGELOG.md](CHANGELOG.md) for the
 renamed commands.
