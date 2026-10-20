@@ -178,6 +178,26 @@ describe('buildEndpointInput', () => {
       expect(entitlements('"weather_data"')).toEqual({ entitlements: ['weather_data'] })
     })
 
+    it('keeps an enum value containing | or [] whole', () => {
+      const pipes: Endpoint = {
+        path: '/pipe/set',
+        components: { schemas: {} },
+        properties: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string', enum: ['a|b'] },
+            modes: { type: 'array', items: { type: 'string', enum: ['a|b', 'c'] } },
+            list: { type: 'string', enum: ['x[]'] },
+          },
+        },
+      }
+      expect(buildEndpointInput(pipes, { _: [], mode: 'a|b', modes: '["a|b","c"]', list: 'x[]' })).toEqual({
+        mode: 'a|b',
+        modes: ['a|b', 'c'],
+        list: 'x[]',
+      })
+    })
+
     it('accepts a single-value enum', () => {
       expect(buildEndpointInput(endpoint, { _: [], mode: 'replace' })).toEqual({ mode: 'replace' })
     })

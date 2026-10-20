@@ -115,16 +115,17 @@ function parseParameterValue(value: unknown, parameter: EndpointParameter): unkn
 }
 
 function parseValue(value: unknown, type: string, parameterName: string): unknown {
+  const literal = getStringLiteral(type)
+  if (literal !== undefined) return parseStringLiteralValue(value, literal, parameterName)
+
   if (type.endsWith('[]')) {
     return parseArrayValue(value, unwrapParens(type.slice(0, -2)), parameterName)
   }
 
-  if (type.includes('|')) {
-    return parseUnionValue(value, type, parameterName)
+  const types = splitUnionTypes(type)
+  if (types.length > 1) {
+    return parseUnionValue(value, types, parameterName)
   }
-
-  const literal = getStringLiteral(type)
-  if (literal !== undefined) return parseStringLiteralValue(value, literal, parameterName)
 
   switch (type) {
     case 'string':
@@ -252,8 +253,28 @@ function formatReceived(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value)
 }
 
-function parseUnionValue(value: unknown, type: string, parameterName: string): unknown {
-  const types = type.split('|').map((item) => item.trim())
+/** Split `a | b` on the `|` separators outside string literals, so an enum value such as `"a|b"` stays whole. */
+function splitUnionTypes(type: string): string[] {
+  const types: string[] = []
+  let start = 0
+  let inString = false
+  for (let index = 0; index < type.length; index++) {
+    const char = type[index]
+    if (inString) {
+      if (char === '\\') index++
+      else if (char === '"') inString = false
+    } else if (char === '"') {
+      inString = true
+    } else if (char === '|') {
+      types.push(type.slice(start, index).trim())
+      start = index + 1
+    }
+  }
+  types.push(type.slice(start).trim())
+  return types
+}
+
+function parseUnionValue(value: unknown, types: string[], parameterName: string): unknown {
   const literals = types.map(getStringLiteral)
   if (literals.every((literal) => literal !== undefined)) {
     const match = literals.find((literal) => matchesStringLiteral(value, literal))
