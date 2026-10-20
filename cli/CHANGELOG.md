@@ -12,7 +12,11 @@ built-in was run. Now, before a built-in command or its help runs, the CLI loads
 error naming the endpoint and the built-in command. It fails the same way when two endpoint paths map to one command
 or a path uses `help`, since such a schema could hide an endpoint behind any built-in.
 
-Only the built-in being run is checked: an endpoint that lands on `terros connect publish` does not stop
+In 2.0.0 a built-in group's help (`terros auth help`, `terros connect`) also printed its subcommands with a
+successful exit after logging any of these collisions. It now fails with the collision error. Group help lists the
+endpoint commands under that group as well, so it fails on any collision in the schema, not only one in its own group.
+
+Only the built-in command being run is checked: an endpoint that lands on `terros connect publish` does not stop
 `terros auth login`. A schema that cannot be loaded at all still lets every built-in command run, so
 `terros auth login` works without one.
 

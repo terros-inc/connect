@@ -129,10 +129,10 @@ and `/garden/bed/list/`) make the CLI exit with an error that names both paths.
 A path segment named `help` is rejected the same way, because `help` is reserved
 for help text. An endpoint that would land on a built-in command such as
 `terros auth login` or `terros connect publish` makes that built-in command, its
-help and endpoint commands exit with an error naming both. Other built-in
-commands still run, unless two endpoints collide or a path uses `help`, which
-stops every command. A schema that cannot be loaded at all lets every built-in
-command run.
+help, every group listing (such as `terros auth help`) and endpoint commands
+exit with an error naming both. Other built-in commands still run, unless two
+endpoints collide or a path uses `help`, which stops every command. A schema
+that cannot be loaded at all lets every built-in command and its group help run.
 
 CLI 2.0.0 changed command names; see [CHANGELOG.md](CHANGELOG.md) for the
 renamed commands.

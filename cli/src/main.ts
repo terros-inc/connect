@@ -1,6 +1,7 @@
 import minimist from 'minimist'
 import {
   buildEndpointInput,
+  CommandCollisionError,
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
   type CommandNode,
@@ -81,9 +82,10 @@ async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
   try {
     tree = buildCliCommandTree(await loadEndpoints(), commandRegistry)
   } catch (error) {
-    // A built-in group's own subcommands do not need the API schema, so still list them.
+    // A built-in group's own subcommands do not need the API schema, so still list them when it cannot be loaded.
+    // A colliding schema is different: listing the group from an empty tree would hide the collision.
     const [name] = words
-    if (name === undefined || !getCommandGroup(name)) throw error
+    if (error instanceof CommandCollisionError || name === undefined || !getCommandGroup(name)) throw error
     console.error(error instanceof Error ? error.message : error)
     tree = { children: new Map() }
   }

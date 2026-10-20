@@ -7,7 +7,9 @@ import { authCommands } from './commands/auth'
 vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn() }))
 vi.mock('./mcp', () => ({ startMcpServer: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
-vi.mock('./commands/connect', () => ({ connectCommands: {} }))
+vi.mock('./commands/connect', () => ({
+  connectCommands: { publish: { description: 'Publish an integration', run: vi.fn() } },
+}))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
 vi.mock('./commands/auth', () => ({
   authCommands: { login: { description: 'Sign in to Terros', run: vi.fn() } },
@@ -35,7 +37,10 @@ beforeEach(() => {
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 })
 
-afterEach(() => log.mockRestore())
+afterEach(() => {
+  log.mockRestore()
+  process.exitCode = undefined
+})
 
 // Built-ins dispatch before endpoint commands, so each case goes through main to prove the built-in never runs.
 describe('a built-in an endpoint path lands on', () => {
@@ -60,6 +65,24 @@ describe('a built-in an endpoint path lands on', () => {
     await expect(main(['mcp', 'help'])).rejects.toThrow('both map to the command: terros mcp')
     expect(log).not.toHaveBeenCalled()
   })
+
+  // Group help and unknown group words load the whole tree; a collision there must not fall back to an empty tree.
+  it.each([
+    ['/connect/publish', 'connect help'],
+    ['/auth/login', 'auth help'],
+    ['/auth/login', 'auth nope'],
+    ['/connect/publish', 'connect'],
+  ])('with %s, fails `terros %s`', async (path, command) => {
+    schema(path)
+    await expect(main(command.split(' '))).rejects.toThrow(`Endpoint ${path} collides with the built-in command`)
+    expect(log).not.toHaveBeenCalled()
+  })
+
+  it('fails group help when two endpoints collide', async () => {
+    schema('/garden/bed/list', '/garden/bed/list/')
+    await expect(main(['auth', 'help'])).rejects.toThrow('both map to the command: terros garden bed list')
+    expect(log).not.toHaveBeenCalled()
+  })
 })
 
 describe('a built-in nothing lands on', () => {
@@ -67,6 +90,13 @@ describe('a built-in nothing lands on', () => {
     vi.mocked(loadEndpoints).mockRejectedValue(new Error('ENOENT: terros.yml'))
     await main(['auth', 'login'])
     expect(login).toHaveBeenCalledOnce()
+  })
+
+  it('lists its group help when the schema cannot be loaded at all', async () => {
+    vi.mocked(loadEndpoints).mockRejectedValue(new Error('ENOENT: terros.yml'))
+    await main(['auth', 'help'])
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('login'))
+    expect(process.exitCode).toBeUndefined()
   })
 
   it('runs when an endpoint lands on a different built-in', async () => {
