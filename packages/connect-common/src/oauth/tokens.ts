@@ -9,14 +9,22 @@ const AUTH_FILE_MODE = 0o600
 const SECOND = 1000
 const MINUTE = 60 * SECOND
 
+let pendingRefresh: Promise<SavedTokens> | undefined
+
 export async function getTokens(): Promise<SavedTokens | null> {
   const tokens = await readTokens()
   if (tokens === null) {
     return null
   }
   if (areTokensValid(tokens)) return tokens
-  const updated = await refreshTokens(tokens.refresh_token)
-  return await saveTokens(updated)
+  // Refresh tokens rotate: concurrent calls in one process share a single refresh, so a second refresh can't
+  // spend the already-replaced token and overwrite auth.json with a login that no longer works.
+  pendingRefresh ??= refreshTokens(tokens.refresh_token)
+    .then(saveTokens)
+    .finally(() => {
+      pendingRefresh = undefined
+    })
+  return await pendingRefresh
 }
 
 function areTokensValid(tokens: SavedTokens): boolean {
