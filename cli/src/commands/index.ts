@@ -1,5 +1,5 @@
 import { startMcpServer } from '../mcp'
-import type { CommandGroup, CommandRegistry, Subcommand } from './types'
+import type { CommandGroup, CommandRegistry } from './types'
 import { connectCommands } from './connect'
 import { authCommands } from './auth'
 import { apiCommands } from './api'
@@ -26,11 +26,6 @@ export const commandRegistry: CommandRegistry = {
 
 export function getCommandGroup(command: string): CommandGroup | undefined {
   return Object.hasOwn(commandRegistry, command) ? commandRegistry[command] : undefined
-}
-
-export function getSubcommand(command: string, subcommand: string): Subcommand | undefined {
-  const subcommands = getCommandGroup(command)?.subcommands
-  return subcommands && Object.hasOwn(subcommands, subcommand) ? subcommands[subcommand] : undefined
 }
 
 export function getCommandNames(): string[] {
