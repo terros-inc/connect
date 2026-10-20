@@ -49,8 +49,14 @@ When the run succeeds, the version is only **staged**. The end of the publish st
 + @terros-inc/cli@1.0.25 (staged with id <stage id>)
 ```
 
-A member of the `terros-inc` npm organization has to approve it. On [npmjs.com](https://www.npmjs.com), open your
-account's **Settings → Staged packages**, find the package and version, and approve it. Until someone approves it,
+A member of the `terros-inc` npm organization has to approve it. Open the package's versions page and approve the
+staged version:
+
+- CLI: https://www.npmjs.com/package/@terros-inc/cli?activeTab=versions
+- SDK: https://www.npmjs.com/package/@terros-inc/sdk?activeTab=versions
+
+Whoever runs the workflow (a person or a bot) must hand the approver this link, along with the package and version
+that was staged. Until someone approves it,
 `npm view @terros-inc/cli version` still shows the previous version.
 
 ### 4. Verify the release
