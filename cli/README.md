@@ -171,6 +171,16 @@ terros <command> [<subcommand> ...] --metadata '{"source":"cli"}'
 
 Responses are printed as formatted JSON.
 
+To send a large request body, such as a whole workflow, put it in a JSON file
+and pass `--inputFile` (`-` reads standard input). Flags still work alongside
+it and override the file's fields:
+
+```sh
+terros workflow get --workflowId WF.example > workflow.json
+# edit workflow.json, then preview the change before saving it
+terros workflow update --inputFile workflow.json --dryRun
+```
+
 ## Act as Another User
 
 Terros staff can run CLI commands as another user by setting

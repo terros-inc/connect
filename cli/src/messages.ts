@@ -73,7 +73,13 @@ export function formatSubcommandParametersHelp(
     })
   }
 
-  if (showDepthHelp) lines.push('', `Use "--depth <number>" to control nested object type detail.`)
+  if (showDepthHelp) {
+    lines.push(
+      '',
+      `Use "--depth <number>" to control nested object type detail.`,
+      `Use "--inputFile <path>" to send a JSON request body from a file ("-" for stdin); flags override its fields.`
+    )
+  }
 
   if (subcommands.length > 0) {
     lines.push('', 'Subcommands:', ...subcommands.map((name) => `  ${name}`))

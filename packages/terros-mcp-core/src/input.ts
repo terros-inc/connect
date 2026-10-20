@@ -3,9 +3,14 @@ import type { Endpoint, EndpointParameter } from './endpoint.ts'
 
 export type ParsedArgs = { _: string[]; [key: string]: unknown }
 
-export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): object {
+/**
+ * Build a request body from command-line flags. `base` is a request body read from elsewhere (a file): flags are set
+ * on top of it, and a required parameter it already holds need not be passed as a flag.
+ */
+export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base: Record<string, unknown> = {}): object {
   const parameters = getEndpointParameters(endpoint.properties, endpoint.components)
   const parsedParams = flattenParsedArgs(params)
+  const prefix = getHiddenWrapperPrefix(endpoint)
   const providedParameterNames = Object.keys(parsedParams)
   const knownParameterNames = new Set(parameters.map((parameter) => parameter.name))
   const unknownParameterNames = providedParameterNames.filter((name) => !knownParameterNames.has(name))
@@ -14,7 +19,10 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): obje
   }
 
   const missingParameters = parameters.filter(
-    (parameter) => parameter.required && !Object.hasOwn(parsedParams, parameter.name)
+    (parameter) =>
+      parameter.required &&
+      !Object.hasOwn(parsedParams, parameter.name) &&
+      getNestedValue(base, toPath(prefix, parameter.name)) === undefined
   )
   if (missingParameters.length > 0) {
     throw new Error(
@@ -22,18 +30,29 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs): obje
     )
   }
 
-  const input: Record<string, unknown> = {}
-  const prefix = getHiddenWrapperPrefix(endpoint)
+  const input = structuredClone(base)
 
   for (const parameter of parameters) {
     if (!Object.hasOwn(parsedParams, parameter.name)) continue
 
     const value = parseParameterValue(parsedParams[parameter.name], parameter)
-    const path = [...prefix, ...parameter.name.split('.').filter(Boolean)]
-    setNestedValue(input, path, value)
+    setNestedValue(input, toPath(prefix, parameter.name), value)
   }
 
   return input
+}
+
+function toPath(prefix: string[], parameterName: string): string[] {
+  return [...prefix, ...parameterName.split('.').filter(Boolean)]
+}
+
+function getNestedValue(input: Record<string, unknown>, path: string[]): unknown {
+  let current: unknown = input
+  for (const key of path) {
+    if (!isRecord(current)) return undefined
+    current = current[key]
+  }
+  return current
 }
 
 function flattenParsedArgs(params: ParsedArgs): Record<string, unknown> {

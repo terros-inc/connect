@@ -351,4 +351,40 @@ describe('buildEndpointInput', () => {
       expect(field(list, '["first","second"]')).toEqual(['first', 'second'])
     })
   })
+
+  describe('with a base request body', () => {
+    const endpoint: Endpoint = {
+      path: '/workflow/update',
+      components: { schemas: {} },
+      properties: {
+        type: 'object',
+        properties: {
+          workflow: {
+            type: 'object',
+            properties: { workflowId: { type: 'string' }, name: { type: 'string' } },
+            required: ['workflowId'],
+          },
+          dryRun: { type: 'boolean' },
+        },
+        required: ['workflow'],
+      },
+    }
+
+    it('accepts required parameters from the base and overrides its fields with flags', () => {
+      const base = { workflow: { workflowId: 'WF.example', name: 'Old', stages: [] } }
+      const params: ParsedArgs = { _: ['workflow', 'update'], workflow: { name: 'New' }, dryRun: 'true' }
+
+      expect(buildEndpointInput(endpoint, params, base)).toEqual({
+        workflow: { workflowId: 'WF.example', name: 'New', stages: [] },
+        dryRun: true,
+      })
+      expect(base.workflow.name).toBe('Old')
+    })
+
+    it('still requires parameters that neither the base nor the flags hold', () => {
+      expect(() => buildEndpointInput(endpoint, { _: [] }, { workflow: { name: 'New' } })).toThrow(
+        '--workflow.workflowId'
+      )
+    })
+  })
 })
