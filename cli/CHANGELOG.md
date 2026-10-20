@@ -2,6 +2,28 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## 2.1.0
+
+### New: `terros app add` and `terros app update`
+
+Create and edit a Terros Connect app from the CLI instead of the web developer pages. Both need the `app:manage`
+permission.
+
+- `terros app add --name "Acme CRM" [--description <text>] [--documentation <markdown>]` creates the app in your
+  current company, in `development` status, and prints its app ID. If `terros.json` in the current directory has no
+  `appId`, the new ID is saved there; an existing `appId` is never replaced.
+- `terros app update [--appId <appId>] [--name <name>] [--description <text>] [--status <status>] [--logo <image>]`
+  changes the app and prints it. `--appId` defaults to the `appId` in `terros.json`. It sends the stored app with your
+  changes, so you never pass `companyId` or `permissions`. `--logo` uploads a local `.png`, `.jpg`, `.gif`, `.webp` or
+  `.svg` image. The API's own rules still apply: publishing needs an approved review and a deployed current version,
+  and its error is printed as it is.
+- `--description` takes plain text; blank lines separate paragraphs.
+
+### Other changes
+
+- `terros <command> <subcommand> help` lists a built-in command's parameters when it declares them.
+- `terros auth login` says why it failed instead of failing silently.
+
 ## 2.0.0
 
 ### BREAKING: API commands follow the full endpoint path

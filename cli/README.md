@@ -74,6 +74,33 @@ For an MCP client that accepts `mcpServers` configuration:
 
 Standard output is reserved for MCP messages; errors are written to standard error.
 
+## Connect Apps
+
+Create a Terros Connect app, without the web developer pages, from the
+integration's directory. You need the `app:manage` permission in your current
+company:
+
+```sh
+terros app add --name "Acme CRM" --description "Sync accounts with Acme CRM."
+```
+
+The app starts in `development` status, hidden from other companies, with a
+draft version `1.0.0`. The command prints the new app ID. If `terros.json` in the
+current directory has no `appId` yet, the ID is saved there, ready for
+`terros connect publish`; an `appId` already in the file is never replaced.
+
+Change the app's name, description or status, or upload its logo:
+
+```sh
+terros app update --status internal --logo ./logo.png
+```
+
+`--appId` defaults to the `appId` in `terros.json`. `--description` takes plain
+text; separate paragraphs with a blank line. `--status` is one of `development`,
+`internal`, `published` or `deprecated`. Publishing needs an approved
+marketplace review and a deployed current version; if either is missing, the
+command prints the API's error and changes nothing.
+
 ## API Request Log
 
 Users with internal access can list a company's recent API requests, newest

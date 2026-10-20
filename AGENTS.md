@@ -19,7 +19,7 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 
 Each `integrations/<name>` has `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/` and `terros.json`. Use `integrations/gohighlevel` as the reference layout.
 
-`terros.json` holds the `appId` and a `scripts` array. Each script declares `name`, `entrypoint`, `type`, `configSchema`, `authSchema`, `permissions` and optionally `slug`. Script types: `incoming` (webhook), `outgoing` (needs `dataType`), `scheduled` (needs `cron`). The schema is `cli/src/connect/configSchema.ts`.
+`terros.json` holds the `appId` and a `scripts` array. Create a new app with `terros app add` (see `cli/README.md`), which saves its `appId` to `terros.json` if the file has none. Each script declares `name`, `entrypoint`, `type`, `configSchema`, `authSchema`, `permissions` and optionally `slug`. Script types: `incoming` (webhook), `outgoing` (needs `dataType`), `scheduled` (needs `cron`). The schema is `cli/src/connect/configSchema.ts`.
 
 Handlers are wrapped with `wrapConnectHandler` from `@terros-inc/sdk`, which supplies the Terros client.
 

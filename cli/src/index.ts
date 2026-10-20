@@ -89,8 +89,12 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
       console.log(formatSubcommandParametersHelp(name, undefined, [], commandGroup.description))
       return
     }
-    if (words.length === 2 && subcommand !== undefined && getSubcommand(name, subcommand)) {
-      console.log(formatSubcommandParametersHelp(name, subcommand, []))
+    const builtin = subcommand === undefined ? undefined : getSubcommand(name, subcommand)
+    if (words.length === 2 && builtin) {
+      const { parameters = [], description } = builtin
+      console.log(
+        formatSubcommandParametersHelp(name, subcommand, parameters, parameters.length > 0 ? description : undefined)
+      )
       return
     }
   }
