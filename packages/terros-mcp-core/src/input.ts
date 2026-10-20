@@ -1,3 +1,4 @@
+import { splitTopLevelUnion } from './util.ts'
 import { getEndpointParameters, resolveSchema } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
 
@@ -146,31 +147,6 @@ function parseValue(value: unknown, type: string, parameterName: string): unknow
 
 function unwrapParens(type: string): string {
   return type.startsWith('(') && type.endsWith(')') ? type.slice(1, -1) : type
-}
-
-/** Splits `a | (b | c)[] | { d: e | f }` on the `|` that are not inside parentheses, braces, brackets or quotes. */
-function splitTopLevelUnion(type: string): string[] {
-  const members: string[] = []
-  let depth = 0
-  let inString = false
-  let start = 0
-  for (let index = 0; index < type.length; index++) {
-    const char = type[index]
-    if (inString) {
-      if (char === '\\') index++
-      else if (char === '"') inString = false
-      continue
-    }
-    if (char === '"') inString = true
-    else if (char === '(' || char === '{' || char === '[') depth++
-    else if (char === ')' || char === '}' || char === ']') depth--
-    else if (char === '|' && depth === 0) {
-      members.push(type.slice(start, index).trim())
-      start = index + 1
-    }
-  }
-  members.push(type.slice(start).trim())
-  return members.filter((member) => member !== '')
 }
 
 function parseStringValue(value: unknown, parameterName: string): string {

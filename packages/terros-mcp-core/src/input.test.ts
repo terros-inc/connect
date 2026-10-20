@@ -336,6 +336,28 @@ describe('buildEndpointInput', () => {
       expect(field(schema, 'yes')).toBe(true)
     })
 
+    // A list item union that deduplicates to one enum rendered as `"a" | "b"[]`, so `a,b` matched no member.
+    it('keeps a list whose item union deduplicates to one enum whole', () => {
+      const endpoint: Endpoint = {
+        path: '/example',
+        components: { schemas: { Direction: { type: 'string', enum: ['north', 'south'] } } },
+        properties: {
+          type: 'object',
+          properties: {
+            field: {
+              type: 'array',
+              items: {
+                anyOf: [{ $ref: '#/components/schemas/Direction' }, { $ref: '#/components/schemas/Direction' }],
+              },
+            } as Endpoint['properties'],
+          },
+        },
+      }
+      expect(getEndpointParameters(endpoint.properties, endpoint.components)[0]?.type).toBe('("north" | "south")[]')
+      expect(buildEndpointInput(endpoint, { _: [], field: 'north,south' })).toEqual({ field: ['north', 'south'] })
+      expect(buildEndpointInput(endpoint, { _: [], field: '["south"]' })).toEqual({ field: ['south'] })
+    })
+
     it('keeps a literal that contains `|` whole', () => {
       const schema = { anyOf: [{ type: 'number' }, { type: 'string', enum: ['a|b', 'c'] }] } as Endpoint['properties']
       expect(field(schema, 'a|b')).toBe('a|b')
