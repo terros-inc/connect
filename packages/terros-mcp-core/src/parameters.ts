@@ -35,10 +35,10 @@ function getEnumValues(schema: Schema): unknown[] | undefined {
   return undefined
 }
 
-function isCompoundSchema(schema: Schema, components: Components): boolean {
+function isCompoundSchema(schema: Schema, components: Components, depth: number): boolean {
   const resolved = resolveSchema(schema, components)
   const variants = getVariants(resolved)
-  if (variants) return variants.length > 1
+  if (variants) return getVariantTypes(variants, components, depth).length > 1
 
   const enumValues = getEnumValues(resolved)
   return (enumValues?.length ?? 0) > 1
@@ -47,7 +47,7 @@ function isCompoundSchema(schema: Schema, components: Components): boolean {
 function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_TYPE_DEPTH): string {
   if (isRefSchema(schema)) return getSchemaType(resolveSchema(schema, components), components, depth)
   const variants = getVariants(schema)
-  if (variants) return variants.map((item) => getSchemaType(item, components, depth)).join(' | ')
+  if (variants) return getVariantTypes(variants, components, depth).join(' | ')
 
   const enumValues = getEnumValues(schema)
   if (enumValues && enumValues.length > 0) return enumValues.map((value) => JSON.stringify(value)).join(' | ')
@@ -62,7 +62,7 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
 
       if (!schema.items) return 'unknown[]'
       const itemType = getSchemaType(schema.items, components, depth)
-      return isCompoundSchema(schema.items, components) ? `(${itemType})[]` : `${itemType}[]`
+      return isCompoundSchema(schema.items, components, depth) ? `(${itemType})[]` : `${itemType}[]`
     }
     if (schema.type === 'object') {
       if (depth <= 0) return 'object'
@@ -75,6 +75,11 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
   }
 
   return 'unknown'
+}
+
+/** A union such as user, team, or company ID resolves to `string` three times; print it once. */
+function getVariantTypes(variants: Schema[], components: Components, depth: number): string[] {
+  return [...new Set(variants.map((item) => getSchemaType(item, components, depth)))]
 }
 
 function formatObjectShape(schema: ObjectSchema, components: Components, depth: number): string {
@@ -104,6 +109,22 @@ export function resolveSchema(schema: Schema, components: Components, seen = new
   return resolveSchema(resolved, components, seen)
 }
 
+/**
+ * The description nearest the property: a description written beside a `$ref` wins over the one on the schema it
+ * points to, at every hop of a ref chain.
+ */
+function getSchemaDescription(schema: Schema, components: Components): string | undefined {
+  const seen = new Set<string>()
+  let current: Schema | undefined = schema
+  while (current) {
+    if (current.description) return current.description
+    if (!isRefSchema(current) || seen.has(current.$ref)) return undefined
+    seen.add(current.$ref)
+    current = components.schemas[current.$ref.replace(/^#\/components\/schemas\//, '')]
+  }
+  return undefined
+}
+
 function flattenSchema(schema: Schema, context: FlattenContext): EndpointParameter[] {
   const resolved = resolveSchema(schema, context.components)
 
@@ -119,14 +140,13 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
     })
   }
 
+  const description = getSchemaDescription(schema, context.components)
   return [
     {
       name: context.path.join('.'),
       type: getSchemaType(resolved, context.components, context.depth),
       required: context.required,
-      ...((schema.description ?? resolved.description)
-        ? { description: schema.description ?? resolved.description }
-        : {}),
+      ...(description ? { description } : {}),
     },
   ]
 }

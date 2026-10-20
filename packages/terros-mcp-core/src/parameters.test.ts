@@ -116,4 +116,54 @@ describe('getEndpointParameters', () => {
       },
     ])
   })
+
+  it('keeps a description written beside a $ref over the referenced schema description', () => {
+    // zod-openapi emits `.describe()` on a shared schema as a component holding `description` beside a `$ref`.
+    const schema: Schema = {
+      type: 'object',
+      properties: {
+        entityId: { $ref: '#/components/schemas/DescribedEntityId' },
+        expiresAt: { $ref: '#/components/schemas/DescribedSeconds' },
+      },
+      required: ['entityId'],
+    }
+    const components: Components = {
+      schemas: {
+        DescribedEntityId: { description: 'Entity whose entitlements change', $ref: '#/components/schemas/EntityId' },
+        EntityId: {
+          oneOf: [
+            { $ref: '#/components/schemas/UserId' },
+            { $ref: '#/components/schemas/TeamId' },
+            { $ref: '#/components/schemas/CompanyId' },
+          ],
+        },
+        UserId: { type: 'string', description: 'User ID' },
+        TeamId: { type: 'string', description: 'Team ID' },
+        CompanyId: { type: 'string', description: 'Company ID' },
+        DescribedSeconds: { description: 'When it expires', $ref: '#/components/schemas/Seconds' },
+        Seconds: { description: 'A timestamp in UTC seconds', $ref: '#/components/schemas/Number' },
+        Number: { type: 'number' },
+      },
+    }
+
+    expect(getEndpointParameters(schema, components)).toEqual([
+      { name: 'entityId', type: 'string', required: true, description: 'Entity whose entitlements change' },
+      { name: 'expiresAt', type: 'number', required: false, description: 'When it expires' },
+    ])
+  })
+
+  it('prints a union of identical types once, without array parentheses', () => {
+    const schema: Schema = {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { oneOf: [{ type: 'string' }, { type: 'string' }] } },
+        values: { type: 'array', items: { oneOf: [{ type: 'string' }, { type: 'number' }, { type: 'string' }] } },
+      },
+    }
+
+    expect(getEndpointParameters(schema, { schemas: {} })).toEqual([
+      { name: 'ids', type: 'string[]', required: false },
+      { name: 'values', type: '(string | number)[]', required: false },
+    ])
+  })
 })

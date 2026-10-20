@@ -145,4 +145,52 @@ describe('buildEndpointInput', () => {
       },
     })
   })
+
+  describe('enum parameters', () => {
+    const endpoint: Endpoint = {
+      path: '/entitlement/add',
+      components: { schemas: { Names: { type: 'string', enum: ['canvass', 'weather_data', 'permits'] } } },
+      properties: {
+        type: 'object',
+        properties: {
+          entitlements: { type: 'array', items: { $ref: '#/components/schemas/Names' } },
+          mode: { type: 'string', enum: ['replace'] },
+        },
+      },
+    }
+    const entitlements = (value: unknown): unknown =>
+      buildEndpointInput(endpoint, { _: ['entitlement', 'add'], entitlements: value })
+
+    // Each value was rejected with "expects valid JSON" because enum members were parsed as JSON.
+    it('accepts a plain enum value', () => {
+      expect(entitlements('weather_data')).toEqual({ entitlements: ['weather_data'] })
+    })
+
+    it('accepts comma-separated enum values', () => {
+      expect(entitlements('weather_data,permits')).toEqual({ entitlements: ['weather_data', 'permits'] })
+    })
+
+    it('accepts a JSON array of enum values', () => {
+      expect(entitlements('["weather_data","permits"]')).toEqual({ entitlements: ['weather_data', 'permits'] })
+    })
+
+    it('still accepts an already-quoted value', () => {
+      expect(entitlements('"weather_data"')).toEqual({ entitlements: ['weather_data'] })
+    })
+
+    it('accepts a single-value enum', () => {
+      expect(buildEndpointInput(endpoint, { _: [], mode: 'replace' })).toEqual({ mode: 'replace' })
+    })
+
+    // The first enum member used to win for any quoted value, sending an unknown name to the API.
+    it('rejects an unknown value and lists the valid ones', () => {
+      expect(() => entitlements('weather')).toThrow(
+        'Parameter --entitlements must be one of: canvass, weather_data, permits; got weather'
+      )
+      expect(() => entitlements('"weather"')).toThrow('must be one of: canvass, weather_data, permits')
+      expect(() => buildEndpointInput(endpoint, { _: [], mode: 'append' })).toThrow(
+        'Parameter --mode must be replace, got append'
+      )
+    })
+  })
 })

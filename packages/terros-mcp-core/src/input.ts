@@ -123,6 +123,9 @@ function parseValue(value: unknown, type: string, parameterName: string): unknow
     return parseUnionValue(value, type, parameterName)
   }
 
+  const literal = getStringLiteral(type)
+  if (literal !== undefined) return parseStringLiteralValue(value, literal, parameterName)
+
   switch (type) {
     case 'string':
       return parseStringValue(value, parameterName)
@@ -217,8 +220,47 @@ function parseArrayValue(value: unknown, itemType: string, parameterName: string
   return [parseValue(value, itemType, parameterName)]
 }
 
+/** An enum or const string is printed in the type as a JSON string, e.g. `"weather_data"`. */
+function getStringLiteral(type: string): string | undefined {
+  if (!type.startsWith('"') || !type.endsWith('"') || type.length < 2) return undefined
+  try {
+    const literal: unknown = JSON.parse(type)
+    return typeof literal === 'string' ? literal : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function matchesStringLiteral(value: unknown, literal: string): boolean {
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return false
+  const text = String(value)
+  if (text === literal) return true
+  if (!text.startsWith('"')) return false
+  try {
+    return JSON.parse(text) === literal
+  } catch {
+    return false
+  }
+}
+
+function parseStringLiteralValue(value: unknown, literal: string, parameterName: string): string {
+  if (matchesStringLiteral(value, literal)) return literal
+  throw new Error(`Parameter --${parameterName} must be ${literal}, got ${formatReceived(value)}`)
+}
+
+function formatReceived(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
 function parseUnionValue(value: unknown, type: string, parameterName: string): unknown {
   const types = type.split('|').map((item) => item.trim())
+  const literals = types.map(getStringLiteral)
+  if (literals.every((literal) => literal !== undefined)) {
+    const match = literals.find((literal) => matchesStringLiteral(value, literal))
+    if (match !== undefined) return match
+    throw new Error(`Parameter --${parameterName} must be one of: ${literals.join(', ')}; got ${formatReceived(value)}`)
+  }
+
   const errors: string[] = []
 
   for (const itemType of types) {

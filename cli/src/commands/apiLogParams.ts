@@ -1,4 +1,5 @@
 import type { ParsedArgs } from 'minimist'
+import type { EndpointParameter } from '@terros-inc/mcp-core'
 
 export type ApiLogInput = {
   companyId: string
@@ -8,7 +9,25 @@ export type ApiLogInput = {
   limit?: number
 }
 
-const API_LOG_FLAGS = new Set(['companyId', 'endpoint', 'errorsOnly', 'since', 'limit'])
+export const apiLogParameters: EndpointParameter[] = [
+  { name: 'companyId', type: 'string', required: true, description: 'Company whose API requests to list' },
+  { name: 'endpoint', type: 'string', required: false, description: 'Only requests to this path, e.g. /account/add' },
+  {
+    name: 'errorsOnly',
+    type: 'boolean',
+    required: false,
+    description: 'Only requests that returned a typed error (stored with status 200)',
+  },
+  {
+    name: 'since',
+    type: 'string',
+    required: false,
+    description: 'Earliest request time (ISO 8601), clipped to the last seven days',
+  },
+  { name: 'limit', type: 'integer', required: false, description: 'Maximum requests to return, 1-100 (default 25)' },
+]
+
+const API_LOG_FLAGS = new Set(apiLogParameters.map((parameter) => parameter.name))
 
 export function parseApiLogParams(params: ParsedArgs): ApiLogInput {
   const unknown = Object.keys(params).filter((name) => name !== '_' && !API_LOG_FLAGS.has(name))
