@@ -53,8 +53,9 @@
     "url": "git+https://github.com/terros-inc/connect.git"
   },
   "scripts": {
-    "fetch-openapi": "rm -f terros.yml && wget https://docs.terros.com/openapi/terros.yml",
+    "fetch-openapi": "rm -f terros.yml && curl -fsSL -o terros.yml https://docs.terros.com/openapi/terros.yml",
     "build": "tsdown",
+    "pretest": "test -f terros.yml || pnpm fetch-openapi",
     "test": "vitest run",
     "prepack": "pnpm fetch-openapi && pnpm build",
     "start": "node src/index.ts"
