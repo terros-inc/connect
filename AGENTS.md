@@ -5,7 +5,7 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - `sdk` - `@terros-inc/sdk`, API client and `wrapConnectHandler` for integration handlers
 - `cli` - `@terros-inc/cli`, the `terros` command, including `terros connect publish`
 - `packages/connect-common` - private shared package, a dependency of `sdk` and `cli`
-- `integrations/*` - one Connect app each (airtable, docusign, gohighlevel, jobnimbus, salesforce, zoho)
+- `integrations/*` - one Connect app each (acculynx, airtable, docusign, gohighlevel, jobnimbus, salesforce, zoho)
 
 ## Setup and commands
 
@@ -23,7 +23,7 @@ Each `integrations/<name>` has `package.json`, `tsconfig.json`, `vitest.config.t
 
 Handlers are wrapped with `wrapConnectHandler` from `@terros-inc/sdk`, which supplies the Terros client.
 
-Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel` has tests so far.
+Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel` and `acculynx` have tests so far.
 
 ## Testing
 

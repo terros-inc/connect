@@ -1,0 +1,78 @@
+{
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
+  "appId": "App.placeholder",
+  "scripts": [
+    {
+      "name": "AccuLynx Send",
+      "description": "Terros to AccuLynx. Install once per AccuLynx location, with that location's API key.",
+      "entrypoint": "src/outgoing.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "configSchema": [
+        {
+          "name": "recordType",
+          "type": "string",
+          "description": "Required, no default. 'contact' creates an AccuLynx contact; 'job' creates a contact and a job for it. The new ID is saved as the account's externalLeadId and the account is not sent again."
+        },
+        {
+          "name": "contactTypeId",
+          "type": "string",
+          "description": "Optional. AccuLynx contact type ID for new contacts."
+        },
+        {
+          "name": "leadSourceId",
+          "type": "string",
+          "description": "Optional. AccuLynx lead source ID for new jobs."
+        },
+        {
+          "name": "accountFilterField",
+          "type": "string",
+          "description": "Optional. Dotted Terros account field, such as teamId, that decides which AccuLynx location an account belongs to. Blank sends every account."
+        },
+        {
+          "name": "accountFilterValues",
+          "type": "string",
+          "description": "Comma-separated values of accountFilterField that this install (this location) sends."
+        }
+      ],
+      "authSchema": {
+        "apiKey": "AccuLynx API key for one location (Account Settings > API Keys)"
+      },
+      "permissions": ["account/update"],
+      "slug": "acculynx-send"
+    },
+    {
+      "name": "AccuLynx Webhook",
+      "description": "AccuLynx to Terros. Subscribe this URL to the job.milestone.current_changed topic for one AccuLynx location.",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "workflowId",
+          "type": "string",
+          "description": "Required. Terros workflow ID (WF.*) whose stage is set from the AccuLynx milestone name"
+        },
+        {
+          "name": "requestType",
+          "type": "string",
+          "description": "Required, no default. 'update' moves only accounts linked to the job by AccuLynx Send; 'upsert' also creates an account for a job started in AccuLynx."
+        },
+        {
+          "name": "subscriptionId",
+          "type": "string",
+          "description": "Optional. AccuLynx webhook subscription ID of this location. Events from any other subscription are refused."
+        },
+        {
+          "name": "accountSource",
+          "type": "string",
+          "description": "Terros accountSource to record on the account (defaults to 'AccuLynx')"
+        }
+      ],
+      "authSchema": {
+        "apiKey": "AccuLynx API key for the same location (Account Settings > API Keys)"
+      },
+      "permissions": ["account/upsert"],
+      "slug": "acculynx-webhook"
+    }
+  ]
+}
