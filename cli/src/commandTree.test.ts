@@ -1,5 +1,11 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
-import { buildCliCommandTree, findBuiltin, formatBuiltinHelp, matchCommand } from './commandTree'
+import {
+  buildCliCommandTree,
+  checkBuiltinCollisions,
+  findBuiltin,
+  formatBuiltinHelp,
+  matchCommand,
+} from './commandTree'
 import type { CommandRegistry } from './commands/types'
 import { apiLogParameters } from './commands/apiLogParams'
 
@@ -96,6 +102,8 @@ describe('findBuiltin', () => {
 
   it('leaves other words to the endpoint tree', () => {
     expect(findBuiltin(registry, ['connect'])).toBeUndefined()
+    // `terros mcp extra` must be an unknown command, not start the server and drop `extra`.
+    expect(findBuiltin(registry, ['mcp', 'extra'])).toBeUndefined()
     expect(findBuiltin(registry, ['connect', 'greenhouse', 'get'])).toBeUndefined()
     expect(findBuiltin(registry, ['garden', 'bed', 'list'])).toBeUndefined()
     expect(findBuiltin(registry, ['toString'])).toBeUndefined()
@@ -133,5 +141,29 @@ describe('formatBuiltinHelp', () => {
     expect(formatBuiltinHelp(helpRegistry, ['api'])).toBeUndefined()
     expect(formatBuiltinHelp(helpRegistry, ['api', 'history'])).toBeUndefined()
     expect(formatBuiltinHelp(helpRegistry, ['entitlement', 'add'])).toBeUndefined()
+  })
+})
+
+describe('checkBuiltinCollisions', () => {
+  const load =
+    (...paths: string[]) =>
+    async () =>
+      parseEndpoints(spec(...paths))
+
+  it('fails before a built-in runs when an endpoint lands on it, naming both', async () => {
+    await expect(checkBuiltinCollisions(load('/connect/publish'), registry, ['connect', 'publish'])).rejects.toThrow(
+      'Endpoint /connect/publish collides with the built-in command: terros connect publish'
+    )
+    await expect(checkBuiltinCollisions(load('/mcp'), registry, ['mcp'])).rejects.toThrow(
+      'Endpoint /mcp collides with the built-in command: terros mcp'
+    )
+  })
+
+  it('only checks the built-in being run', async () => {
+    await expect(checkBuiltinCollisions(load('/connect/publish'), registry, ['auth', 'login'])).resolves.toBeUndefined()
+    await expect(
+      checkBuiltinCollisions(load('/connect/publish'), registry, ['connect', 'pack'])
+    ).resolves.toBeUndefined()
+    await expect(checkBuiltinCollisions(load('/mcp/list'), registry, ['mcp'])).resolves.toBeUndefined()
   })
 })

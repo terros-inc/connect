@@ -1,5 +1,6 @@
 import {
   buildCommandTree,
+  CommandCollisionError,
   findCommand,
   getChildCommandNames,
   getEndpointPaths,
@@ -31,12 +32,14 @@ export function buildCliCommandTree(endpoints: EndpointGroups, registry: Command
     const node = tree.children.get(name)
     if (!node) continue
     if (node.endpoint) {
-      throw new Error(`Endpoint ${node.endpoint.path} collides with the built-in command: terros ${name}`)
+      throw new CommandCollisionError(
+        `Endpoint ${node.endpoint.path} collides with the built-in command: terros ${name}`
+      )
     }
     for (const subcommand of Object.keys(group.subcommands)) {
       const child = node.children.get(subcommand)
       if (child) {
-        throw new Error(
+        throw new CommandCollisionError(
           `Endpoint ${getEndpointPaths(child)[0]} collides with the built-in command: terros ${name} ${subcommand}`
         )
       }
@@ -45,7 +48,35 @@ export function buildCliCommandTree(endpoints: EndpointGroups, registry: Command
   return tree
 }
 
-/** The built-in command named by `words`, if any. Built-ins never need the API schema. */
+/**
+ * Fail if an endpoint path lands on the built-in command named by `words`, so running that built-in (or its help)
+ * cannot silently hide the endpoint. A schema that cannot be loaded does not block built-in commands
+ * (`terros auth login` must work without one), but a schema whose own paths collide does: the parser stops at the
+ * first collision, so it cannot tell whether a later path would land on this built-in.
+ */
+export async function checkBuiltinCollisions(
+  loadEndpoints: () => Promise<EndpointGroups>,
+  registry: CommandRegistry,
+  words: string[]
+): Promise<void> {
+  const [name, subcommand] = words
+  const group = name === undefined ? undefined : getGroup(registry, name)
+  if (name === undefined || !group) return
+  let endpoints: EndpointGroups
+  try {
+    endpoints = await loadEndpoints()
+  } catch (error) {
+    if (error instanceof CommandCollisionError) throw error
+    return
+  }
+  const subcommands: CommandGroup['subcommands'] =
+    subcommand !== undefined && Object.hasOwn(group.subcommands, subcommand)
+      ? { [subcommand]: group.subcommands[subcommand] as Subcommand }
+      : {}
+  buildCliCommandTree(endpoints, { [name]: { ...group, subcommands } })
+}
+
+/** The built-in command named by `words`, if any. */
 export function findBuiltin(registry: CommandRegistry, words: string[]): BuiltinMatch | undefined {
   const [name, subcommand] = words
   const group = name === undefined ? undefined : getGroup(registry, name)

@@ -2,6 +2,47 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## 2.0.1
+
+### Bug fix: built-in commands no longer hide an endpoint that lands on them
+
+In 2.0.0 a built-in command (`terros auth login`, `terros connect publish`, `terros mcp`, ...) ran before any
+endpoint was checked against it, so an endpoint path that maps to the same command was silently hidden whenever the
+built-in was run. Now, before a built-in command or its help runs, the CLI loads the API schema and fails with an
+error naming the endpoint and the built-in command. It fails the same way when two endpoint paths map to one command
+or a path uses `help`, since such a schema could hide an endpoint behind any built-in.
+
+In 2.0.0 a built-in group's help (`terros auth help`, `terros connect`) also printed its subcommands with a
+successful exit after logging any of these collisions. It now fails with the collision error. Group help lists the
+endpoint commands under that group as well, so it fails on any collision in the schema, not only one in its own group.
+
+Only the built-in command being run is checked: an endpoint that lands on `terros connect publish` does not stop
+`terros auth login`. A schema that cannot be loaded at all still lets every built-in command run, so
+`terros auth login` works without one.
+
+### Bug fixes: help and parameter parsing (#101, #102, #103, #105)
+
+- Help for a built-in command shows its description and the flags it accepts (`terros api log help` lists
+  `--companyId`, `--endpoint`, `--errorsOnly`, `--since` and `--limit`) instead of `Parameters: none`.
+- Endpoint help shows a field's description when the schema puts it beside a `$ref`, and prints a union of identical
+  types once (`string` rather than `string | string | string`).
+- Enum and string-literal parameters accept a plain value, a comma-separated list or a JSON array, not only a quoted
+  JSON string. An unknown value fails before the request and lists the valid values.
+- A union parameter with a list member (`number | "Warn" | string[]`) takes a plain value as the matching member
+  instead of wrapping it in a list, and a `|` inside a nested type or a quoted literal no longer splits the union
+  (#102).
+- A list whose item union reduces to a single enum is shown as `("a" | "b")[]` and accepts `a,b`, instead of
+  rejecting every value (#103).
+- `null` clears a nullable parameter (`--value null`). `terros preference update` now requires `--value` (or `value`
+  in `--inputFile`), so a forgotten flag can no longer clear a preference: clearing one takes `--value null` (#105).
+
+### Additions (#100, #104)
+
+- `--inputFile <path>` (`-` reads standard input) on every API command sends a JSON request body from a file; flags
+  override its fields (#100).
+- `terros whoami` shows the user and company the CLI is signed in as, and whether it is impersonating (#104). With a
+  saved login, concurrent API calls in one process now share a single token refresh.
+
 ## 2.0.0
 
 ### BREAKING: API commands follow the full endpoint path

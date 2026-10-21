@@ -2,6 +2,7 @@ import { parse } from 'yaml'
 import { getCommandWords, HELP_WORD } from './util.ts'
 import type { OpenAPISchema } from './types.ts'
 import type { EndpointGroups, Endpoints } from './endpoint.ts'
+import { CommandCollisionError } from './command.ts'
 
 export function parseEndpoints(file: string): EndpointGroups {
   const data = parse(file) as OpenAPISchema
@@ -16,13 +17,15 @@ export function parseEndpoints(file: string): EndpointGroups {
     const [group, ...rest] = words
     if (group === undefined) throw new Error(`Endpoint path has no command: ${path}`)
     if (words.includes(HELP_WORD)) {
-      throw new Error(`Endpoint path ${path} uses the reserved command word "${HELP_WORD}"`)
+      throw new CommandCollisionError(`Endpoint path ${path} uses the reserved command word "${HELP_WORD}"`)
     }
 
     const command = words.join(' ')
     const existingPath = pathsByCommand.get(command)
     if (existingPath !== undefined) {
-      throw new Error(`Endpoints ${existingPath} and ${path} both map to the command: terros ${command}`)
+      throw new CommandCollisionError(
+        `Endpoints ${existingPath} and ${path} both map to the command: terros ${command}`
+      )
     }
     pathsByCommand.set(command, path)
 
