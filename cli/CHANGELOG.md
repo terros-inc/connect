@@ -20,7 +20,7 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
 `terros auth login`. A schema that cannot be loaded at all still lets every built-in command run, so
 `terros auth login` works without one.
 
-### Bug fixes: help and parameter parsing (#101, #102)
+### Bug fixes: help and parameter parsing (#101, #102, #103, #105)
 
 - Help for a built-in command shows its description and the flags it accepts (`terros api log help` lists
   `--companyId`, `--endpoint`, `--errorsOnly`, `--since` and `--limit`) instead of `Parameters: none`.
@@ -31,6 +31,10 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
 - A union parameter with a list member (`number | "Warn" | string[]`) takes a plain value as the matching member
   instead of wrapping it in a list, and a `|` inside a nested type or a quoted literal no longer splits the union
   (#102).
+- A list whose item union reduces to a single enum is shown as `("a" | "b")[]` and accepts `a,b`, instead of
+  rejecting every value (#103).
+- `null` clears a nullable parameter (`--value null`). `terros preference update` now requires `--value` (or `value`
+  in `--inputFile`), so a forgotten flag can no longer clear a preference: clearing one takes `--value null` (#105).
 
 ### Additions (#100, #104)
 
