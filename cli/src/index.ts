@@ -1,5 +1,10 @@
 import minimist from 'minimist'
-import { buildEndpointInput, DEFAULT_TYPE_DEPTH, getEndpointParameters, type CommandNode } from '@terros-inc/mcp-core'
+import {
+  buildEndpointInput,
+  DEFAULT_TYPE_DEPTH,
+  getEndpointInputParameters,
+  type CommandNode,
+} from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
 import {
   formatCommandsHelp,
@@ -101,7 +106,7 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   const endpoint = level.node.endpoint
   if (endpoint) {
     const depth = getHelpDepth(requestedDepth)
-    const parameters = getEndpointParameters(endpoint.properties, endpoint.components, depth)
+    const parameters = getEndpointInputParameters(endpoint, depth)
     console.log(
       formatSubcommandParametersHelp(
         level.words.join(' '),

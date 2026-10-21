@@ -5,11 +5,25 @@ import type { Endpoint, EndpointParameter } from './endpoint.ts'
 export type ParsedArgs = { _: string[]; [key: string]: unknown }
 
 /**
+ * Parameters the CLI requires although the API schema marks them optional. The API treats an omitted preference
+ * `value` as a clear for older mobile clients, so a forgotten `--value` must not wipe a setting: pass `--value null`.
+ */
+const REQUIRED_PARAMETERS: Record<string, string[]> = { '/preference/update': ['value'] }
+
+/** The endpoint's parameters, with the CLI's own required parameters marked required. */
+export function getEndpointInputParameters(endpoint: Endpoint, depth?: number): EndpointParameter[] {
+  const required = REQUIRED_PARAMETERS[endpoint.path] ?? []
+  return getEndpointParameters(endpoint.properties, endpoint.components, depth).map((parameter) =>
+    required.includes(parameter.name) ? { ...parameter, required: true } : parameter
+  )
+}
+
+/**
  * Build a request body from command-line flags. `base` is a request body read from elsewhere (a file): flags are set
  * on top of it, and a required parameter it already holds need not be passed as a flag.
  */
 export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base: Record<string, unknown> = {}): object {
-  const parameters = getEndpointParameters(endpoint.properties, endpoint.components)
+  const parameters = getEndpointInputParameters(endpoint)
   const parsedParams = flattenParsedArgs(params)
   const prefix = getHiddenWrapperPrefix(endpoint)
   const providedParameterNames = Object.keys(parsedParams)
@@ -148,6 +162,9 @@ function parseValue(value: unknown, type: string, parameterName: string): unknow
   }
 
   switch (type) {
+    case 'null':
+      if (value === null || value === 'null') return null
+      throw new Error(`Parameter --${parameterName} expects null`)
     case 'string':
       return parseStringValue(value, parameterName)
     case 'integer':
@@ -279,6 +296,8 @@ function formatReceived(value: unknown): string {
 }
 
 function parseUnionValue(value: unknown, types: string[], parameterName: string): unknown {
+  if (types.includes('null') && (value === null || value === 'null')) return null
+
   const literals = types.map(getStringLiteral)
   if (literals.every((literal) => literal !== undefined)) {
     const match = literals.find((literal) => matchesStringLiteral(value, literal))
