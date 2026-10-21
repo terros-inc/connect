@@ -20,7 +20,7 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
 `terros auth login`. A schema that cannot be loaded at all still lets every built-in command run, so
 `terros auth login` works without one.
 
-### Bug fixes: help and parameter parsing (#101)
+### Bug fixes: help and parameter parsing (#101, #102)
 
 - Help for a built-in command shows its description and the flags it accepts (`terros api log help` lists
   `--companyId`, `--endpoint`, `--errorsOnly`, `--since` and `--limit`) instead of `Parameters: none`.
@@ -28,6 +28,16 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
   types once (`string` rather than `string | string | string`).
 - Enum and string-literal parameters accept a plain value, a comma-separated list or a JSON array, not only a quoted
   JSON string. An unknown value fails before the request and lists the valid values.
+- A union parameter with a list member (`number | "Warn" | string[]`) takes a plain value as the matching member
+  instead of wrapping it in a list, and a `|` inside a nested type or a quoted literal no longer splits the union
+  (#102).
+
+### Additions (#100, #104)
+
+- `--inputFile <path>` (`-` reads standard input) on every API command sends a JSON request body from a file; flags
+  override its fields (#100).
+- `terros whoami` shows the user and company the CLI is signed in as, and whether it is impersonating (#104). With a
+  saved login, concurrent API calls in one process now share a single token refresh.
 
 ## 2.0.0
 
