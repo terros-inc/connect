@@ -9,6 +9,7 @@ import {
   HELP_PARENT_MESSAGE,
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
+import { readInputFile } from './inputFile'
 import { buildCliCommandTree, findBuiltin, formatBuiltinHelp, matchCommand, type CommandLevel } from './commandTree'
 import { commandRegistry, getCommandGroup } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
@@ -52,7 +53,8 @@ async function main(): Promise<void> {
     return
   }
 
-  const input = buildEndpointInput(endpoint, params)
+  const { params: flags, base } = readInputFile(params)
+  const input = buildEndpointInput(endpoint, flags, base)
   const client = buildTerrosClient()
   const response =
     endpoint.path === '/apiHistory/start'

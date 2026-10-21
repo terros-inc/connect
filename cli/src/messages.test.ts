@@ -83,7 +83,8 @@ Parameters:
 Parameters:
   none
 
-Use "--depth <number>" to control nested object type detail.`
+Use "--depth <number>" to control nested object type detail.
+Use "--inputFile <path>" to send a JSON request body from a file ("-" for stdin); flags override its fields.`
     )
   })
 
@@ -102,6 +103,7 @@ Parameters:
   none
 
 Use "--depth <number>" to control nested object type detail.
+Use "--inputFile <path>" to send a JSON request body from a file ("-" for stdin); flags override its fields.
 
 Subcommands:
   bed`
