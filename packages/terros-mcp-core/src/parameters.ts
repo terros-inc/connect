@@ -1,3 +1,4 @@
+import { splitTopLevelUnion } from './util.ts'
 import type { ObjectSchema, Schema } from './types.ts'
 import type { EndpointParameter } from './endpoint.ts'
 
@@ -35,13 +36,9 @@ function getEnumValues(schema: Schema): unknown[] | undefined {
   return undefined
 }
 
-function isCompoundSchema(schema: Schema, components: Components, depth: number): boolean {
-  const resolved = resolveSchema(schema, components)
-  const variants = getVariants(resolved)
-  if (variants) return getVariantTypes(variants, components, depth).length > 1
-
-  const enumValues = getEnumValues(resolved)
-  return (enumValues?.length ?? 0) > 1
+/** A list of a union needs parentheses: `("a" | "b")[]`, not `"a" | "b"[]`, which reads as a union with a list member. */
+function isCompoundType(type: string): boolean {
+  return splitTopLevelUnion(type).length > 1
 }
 
 function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_TYPE_DEPTH): string {
@@ -62,7 +59,7 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
 
       if (!schema.items) return 'unknown[]'
       const itemType = getSchemaType(schema.items, components, depth)
-      return isCompoundSchema(schema.items, components, depth) ? `(${itemType})[]` : `${itemType}[]`
+      return isCompoundType(itemType) ? `(${itemType})[]` : `${itemType}[]`
     }
     if (schema.type === 'object') {
       if (depth <= 0) return 'object'
