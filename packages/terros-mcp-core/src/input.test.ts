@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import { getEndpointParameters } from './parameters.ts'
-import { buildEndpointInput, type ParsedArgs } from './input.ts'
+import { buildEndpointInput, getEndpointInputParameters, type ParsedArgs } from './input.ts'
 import type { Endpoint } from './endpoint.ts'
 
 describe('buildEndpointInput', () => {
@@ -231,7 +231,9 @@ describe('buildEndpointInput', () => {
             },
             required: ['type'],
           },
-          Value: {
+          // The API wraps the members as `anyOf: [{ anyOf: members }, { type: 'null' }]`.
+          Value: { anyOf: [{ $ref: '#/components/schemas/Members' }, { type: 'null' }] },
+          Members: {
             anyOf: [
               { type: 'number' },
               { type: 'boolean' },
@@ -270,11 +272,42 @@ describe('buildEndpointInput', () => {
       )?.type
       expect(type).toContain('{ type: "random" | "balanced", windowDays?: number }')
       expect(type).toContain('("solar" | "parcel boundaries")[]')
-      expect(type?.endsWith('[]')).toBe(true)
+      expect(type?.endsWith('[] | null')).toBe(true)
     })
 
     it('sends a string literal as a string', () => {
+      // A normal preference update must not become a nested list or an accidental clear.
       expect(value('Warn')).toBe('Warn')
+    })
+
+    // An intentional reset must send JSON null rather than a string or a list containing "null".
+    it('sends a nullable value as null', () => {
+      expect(value('null')).toBeNull()
+      expect(value(null)).toBeNull()
+    })
+
+    // Forgetting --value must not clear a setting just because the API allows omission.
+    it('requires an explicit value for preference updates', () => {
+      expect(getEndpointInputParameters(endpoint).find((parameter) => parameter.name === 'value')?.required).toBe(true)
+      expect(() => buildEndpointInput(endpoint, { _: [], preference: 'example' })).toThrow(
+        'Missing required parameter(s): --value'
+      )
+    })
+
+    // A reset explicitly supplied by --inputFile must not be rejected as a missing value.
+    it('accepts null from the base request body without a value flag', () => {
+      expect(buildEndpointInput(endpoint, { _: [], preference: 'example' }, { value: null })).toEqual({
+        preference: 'example',
+        value: null,
+      })
+    })
+
+    // Nullable parsing must not turn the text "null" in an ordinary string parameter into a clear.
+    it('preserves null text in a non-nullable string parameter', () => {
+      expect(buildEndpointInput(endpoint, { _: [], preference: 'null', value: 'Warn' })).toEqual({
+        preference: 'null',
+        value: 'Warn',
+      })
     })
 
     it('sends a boolean as a boolean', () => {
@@ -344,6 +377,10 @@ describe('buildEndpointInput', () => {
     it('keeps the order of scalar members, so a string listed first still wins', () => {
       const schema = { anyOf: [{ type: 'string' }, { type: 'number' }] } as Endpoint['properties']
       expect(field(schema, '60')).toBe('60')
+      // A leading string member must not swallow an explicit nullable reset as the text "null".
+      const nullable = { anyOf: [{ type: 'string' }, { type: 'null' }] } as Endpoint['properties']
+      expect(field(nullable, 'null')).toBeNull()
+      expect(field(nullable, null)).toBeNull()
       const list = {
         anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
       } as Endpoint['properties']

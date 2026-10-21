@@ -32,6 +32,10 @@ export type BooleanSchema = SchemaBase & {
   type: 'boolean'
 }
 
+export type NullSchema = SchemaBase & {
+  type: 'null'
+}
+
 export type ObjectSchema = SchemaBase & {
   type: 'object'
   properties?: {
@@ -61,6 +65,7 @@ export type Schema =
   | IntegerSchema
   | NumberSchema
   | BooleanSchema
+  | NullSchema
   | ObjectSchema
   | UnionSchema
   | ArraySchema

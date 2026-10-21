@@ -172,6 +172,9 @@ terros <command> [<subcommand> ...] --name "Acme Inc." --active true
 Parameter values are validated based on the Terros API schema. Supported values
 include strings, numbers, booleans, arrays, and JSON objects.
 
+Pass `null` to clear a nullable parameter, for example `--value null`. `terros preference update` requires
+`--value` (or `value` in `--inputFile`), so clearing a preference always takes an explicit `--value null`.
+
 Examples:
 
 ```sh
