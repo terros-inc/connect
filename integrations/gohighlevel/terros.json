@@ -41,16 +41,6 @@
           "description": "Optional. Terros custom field ID (CF.…) that receives the GoHighLevel opportunity ID. A value not starting with CF. is ignored with a warning."
         },
         {
-          "name": "alertWebhookUrl",
-          "type": "string",
-          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
-        },
-        {
-          "name": "alertRecipients",
-          "type": "string",
-          "description": "Optional. Comma-separated emails. Only copied into the alert webhook JSON as recipients; this integration sends no email, so the receiver of alertWebhookUrl must act on them."
-        },
-        {
           "name": "disabled",
           "type": "string",
           "description": "Kill switch. Type true to make this script do nothing. Blank or false: run normally. Any other text, including a typo, counts as true."
@@ -119,7 +109,7 @@
         {
           "name": "alertWebhookUrl",
           "type": "string",
-          "description": "Optional. URL that receives a JSON POST when a sync needs attention (Account Sync: an account in an opportunity stage has no closer; Appointment Sync: an appointment create or change was refused). A failed delivery is only logged."
+          "description": "Optional. URL that receives a JSON POST when Appointment Sync refuses to create or change an appointment. A failed delivery is only logged."
         },
         {
           "name": "alertRecipients",

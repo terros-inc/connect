@@ -1,5 +1,3 @@
-import { type AccountId, type AccountNote, type TerrosClient, type UpsertAccountNote } from '@terros-inc/sdk'
-
 /** Notes starting with this are sync bookkeeping and are never copied to GoHighLevel. */
 export const ALERT_NOTE_PREFIX = '[GoHighLevel sync alert]'
 
@@ -35,23 +33,6 @@ export async function sendAlert(config: AlertConfig, alert: Alert): Promise<void
   } catch (error) {
     console.error(`GHL_SYNC_ALERT delivery failed: ${error instanceof Error ? error.message : error}`)
   }
-}
-
-export function alertNoteText(accountId: string, kind: string): string {
-  return `${ALERT_NOTE_PREFIX} ${kind} (${accountId})`
-}
-
-export function hasAlertNote(notes: readonly Pick<AccountNote, 'text'>[] | undefined, kind: string): boolean {
-  return (notes ?? []).some((note) => note.text.startsWith(`${ALERT_NOTE_PREFIX} ${kind} `))
-}
-
-/**
- * Records that an alert was sent so later saves of the same account do not repeat it. The note names no author: the
- * backend writes it as the user this integration authenticates as.
- */
-export async function saveAlertNote(client: TerrosClient, accountId: AccountId, kind: string): Promise<void> {
-  const note: UpsertAccountNote = { timestamp: Date.now(), text: alertNoteText(accountId, kind) }
-  await client.account.upsert({ requestType: 'update', account: { accountId, notes: [note] } })
 }
 
 export function splitList(value: string | undefined): string[] {
