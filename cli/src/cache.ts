@@ -38,3 +38,7 @@ export async function writeCache(name: CacheName, key: string, data: unknown): P
 export async function clearRuntimeCaches(): Promise<void> {
   await Promise.all(['profile', 'openapi'].map((name) => rm(join(cacheDirectory(), `${name}.json`), { force: true })))
 }
+
+export async function clearOpenApiCache(): Promise<void> {
+  await rm(join(cacheDirectory(), 'openapi.json'), { force: true })
+}

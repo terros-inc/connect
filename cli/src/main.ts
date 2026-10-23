@@ -26,6 +26,7 @@ import {
   type CommandLevel,
 } from './commandTree'
 import { commandRegistry, getCommandGroup } from './commands'
+import { clearOpenApiCache } from './cache'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
@@ -79,9 +80,9 @@ export async function main(argv: string[]): Promise<void> {
     return
   }
 
-  const level = await loadCommandLevel(words)
+  const { level, refreshed } = await loadCommandLevelWithRefresh(words)
   if (level.unmatched.length > 0) {
-    console.error(`Unknown command: terros ${words.join(' ')}`)
+    console.error(unknownCommandMessage(words, refreshed))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -90,6 +91,12 @@ export async function main(argv: string[]): Promise<void> {
   const endpoint = level.node.endpoint
   if (!endpoint) {
     console.log(formatLevelHelp(level))
+    return
+  }
+
+  if (refreshed) {
+    console.error(`API schema refreshed. Rerun \`terros ${words.join(' ')}\` to try the endpoint.`)
+    process.exitCode = 1
     return
   }
 
@@ -118,6 +125,15 @@ async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
   return matchCommand(tree, commandRegistry, words)
 }
 
+async function loadCommandLevelWithRefresh(words: string[]): Promise<{ level: CommandLevel; refreshed: boolean }> {
+  const level = await loadCommandLevel(words)
+  // API schema endpoints cannot overlap built-in command groups, so refreshing cannot fix a built-in typo.
+  if (level.unmatched.length === 0 || getCommandGroup(words[0] ?? '')) return { level, refreshed: false }
+
+  await clearOpenApiCache()
+  return { level: await loadCommandLevel(words), refreshed: true }
+}
+
 function formatLevelHelp(level: CommandLevel): string {
   if (level.words.length === 0) return formatCommandsHelp(level.subcommands)
   if (level.node.endpoint && level.subcommands.length === 0) return formatCommandUsage(level.words.join(' '))
@@ -132,9 +148,9 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
     return
   }
 
-  const level = await loadCommandLevel(words)
+  const { level, refreshed } = await loadCommandLevelWithRefresh(words)
   if (level.unmatched.length > 0) {
-    console.error(`Unknown command: terros ${words.join(' ')}`)
+    console.error(unknownCommandMessage(words, refreshed))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -158,6 +174,13 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   }
 
   console.log(formatLevelHelp(level))
+}
+
+function unknownCommandMessage(words: string[], refreshed: boolean): string {
+  const guidance = refreshed
+    ? 'The API schema was refreshed; check that the endpoint is deployed and available to your account.'
+    : 'If this endpoint was recently added, run `terros api refresh` and retry it.'
+  return `Unknown command: terros ${words.join(' ')}. ${guidance}`
 }
 
 function getHelpDepth(requestedDepth: unknown): number {
