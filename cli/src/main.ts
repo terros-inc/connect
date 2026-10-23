@@ -29,8 +29,33 @@ import { commandRegistry, getCommandGroup } from './commands'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
+/** A negative number, in the forms minimist itself reads as a number: `-124.5`, `-3`, `-.5`, `-1e-3`. */
+const NEGATIVE_NUMBER = /^-(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i
+
+/**
+ * Parse the command line, reading a negative number after a long flag as that flag's value. minimist alone reads
+ * `--longitude -124.5` as `--longitude` plus the short flags `-1`, `-2` and `-4`, so it is joined into
+ * `--longitude=-124.5` first. Short flags and words after `--` are left to minimist unchanged.
+ */
+export function parseArgv(argv: string[]): minimist.ParsedArgs {
+  const joined: string[] = []
+  for (const [index, arg] of argv.entries()) {
+    if (arg === '--') {
+      joined.push(...argv.slice(index))
+      break
+    }
+    const previous = joined.at(-1)
+    if (NEGATIVE_NUMBER.test(arg) && previous?.startsWith('--') && previous.length > 2 && !previous.includes('=')) {
+      joined[joined.length - 1] = `${previous}=${arg}`
+      continue
+    }
+    joined.push(arg)
+  }
+  return minimist(joined)
+}
+
 export async function main(argv: string[]): Promise<void> {
-  const params = minimist(argv)
+  const params = parseArgv(argv)
   const words = params._.map(String)
   if (words.length === 0) {
     if (params.v === true || params.version === true) {

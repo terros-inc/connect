@@ -39,6 +39,8 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
   rejecting every value (#103).
 - `null` clears a nullable parameter (`--value null`). `terros preference update` now requires `--value` (or `value`
   in `--inputFile`), so a forgotten flag can no longer clear a preference: clearing one takes `--value null` (#105).
+- A negative number after a flag is that flag's value: `--boundingBox.top.longitude -124.5` no longer fails with
+  `Unknown parameter(s): --1, --2, --4`, so `--flag=-124.5` is no longer needed.
 
 ### Additions (#100, #104)
 
