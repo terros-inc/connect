@@ -160,6 +160,18 @@ it('refreshes and retries when an endpoint gains a parameter', async () => {
   expect(process.exitCode).toBeUndefined()
 })
 
+it('reports an unsupported parameter after discovering an endpoint without refreshing twice', async () => {
+  schema('/company/list')
+  refreshedSchema('/company/list', '/garden/bed/list')
+
+  await main(['garden', 'bed', 'list', '--unsupported', 'active'])
+
+  expect(loadEndpointsAfterRefresh).toHaveBeenCalledOnce()
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
+  expect(call).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+})
+
 it('does not execute an unknown command when the internal schema is unavailable', async () => {
   schema('/company/list')
   vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
@@ -198,6 +210,17 @@ it('refreshes for a new API endpoint under a built-in group', async () => {
 
   expect(call).toHaveBeenCalledWith('/api/foo', {})
   expect(clearOpenApiCache).toHaveBeenCalledOnce()
+})
+
+it('refreshes a missing command in a known API subtree even when its name resembles a built-in', async () => {
+  schema('/api/logs/list')
+  refreshedSchema('/api/logs/list', '/api/logs/get')
+
+  await main(['api', 'logs', 'get'])
+
+  expect(call).toHaveBeenCalledWith('/api/logs/get', {})
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
+  expect(process.exitCode).toBeUndefined()
 })
 
 it('lets api refresh recover from a stale endpoint collision', async () => {

@@ -59,7 +59,7 @@ export async function main(argv: string[]): Promise<void> {
 
   let { level, refreshStatus } = await loadCommandLevelWithRefresh(words)
   if (level.unmatched.length > 0) {
-    console.error(unknownCommandMessage(words, refreshStatus))
+    console.error(unknownCommandMessage(words, level, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -76,14 +76,19 @@ export async function main(argv: string[]): Promise<void> {
   try {
     input = buildEndpointInput(endpoint, flags, base)
   } catch (error) {
-    if (!isUnknownParameterError(error) || refreshStatus !== undefined) throw error
+    if (!isUnknownParameterError(error)) throw error
+    if (refreshStatus !== undefined) {
+      console.error(unknownParameterMessage(error, refreshStatus))
+      process.exitCode = 1
+      return
+    }
 
     await clearOpenApiCache()
     const refreshed = await loadEndpointsAfterRefresh()
     refreshStatus = refreshed.internalSchemaStatus
     level = await loadCommandLevel(words, Promise.resolve(refreshed.endpoints))
     if (level.unmatched.length > 0 || !level.node.endpoint) {
-      console.error(unknownCommandMessage(words, refreshStatus))
+      console.error(unknownCommandMessage(words, level, refreshStatus))
       console.log(formatLevelHelp(level))
       process.exitCode = 1
       return
@@ -130,7 +135,7 @@ async function loadCommandLevelWithRefresh(words: string[]): Promise<{
   refreshStatus?: 'available' | 'unavailable' | 'failed'
 }> {
   const level = await loadCommandLevel(words)
-  if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words)) return { level }
+  if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words, level)) return { level }
 
   await clearOpenApiCache()
   const refreshed = await loadEndpointsAfterRefresh()
@@ -156,7 +161,7 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
 
   const { level, refreshStatus } = await loadCommandLevelWithRefresh(words)
   if (level.unmatched.length > 0) {
-    console.error(unknownCommandMessage(words, refreshStatus))
+    console.error(unknownCommandMessage(words, level, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -182,28 +187,40 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   console.log(formatLevelHelp(level))
 }
 
-function unknownCommandMessage(words: string[], refreshStatus?: 'available' | 'unavailable' | 'failed'): string {
-  if (isLikelyBuiltinTypo(words)) {
+function unknownCommandMessage(
+  words: string[],
+  level: CommandLevel,
+  refreshStatus?: 'available' | 'unavailable' | 'failed'
+): string {
+  if (isLikelyBuiltinTypo(words, level)) {
     return `Unknown built-in command: terros ${words.join(' ')}. Check the built-in command names above.`
   }
   if (refreshStatus === 'available') {
-    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account.`
+    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`.`
+  }
+  if (refreshStatus === 'failed') {
+    return `Unknown command: terros ${words.join(' ')}. Internal schema loading failed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
   }
   return `Unknown command: terros ${words.join(' ')}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
 }
 
 function unknownParameterMessage(error: unknown, refreshStatus?: 'available' | 'unavailable' | 'failed'): string {
   const message = error instanceof Error ? error.message : String(error)
-  return refreshStatus === 'available'
-    ? `${message}. The refreshed API schema still does not include this parameter; check whether it is supported for your account.`
-    : `${message}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
+  if (refreshStatus === 'available') {
+    return `${message}. The refreshed API schema still does not include this parameter; check whether it is supported for your account. For a manual schema retry, run \`terros api refresh\`.`
+  }
+  if (refreshStatus === 'failed') {
+    return `${message}. Internal schema loading failed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
+  }
+  return `${message}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
 }
 
 function isUnknownParameterError(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith('Unknown parameter(s):')
 }
 
-function isLikelyBuiltinTypo(words: string[]): boolean {
+function isLikelyBuiltinTypo(words: string[], level: CommandLevel): boolean {
+  if (level.words.length > 1) return false
   const group = getCommandGroup(words[0] ?? '')
   const candidate = words[1]
   if (!group || !candidate || Object.hasOwn(group.subcommands, candidate)) return false
