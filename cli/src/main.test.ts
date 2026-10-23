@@ -156,3 +156,23 @@ describe('custom stat read commands', () => {
     expect(log).toHaveBeenCalledWith(JSON.stringify(response, null, 2))
   })
 })
+
+describe('custom stat write commands', () => {
+  it('adds an advanced custom stat without an explicit scope using the API ratio contract', async () => {
+    ratioSchema()
+    call.mockResolvedValue({ type: 'success' })
+    const ratio = {
+      name: 'Revenue per pitch',
+      type: 'formula',
+      formula: '$Revenue / $Pitch',
+      scopes: {
+        $Revenue: 'cf|account|sum|CF.revenue|createdDate',
+        $Pitch: 'contact.pitches',
+      },
+    }
+
+    await main(['ratio', 'add', '--ratio', JSON.stringify(ratio)])
+
+    expect(call).toHaveBeenCalledWith('/ratio/add', { ratio })
+  })
+})

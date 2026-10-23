@@ -4,8 +4,8 @@ const components = { schemas: {} }
 
 const INPUT_KPI_HELP = `
 Input KPIs for numerator, denominator, and formula scopes must be numeric \`value\`s returned by
-\`terros report column --columnTypes number\` for the same workflow. Common fixed values are \`contact.pitch\`,
-\`contact.pitches\`, \`contact.daysWorked\`, \`meeting.checkin\`, \`meetingAttendance.count\`,
+\`terros report column --columnTypes number\` for the same workflow. Common fixed values are \`contact.pitches\`,
+\`contact.daysWorked\`, \`meetingAttendance.count\`,
 \`conversation.averageScore\`, \`conversation.count\`, and \`conversation.activeHours\`. The allowed dynamic
 families are workflow action counts; setter, closer, and account stage counts; numeric custom fields; and existing
 custom stats. Availability depends on the selected workflow, reporting configuration, and the caller's permissions.
@@ -13,7 +13,9 @@ custom stats. Availability depends on the selected workflow, reporting configura
 
 const ADD_DESCRIPTION = `
 Add a custom stat. Use type \`ratio\` or \`percentage\` with numerator and denominator for a custom ratio. Use
-type \`formula\` with formula and scopes for an advanced custom stat. ${INPUT_KPI_HELP}
+type \`formula\` with formula and scopes for an advanced custom stat.
+
+${INPUT_KPI_HELP}
 
 Custom ratio example:
   terros ratio add --ratio '{"scopeId":"C.example","name":"Close Rate","type":"percentage","numerator":"setter|S.closed|count","denominator":"contact.pitches"}'
@@ -24,7 +26,9 @@ Advanced custom stat example:
 
 const UPDATE_DESCRIPTION = `
 Update a custom stat by sending its complete definition, including ratioId and scopeId. Custom ratios use type
-\`ratio\` or \`percentage\`; advanced custom stats use type \`formula\`. ${INPUT_KPI_HELP}
+\`ratio\` or \`percentage\`; advanced custom stats use type \`formula\`.
+
+${INPUT_KPI_HELP}
 
 Example:
   terros ratio update --ratio '{"ratioId":"Ratio.example","scopeId":"C.example","name":"Close Rate","type":"percentage","numerator":"setter|S.closed|count","denominator":"contact.pitches"}'

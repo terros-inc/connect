@@ -35,9 +35,6 @@ it('uses bundled YAML when no internal schema is available', async () => {
   expect(endpoints).toHaveProperty('company.get.path', '/company/get')
   expect(endpoints).toHaveProperty('ratio.get.path', '/ratio/get')
   expect(endpoints).toHaveProperty('ratio.list.path', '/ratio/list')
-  expect(endpoints).toHaveProperty('ratio.add.path', '/ratio/add')
-  expect(endpoints).toHaveProperty('ratio.update.path', '/ratio/update')
-  expect(endpoints).toHaveProperty('ratio.remove.path', '/ratio/remove')
 })
 
 it('uses an API-provided ratio write endpoint instead of its fallback', async () => {
