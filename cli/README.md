@@ -188,6 +188,23 @@ terros <command> [<subcommand> ...] --metadata '{"source":"cli"}'
 
 Responses are printed as formatted JSON.
 
+### List and inspect custom stats
+
+List the ratio and advanced formula custom stats visible to the signed-in user:
+
+```sh
+terros ratio list
+```
+
+Use `--scopeId` or `--workflowId` to filter the list. Inspect one custom stat by ID:
+
+```sh
+terros ratio get --ratioId Ratio.example
+```
+
+Both commands are read-only. They return the complete stored definition, including ratio inputs or formula scopes,
+formula, formatting options, workflow and scope filters, and the existing `modifiedBy` history.
+
 To send a large request body, such as a whole workflow, put it in a JSON file
 and pass `--inputFile` (`-` reads standard input). Flags still work alongside
 it and override the file's fields:
