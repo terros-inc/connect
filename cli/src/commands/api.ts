@@ -1,5 +1,5 @@
 import type { ParsedArgs } from 'minimist'
-import { loadEndpoints } from '../loadEndpoints'
+import { loadEndpointsAfterRefresh } from '../loadEndpoints'
 import { clearOpenApiCache } from '../cache'
 import { runApiHistoryQuery } from '../apiHistory'
 import { buildTerrosClient } from '../api/query'
@@ -8,13 +8,19 @@ import { apiLogParameters, parseApiLogParams } from './apiLogParams'
 export const apiCommands = {
   refresh: {
     description:
-      'Refresh the cached API schema. Then retry the endpoint command. If it is still unavailable, check whether it appears in the API schema and is available to your account.',
+      'Refresh the cached API schema for internal users. If a command is not in the schema available to your account, update the CLI.',
     async run(): Promise<void> {
       await clearOpenApiCache()
-      await loadEndpoints()
-      console.log(
-        'API schema refreshed. Retry the endpoint command. If it is still unavailable, check whether it appears in the API schema and is available to your account.'
+      const { internalSchemaStatus } = await loadEndpointsAfterRefresh()
+      if (internalSchemaStatus === 'available') {
+        console.log('API schema refreshed. Retry the endpoint command.')
+        return
+      }
+
+      console.error(
+        'The internal API schema could not be refreshed for this account. Update the CLI with `npm install -g @terros-inc/cli` and retry.'
       )
+      process.exitCode = 1
     },
   },
   log: {

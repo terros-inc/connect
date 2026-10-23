@@ -4,6 +4,7 @@ import {
   CommandCollisionError,
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
+  type EndpointGroups,
   type CommandNode,
   withoutUploadUrls,
 } from '@terros-inc/mcp-core'
@@ -15,7 +16,7 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
-import { loadEndpoints } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
 import { readInputFile } from './inputFile'
 import {
   buildCliCommandTree,
@@ -75,33 +76,55 @@ export async function main(argv: string[]): Promise<void> {
 
   const builtin = findBuiltin(commandRegistry, words)
   if (builtin) {
-    await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
+    if (!(words[0] === 'api' && words[1] === 'refresh')) {
+      await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
+    }
     await builtin.run({ params, args: builtin.args })
     return
   }
 
-  const { level, refreshed } = await loadCommandLevelWithRefresh(words)
+  let { level, refreshStatus } = await loadCommandLevelWithRefresh(words)
   if (level.unmatched.length > 0) {
-    console.error(unknownCommandMessage(words, refreshed))
+    console.error(unknownCommandMessage(words, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
   }
 
-  const endpoint = level.node.endpoint
+  let endpoint = level.node.endpoint
   if (!endpoint) {
     console.log(formatLevelHelp(level))
     return
   }
 
-  if (refreshed) {
-    console.error(`API schema refreshed. Rerun \`terros ${words.join(' ')}\` to try the endpoint.`)
-    process.exitCode = 1
-    return
-  }
-
   const { params: flags, base } = readInputFile(params)
-  const input = buildEndpointInput(endpoint, flags, base)
+  let input: object
+  try {
+    input = buildEndpointInput(endpoint, flags, base)
+  } catch (error) {
+    if (!isUnknownParameterError(error) || refreshStatus !== undefined) throw error
+
+    await clearOpenApiCache()
+    const refreshed = await loadEndpointsAfterRefresh()
+    refreshStatus = refreshed.internalSchemaStatus
+    level = await loadCommandLevel(words, Promise.resolve(refreshed.endpoints))
+    if (level.unmatched.length > 0 || !level.node.endpoint) {
+      console.error(unknownCommandMessage(words, refreshStatus))
+      console.log(formatLevelHelp(level))
+      process.exitCode = 1
+      return
+    }
+
+    endpoint = level.node.endpoint
+    try {
+      input = buildEndpointInput(endpoint, flags, base)
+    } catch (retryError) {
+      if (!isUnknownParameterError(retryError)) throw retryError
+      console.error(unknownParameterMessage(retryError, refreshStatus))
+      process.exitCode = 1
+      return
+    }
+  }
   const client = buildTerrosClient()
   const response =
     endpoint.path === '/apiHistory/start'
@@ -110,10 +133,13 @@ export async function main(argv: string[]): Promise<void> {
   console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
 }
 
-async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
+async function loadCommandLevel(
+  words: string[],
+  endpoints: Promise<EndpointGroups> = loadEndpoints()
+): Promise<CommandLevel> {
   let tree: CommandNode
   try {
-    tree = buildCliCommandTree(await loadEndpoints(), commandRegistry)
+    tree = buildCliCommandTree(await endpoints, commandRegistry)
   } catch (error) {
     // A built-in group's own subcommands do not need the API schema, so still list them when it cannot be loaded.
     // A colliding schema is different: listing the group from an empty tree would hide the collision.
@@ -125,13 +151,19 @@ async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
   return matchCommand(tree, commandRegistry, words)
 }
 
-async function loadCommandLevelWithRefresh(words: string[]): Promise<{ level: CommandLevel; refreshed: boolean }> {
+async function loadCommandLevelWithRefresh(words: string[]): Promise<{
+  level: CommandLevel
+  refreshStatus?: 'available' | 'unavailable' | 'failed'
+}> {
   const level = await loadCommandLevel(words)
-  // API schema endpoints cannot overlap built-in command groups, so refreshing cannot fix a built-in typo.
-  if (level.unmatched.length === 0 || getCommandGroup(words[0] ?? '')) return { level, refreshed: false }
+  if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words)) return { level }
 
   await clearOpenApiCache()
-  return { level: await loadCommandLevel(words), refreshed: true }
+  const refreshed = await loadEndpointsAfterRefresh()
+  return {
+    level: await loadCommandLevel(words, Promise.resolve(refreshed.endpoints)),
+    refreshStatus: refreshed.internalSchemaStatus,
+  }
 }
 
 function formatLevelHelp(level: CommandLevel): string {
@@ -148,9 +180,9 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
     return
   }
 
-  const { level, refreshed } = await loadCommandLevelWithRefresh(words)
+  const { level, refreshStatus } = await loadCommandLevelWithRefresh(words)
   if (level.unmatched.length > 0) {
-    console.error(unknownCommandMessage(words, refreshed))
+    console.error(unknownCommandMessage(words, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -176,11 +208,54 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   console.log(formatLevelHelp(level))
 }
 
-function unknownCommandMessage(words: string[], refreshed: boolean): string {
-  const guidance = refreshed
-    ? 'The API schema was refreshed; check that the endpoint is deployed and available to your account.'
-    : 'If this endpoint was recently added, run `terros api refresh` and retry it.'
-  return `Unknown command: terros ${words.join(' ')}. ${guidance}`
+function unknownCommandMessage(words: string[], refreshStatus?: 'available' | 'unavailable' | 'failed'): string {
+  if (isLikelyBuiltinTypo(words)) {
+    return `Unknown built-in command: terros ${words.join(' ')}. Check the built-in command names above.`
+  }
+  if (refreshStatus === 'available') {
+    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account.`
+  }
+  return `Unknown command: terros ${words.join(' ')}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
+}
+
+function unknownParameterMessage(error: unknown, refreshStatus?: 'available' | 'unavailable' | 'failed'): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return refreshStatus === 'available'
+    ? `${message}. The refreshed API schema still does not include this parameter; check whether it is supported for your account.`
+    : `${message}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
+}
+
+function isUnknownParameterError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('Unknown parameter(s):')
+}
+
+function isLikelyBuiltinTypo(words: string[]): boolean {
+  const group = getCommandGroup(words[0] ?? '')
+  const candidate = words[1]
+  if (!group || !candidate || Object.hasOwn(group.subcommands, candidate)) return false
+  return Object.keys(group.subcommands).some((name) => isOneEditAway(candidate, name))
+}
+
+function isOneEditAway(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false
+  let left = 0
+  let right = 0
+  let edits = 0
+  while (left < a.length && right < b.length) {
+    if (a[left] === b[right]) {
+      left++
+      right++
+    } else {
+      if (++edits > 1) return false
+      if (a.length > b.length) left++
+      else if (b.length > a.length) right++
+      else {
+        left++
+        right++
+      }
+    }
+  }
+  return edits + Number(left < a.length || right < b.length) <= 1
 }
 
 function getHelpDepth(requestedDepth: unknown): number {
