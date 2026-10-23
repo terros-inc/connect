@@ -196,7 +196,8 @@ List the ratio and advanced formula custom stats visible to the signed-in user:
 terros ratio list
 ```
 
-Use `--scopeId` or `--workflowId` to filter the list. Inspect one custom stat by ID:
+Use `--scopeId` to return stats stored at exactly that scope; omitting it uses your company. `--workflowId` returns
+global stats and stats assigned to exactly that workflow. Inspect one custom stat by ID:
 
 ```sh
 terros ratio get --ratioId Ratio.example

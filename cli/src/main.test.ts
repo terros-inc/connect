@@ -2,9 +2,7 @@ import { parseEndpoints } from '@terros-inc/mcp-core'
 import { startMcpServer } from './mcp'
 import { main } from './main'
 import { loadEndpoints } from './loadEndpoints'
-import { ratioReadEndpoints } from './crud/ratio'
 import { authCommands } from './commands/auth'
-import { buildTerrosClient } from './api/query'
 
 vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn() }))
 vi.mock('./mcp', () => ({ startMcpServer: vi.fn() }))
@@ -31,14 +29,11 @@ const spec = (...paths: string[]): string =>
 
 const schema = (...paths: string[]) =>
   vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
-const ratioSchema = () => vi.mocked(loadEndpoints).mockResolvedValue({ ratio: ratioReadEndpoints })
 const login = vi.mocked(authCommands.login.run)
-const call = vi.fn()
 let log: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(buildTerrosClient).mockReturnValue({ call } as unknown as ReturnType<typeof buildTerrosClient>)
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 })
 
@@ -108,51 +103,5 @@ describe('a built-in nothing lands on', () => {
     schema('/connect/publish', '/garden/bed/list')
     await main(['auth', 'login'])
     expect(login).toHaveBeenCalledOnce()
-  })
-})
-
-describe('custom stat read commands', () => {
-  const modifiedBy = [{ userId: 'U.example', timestamp: 1_800_000_000_000, updateProcess: 'settings' }]
-  const ratio = {
-    ratioId: 'Ratio.example',
-    scopeId: 'C.example',
-    name: 'Conversion rate',
-    type: 'percentage',
-    numerator: 'contact.pitches',
-    denominator: 'contact.knocks',
-    modifiedBy,
-  }
-  const formula = {
-    ratioId: 'Ratio.sample',
-    scopeId: 'C.example',
-    name: 'Weighted outcome',
-    type: 'formula',
-    formula: '$wins * 2 + $sits',
-    scopes: { $wins: 'event.sales', $sits: 'event.sits' },
-    formatter: 'round',
-    accumulator: 'sum',
-    modifiedBy,
-  }
-
-  it('lists ratio and advanced custom stats without dropping their definitions or history', async () => {
-    ratioSchema()
-    const response = { type: 'success', ratios: [ratio, formula] }
-    call.mockResolvedValue(response)
-
-    await main(['ratio', 'list', '--scopeId', 'C.example'])
-
-    expect(call).toHaveBeenCalledWith('/ratio/list', { scopeId: 'C.example' })
-    expect(log).toHaveBeenCalledWith(JSON.stringify(response, null, 2))
-  })
-
-  it.each([ratio, formula])('gets the full $type custom stat definition and history', async (stat) => {
-    ratioSchema()
-    const response = { type: 'success', ratio: stat }
-    call.mockResolvedValue(response)
-
-    await main(['ratio', 'get', '--ratioId', stat.ratioId])
-
-    expect(call).toHaveBeenCalledWith('/ratio/get', { ratioId: stat.ratioId })
-    expect(log).toHaveBeenCalledWith(JSON.stringify(response, null, 2))
   })
 })

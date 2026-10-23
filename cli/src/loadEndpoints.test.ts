@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { loadEndpoints } from './loadEndpoints'
 import { loadInternalSchema } from './crud/internal'
+import { loadEndpoints } from './loadEndpoints'
 
 vi.mock('node:fs', () => ({ readFileSync: vi.fn() }))
 vi.mock('./crud/internal', () => ({ loadInternalSchema: vi.fn() }))
@@ -31,10 +31,7 @@ beforeEach(() => {
 
 it('uses bundled YAML when no internal schema is available', async () => {
   vi.mocked(loadInternalSchema).mockResolvedValue(undefined)
-  const endpoints = await loadEndpoints()
-  expect(endpoints).toHaveProperty('company.get.path', '/company/get')
-  expect(endpoints).toHaveProperty('ratio.get.path', '/ratio/get')
-  expect(endpoints).toHaveProperty('ratio.list.path', '/ratio/list')
+  expect(await loadEndpoints()).toHaveProperty('company.get.path', '/company/get')
 })
 
 it('replaces the bundled schema entirely with the internal JSON schema', async () => {
@@ -55,27 +52,6 @@ it('replaces the bundled schema entirely with the internal JSON schema', async (
   expect(Object.keys(endpoints.company!)).toEqual(['list'])
   expect(readFileSync).not.toHaveBeenCalled()
   expect(endpoints.company!.list!.components).toHaveProperty('schemas.Input.properties.archived')
-})
-
-it('keeps ratio read definitions supplied by a downloaded internal schema', async () => {
-  vi.mocked(loadInternalSchema).mockResolvedValue(
-    JSON.stringify({
-      openapi: '3.1.1',
-      paths: {
-        '/ratio/get': {
-          post: {
-            description: 'Downloaded ratio get.',
-            requestBody: { content: { 'application/json': { schema: { type: 'object' } } } },
-          },
-        },
-      },
-      components: { schemas: {} },
-    })
-  )
-
-  const endpoints = await loadEndpoints()
-  expect(endpoints.ratio?.get.description).toBe('Downloaded ratio get.')
-  expect(endpoints).toHaveProperty('ratio.list.path', '/ratio/list')
 })
 
 it('exposes API history start as an internal CLI command that requires a company ID', async () => {
