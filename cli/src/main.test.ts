@@ -3,6 +3,7 @@ import { startMcpServer } from './mcp'
 import { main } from './main'
 import { loadEndpoints } from './loadEndpoints'
 import { authCommands } from './commands/auth'
+import { buildTerrosClient } from './api/query'
 
 vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn() }))
 vi.mock('./mcp', () => ({ startMcpServer: vi.fn() }))
@@ -103,5 +104,27 @@ describe('a built-in nothing lands on', () => {
     schema('/connect/publish', '/garden/bed/list')
     await main(['auth', 'login'])
     expect(login).toHaveBeenCalledOnce()
+  })
+})
+
+describe('an endpoint command', () => {
+  // Staff with company:update get presigned write URLs from company/get; printing them would hand out upload access.
+  it('prints the response without presigned upload URLs', async () => {
+    schema('/company/get')
+    const call = vi.fn().mockResolvedValue({
+      company: {
+        companyId: 'C.example',
+        name: 'Acme Solar',
+        uploadAvatarUrl: 'https://s3.example.test/a',
+        uploadIconUrl: 'https://s3.example.test/i',
+      },
+    })
+    vi.mocked(buildTerrosClient).mockReturnValue({ call } as unknown as ReturnType<typeof buildTerrosClient>)
+    await main(['company', 'get'])
+    expect(call).toHaveBeenCalledWith('/company/get', expect.anything())
+    expect(log).toHaveBeenCalledOnce()
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
+      company: { companyId: 'C.example', name: 'Acme Solar' },
+    })
   })
 })

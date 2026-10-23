@@ -1,4 +1,4 @@
-import { buildTools } from './tools.ts'
+import { buildTools, withoutUploadUrls } from './tools.ts'
 import { parseEndpoints } from './parser.ts'
 
 const spec = (...paths: string[]): string =>
@@ -25,4 +25,24 @@ it('names each tool from its full route and calls that route', async () => {
   expect(tools.map((tool) => tool.name).sort()).toEqual(['garden_bed_tag_add', 'search'])
   await tools.find((tool) => tool.name === 'garden_bed_tag_add')?.call({ id: 'bed-1' })
   expect(client.call).toHaveBeenCalledWith('garden/bed/tag/add', { id: 'bed-1' })
+})
+
+// `company/get` returns presigned avatar and icon upload URLs to a caller who may update the company; printing them
+// would hand a write credential to the terminal or an AI model.
+it('drops presigned upload URLs from a tool response at any depth', async () => {
+  const company = { companyId: 'C.example', avatarUrl: 'https://cdn.example.test/a.png' }
+  client.call.mockResolvedValueOnce({
+    type: 'success',
+    company: {
+      ...company,
+      uploadAvatarUrl: 'https://upload.example.test/a',
+      uploadIconUrl: 'https://upload.example.test/i',
+    },
+  })
+  const [tool] = buildTools(parseEndpoints(spec('/company/get')), client)
+  expect(await tool.call({})).toEqual({ type: 'success', company })
+  expect(withoutUploadUrls({ teams: [{ teamId: 'T.example', uploadAvatarUrl: 'x' }], count: 1 })).toEqual({
+    teams: [{ teamId: 'T.example' }],
+    count: 1,
+  })
 })
