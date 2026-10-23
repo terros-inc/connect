@@ -4,6 +4,7 @@ import {
   formatCommandUsage,
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
+  getReportKpiHelpParameters,
 } from './messages'
 
 describe('formatCommandsHelp', () => {
@@ -108,5 +109,43 @@ Use "--inputFile <path>" to send a JSON request body from a file ("-" for stdin)
 Subcommands:
   bed`
     )
+  })
+})
+
+describe('getReportKpiHelpParameters', () => {
+  it('replaces incorrect generated timezone claims only for KPI date boundaries', () => {
+    expect(
+      getReportKpiHelpParameters([
+        {
+          name: 'filter.startDate',
+          type: 'string | number',
+          required: false,
+          description: "Uses the querying user's timezone.",
+        },
+        {
+          name: 'filter.endDate',
+          type: 'string | number',
+          required: false,
+          description: "Uses the querying user's timezone.",
+        },
+        { name: 'grouping', type: 'object', required: true, description: 'Grouping description.' },
+      ])
+    ).toEqual([
+      {
+        name: 'filter.startDate',
+        type: 'string | number',
+        required: false,
+        description:
+          "Inclusive activity start. Uses last action date. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+      },
+      {
+        name: 'filter.endDate',
+        type: 'string | number',
+        required: false,
+        description:
+          "Inclusive activity end. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+      },
+      { name: 'grouping', type: 'object', required: true, description: 'Grouping description.' },
+    ])
   })
 })

@@ -10,6 +10,7 @@ import packageJson from '../package.json'
 import {
   formatCommandsHelp,
   formatCommandUsage,
+  getReportKpiHelpParameters,
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
@@ -118,7 +119,9 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   const endpoint = level.node.endpoint
   if (endpoint) {
     const depth = getHelpDepth(requestedDepth)
-    const parameters = getEndpointInputParameters(endpoint, depth)
+    const endpointParameters = getEndpointInputParameters(endpoint, depth)
+    const parameters =
+      endpoint.path === '/report/kpi' ? getReportKpiHelpParameters(endpointParameters) : endpointParameters
     console.log(
       formatSubcommandParametersHelp(
         level.words.join(' '),

@@ -46,10 +46,11 @@ count through the account's setter or closer. They do not mean "currently in thi
 additive values such as action occurrences, and distinct/query for account counts that need a separate
 company-grouped total rather than a sum of row counts.
 
-filter.startDate and filter.endDate are inclusive activity boundaries, applied to the activity/last-action date,
-in the querying user's timezone. Millisecond inputs are exact instants. Equal boundaries select only that instant,
-not a whole day, so a start and end at the same midnight commonly return no rows; for one calendar day, pass its
-start and its inclusive end (for example 00:00:00.000 through 23:59:59.999 in that timezone).
+filter.startDate and filter.endDate are inclusive activity boundaries, applied to the activity/last-action date.
+Millisecond inputs are exact instants. Date strings with Z or an explicit offset use that timezone; strings without
+a timezone use the API's default timezone, not the querying user's timezone. Equal boundaries select only that
+instant, not a whole day, so a start and end at the same midnight commonly return no rows; for one calendar day,
+pass its start and its inclusive end (for example 00:00:00.000 through 23:59:59.999 with the same timezone).
 
 A ratio is calculated per row and is not additive. Its totalRow cell is null when no supported accumulator defines
 how to total it. Copy the ratio's accumulator from "terros report column": avg combines row ratios, while
@@ -60,6 +61,20 @@ Example (synthetic IDs; one UTC day):
     --kpis '[{"value":"groupBy"},{"value":"action|A.example|count","accumulator":"sum"},{"value":"setter|S.example|count","accumulator":"distinct"}]' \\
     --filter.startDate 1767225600000 --filter.endDate 1767311999999
 `.trim()
+
+const REPORT_KPI_PARAMETER_DESCRIPTIONS: Record<string, string> = {
+  'filter.startDate':
+    "Inclusive activity start. Uses last action date. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+  'filter.endDate':
+    "Inclusive activity end. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+}
+
+export function getReportKpiHelpParameters(parameters: EndpointParameter[]): EndpointParameter[] {
+  return parameters.map((parameter) => ({
+    ...parameter,
+    description: REPORT_KPI_PARAMETER_DESCRIPTIONS[parameter.name] ?? parameter.description,
+  }))
+}
 
 export function formatCommandsHelp(commands: string[]): string {
   const lines = [
