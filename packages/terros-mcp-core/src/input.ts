@@ -197,8 +197,9 @@ function parseStringValue(value: unknown, parameterName: string): string {
 
   // Accept a JSON-quoted string as enum parameters do, so `'"C.example"'` and `C.example` both send the id. The
   // trade-off: a value that should keep its surrounding quotes cannot be passed as a flag (use --inputFile).
+  // JSON.parse ignores surrounding whitespace, so ` "C.example"` decodes too; the trim only gates the attempt.
   const text = String(value)
-  if (!text.startsWith('"')) return text
+  if (!text.trim().startsWith('"')) return text
   try {
     const parsed: unknown = JSON.parse(text)
     return typeof parsed === 'string' ? parsed : text

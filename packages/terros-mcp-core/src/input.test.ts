@@ -235,6 +235,13 @@ describe('buildEndpointInput', () => {
       expect(build({ query: '"Acme Solar"' })).toEqual({ query: 'Acme Solar' })
     })
 
+    // A shell or script that pads the quoted value used to send the quotes, as with no decoding at all.
+    it('decodes a JSON-quoted value with surrounding whitespace', () => {
+      expect(build({ query: ' "C.example" ' })).toEqual({ query: 'C.example' })
+      expect(build({ query: '\t"C.example"\n' })).toEqual({ query: 'C.example' })
+      expect(build({ query: ' C.example' })).toEqual({ query: ' C.example' })
+    })
+
     // Text that only starts with a quote is not a JSON string and must be sent as typed, not rejected.
     it('sends a value that is not a JSON string unchanged', () => {
       expect(build({ query: '"Acme' })).toEqual({ query: '"Acme' })
