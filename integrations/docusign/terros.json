@@ -59,7 +59,7 @@
       "type": "incoming",
       "configSchema": [],
       "authSchema": {},
-      "permissions": ["account/upsert"],
+      "permissions": [],
       "slug": "docusign-webhook"
     }
   ]

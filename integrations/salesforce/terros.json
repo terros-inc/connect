@@ -19,7 +19,7 @@
         "clientSecret": "Salesforce Connected App Client Secret",
         "url": "Salesforce instance URL"
       },
-      "permissions": ["account/update"],
+      "permissions": ["account:save"],
       "slug": "salesforce-lead-sync"
     },
     {
@@ -28,7 +28,7 @@
       "type": "incoming",
       "configSchema": [],
       "authSchema": {},
-      "permissions": ["account/match", "account/upsert"],
+      "permissions": ["account:list"],
       "slug": "salesforce-status-sync"
     }
   ]
