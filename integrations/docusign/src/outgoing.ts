@@ -129,7 +129,7 @@ function resolveField(account: AccountWebhookData, ref: string): string | undefi
   const key = String(ref).trim()
   if (!key) return undefined
   if (key.startsWith('CF.')) {
-    const customFields = account.customFields as CustomFieldMap | undefined
+    const customFields = account.customFieldMap
     const value = customFields?.[key as keyof CustomFieldMap]
     return value === null || value === undefined ? undefined : String(value)
   }

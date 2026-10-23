@@ -31,7 +31,7 @@ export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptC
   const salesRepId = await getSalesRepId(account.owner, apiKey)
   if (!salesRepId) {
     console.log(
-      `No JobNimbus sales rep id found for account ${account.id} (owner ${account.ownerId || maskEmail(account.owner?.email)})`
+      `No JobNimbus sales rep id found for account ${account.id} (owner ${account.owner?.userId || maskEmail(account.owner?.email)})`
     )
     throw Error('Cannot assign to a user: No JobNimbus sales rep id found')
   }

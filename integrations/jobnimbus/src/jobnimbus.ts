@@ -45,8 +45,8 @@ function toJobNimbusContact(
   salesRepId: string,
   scriptConfig: JobNimbusScriptConfig
 ): Record<string, unknown> | undefined {
-  const resident = (account.homeowner || {}) as Record<string, string | undefined>
-  const address = account.location
+  const resident = (account.resident || {}) as Record<string, string | undefined>
+  const address = account.address
   const firstName = resident.firstName || ''
   const lastName = resident.lastName || ''
   const statusName = getStatusName(account, scriptConfig)
@@ -77,8 +77,8 @@ function toJobNimbusJob(
   salesRepId: string,
   scriptConfig: JobNimbusScriptConfig
 ): Record<string, unknown> | undefined {
-  const resident = (account.homeowner || {}) as Record<string, string | undefined>
-  const address = account.location
+  const resident = (account.resident || {}) as Record<string, string | undefined>
+  const address = account.address
   const firstName = resident.firstName || ''
   const lastName = resident.lastName || ''
   const displayName = `${firstName} ${lastName}`.trim()
