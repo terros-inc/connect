@@ -27,11 +27,16 @@ async function cacheKey(): Promise<string | undefined> {
     .digest('hex')
 }
 
-export async function loadInternalSchema(): Promise<string | undefined> {
+export type InternalSchemaResult = {
+  schema?: string
+  status: 'available' | 'unavailable' | 'failed'
+}
+
+export async function loadInternalSchemaWithStatus(): Promise<InternalSchemaResult> {
   try {
     const key = await cacheKey()
-    if (!key) return undefined
-    return await loadInternalSpec({
+    if (!key) return { status: 'unavailable' }
+    const schema = await loadInternalSpec({
       client: buildTerrosClient(),
       internalCompanyId: 'C:tantalim',
       cache: {
@@ -39,10 +44,15 @@ export async function loadInternalSchema(): Promise<string | undefined> {
         write: (name, data) => writeCache(name, key, data),
       },
     })
+    return schema === undefined ? { status: 'unavailable' } : { schema, status: 'available' }
   } catch (error) {
     console.error(
       `Unable to load internal API commands; using bundled schema: ${error instanceof Error ? error.message : error}`
     )
-    return undefined
+    return { status: 'failed' }
   }
+}
+
+export async function loadInternalSchema(): Promise<string | undefined> {
+  return (await loadInternalSchemaWithStatus()).schema
 }
