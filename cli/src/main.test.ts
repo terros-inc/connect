@@ -2,7 +2,7 @@ import { parseEndpoints } from '@terros-inc/mcp-core'
 import { startMcpServer } from './mcp'
 import { main } from './main'
 import { loadEndpoints } from './loadEndpoints'
-import { ratioReadEndpoints } from './crud/ratio'
+import { ratioEndpoints } from './crud/ratio'
 import { authCommands } from './commands/auth'
 import { buildTerrosClient } from './api/query'
 
@@ -31,7 +31,7 @@ const spec = (...paths: string[]): string =>
 
 const schema = (...paths: string[]) =>
   vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
-const ratioSchema = () => vi.mocked(loadEndpoints).mockResolvedValue({ ratio: ratioReadEndpoints })
+const ratioSchema = () => vi.mocked(loadEndpoints).mockResolvedValue({ ratio: ratioEndpoints })
 const login = vi.mocked(authCommands.login.run)
 const call = vi.fn()
 let log: ReturnType<typeof vi.spyOn>

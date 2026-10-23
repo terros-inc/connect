@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { loadEndpoints as loadCoreEndpoints, type EndpointGroups } from '@terros-inc/mcp-core'
-import { ratioReadEndpoints } from './crud/ratio'
+import { ratioEndpoints as supplementalRatioEndpoints } from './crud/ratio'
 import { loadInternalSchema } from './crud/internal'
 
 export async function loadEndpoints(): Promise<EndpointGroups> {
@@ -10,7 +10,7 @@ export async function loadEndpoints(): Promise<EndpointGroups> {
   })
 
   const ratioEndpoints = (endpoints.ratio ??= Object.create(null))
-  for (const [name, endpoint] of Object.entries(ratioReadEndpoints)) {
+  for (const [name, endpoint] of Object.entries(supplementalRatioEndpoints)) {
     if (!Object.hasOwn(ratioEndpoints, name)) ratioEndpoints[name] = endpoint
   }
   return endpoints
