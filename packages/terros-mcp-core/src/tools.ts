@@ -25,8 +25,24 @@ function buildTool(endpoint: Endpoint, client: ApiClient): BuiltTool {
     name: route.replaceAll('/', '_'),
     description: endpoint.description,
     inputSchema: getInputSchema(endpoint),
-    call: (input) => client.call(route, input),
+    call: async (input) => withoutUploadUrls(await client.call(route, input)),
   }
+}
+
+// Presigned S3 upload URLs (for example on `company/get` for a caller who may update the company) let anyone holding
+// them overwrite that avatar or icon until they expire. Only the apps' image editors need them, so the CLI and MCP
+// tools drop them from every response rather than print or hand them to an AI model.
+const UPLOAD_URL_KEYS = new Set(['uploadAvatarUrl', 'uploadIconUrl'])
+
+/** The API response without presigned upload URLs, at any depth. */
+export function withoutUploadUrls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutUploadUrls)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !UPLOAD_URL_KEYS.has(key))
+      .map(([key, entry]) => [key, withoutUploadUrls(entry)])
+  )
 }
 
 export type CreateMcpServerOptions = {

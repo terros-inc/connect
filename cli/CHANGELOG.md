@@ -30,6 +30,8 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
   JSON string. An unknown value fails before the request and lists the valid values.
 - A string parameter, an id in a list included, takes a JSON-quoted value too: `--companyIds '"C.example"'` sends
   `C.example` like `--companyIds C.example`, instead of the quoted text the API rejected with `Invalid input`.
+- Command output and MCP tool results leave out presigned avatar and icon upload URLs (`uploadAvatarUrl`,
+  `uploadIconUrl`), which only the apps' image editors use.
 - A union parameter with a list member (`number | "Warn" | string[]`) takes a plain value as the matching member
   instead of wrapping it in a list, and a `|` inside a nested type or a quoted literal no longer splits the union
   (#102).

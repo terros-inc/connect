@@ -5,6 +5,7 @@ import {
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
   type CommandNode,
+  withoutUploadUrls,
 } from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
 import {
@@ -74,7 +75,7 @@ export async function main(argv: string[]): Promise<void> {
     endpoint.path === '/apiHistory/start'
       ? await runApiHistoryQuery(client, input)
       : await client.call(endpoint.path, input)
-  console.log(JSON.stringify(response, null, 2))
+  console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
 }
 
 async function loadCommandLevel(words: string[]): Promise<CommandLevel> {
