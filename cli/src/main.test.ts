@@ -3,8 +3,10 @@ import { startMcpServer } from './mcp'
 import { main } from './main'
 import { loadEndpoints } from './loadEndpoints'
 import { authCommands } from './commands/auth'
+import { clearOpenApiCache } from './cache'
 
 vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn() }))
+vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
 vi.mock('./mcp', () => ({ startMcpServer: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
 vi.mock('./commands/connect', () => ({
@@ -104,4 +106,40 @@ describe('a built-in nothing lands on', () => {
     await main(['auth', 'login'])
     expect(login).toHaveBeenCalledOnce()
   })
+})
+
+it('suggests refreshing the API schema when an endpoint command is unknown', async () => {
+  schema('/company/list')
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+  await main(['company', 'missing'])
+
+  expect(error).toHaveBeenCalledWith(
+    'Unknown command: terros company missing. The API schema was refreshed; check that the endpoint is deployed and available to your account.'
+  )
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
+  error.mockRestore()
+})
+
+it('does not execute a command that appears after the automatic schema refresh', async () => {
+  vi.mocked(loadEndpoints)
+    .mockResolvedValueOnce(parseEndpoints(spec('/company/list')))
+    .mockResolvedValueOnce(parseEndpoints(spec('/company/list', '/garden/bed/list')))
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+  await main(['garden', 'bed', 'list'])
+
+  expect(error).toHaveBeenCalledWith('API schema refreshed. Rerun `terros garden bed list` to try the endpoint.')
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
+  expect(log).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+  error.mockRestore()
+})
+
+it('does not refresh the schema for an unknown built-in subcommand', async () => {
+  schema('/company/list')
+
+  await main(['auth', 'missing'])
+
+  expect(clearOpenApiCache).not.toHaveBeenCalled()
 })
