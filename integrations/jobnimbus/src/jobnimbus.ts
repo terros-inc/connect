@@ -7,6 +7,7 @@ export type JobNimbusScriptConfig = {
   defaultCompanyName?: string
   defaultStatus?: string
   jobNimbusRecord?: string
+  requiredFields?: string
   statusFields?: Record<string, string>
   statusValues?: Record<string, string>
   workflowType?: string
@@ -34,7 +35,7 @@ export function toJobNimbusRecord(
   salesRepId: string,
   scriptConfig: JobNimbusScriptConfig,
   jobNimbusRecord: string
-): Record<string, unknown> | undefined {
+): Record<string, unknown> {
   if (jobNimbusRecord === 'contact') return toJobNimbusContact(account, salesRepId, scriptConfig)
 
   return toJobNimbusJob(account, salesRepId, scriptConfig)
@@ -44,18 +45,12 @@ function toJobNimbusContact(
   account: AccountWebhookData,
   salesRepId: string,
   scriptConfig: JobNimbusScriptConfig
-): Record<string, unknown> | undefined {
+): Record<string, unknown> {
   const resident = (account.resident || {}) as Record<string, string | undefined>
   const address = account.address
   const firstName = resident.firstName || ''
   const lastName = resident.lastName || ''
-  const statusName = getStatusName(account, scriptConfig)
-
-  if (!statusName) return undefined
-
   return removeUndefinedValues({
-    record_type_name: scriptConfig.workflowType || 'Customer',
-    status_name: statusName,
     first_name: firstName,
     last_name: lastName,
     display_name: `${firstName} ${lastName}`.trim(),
@@ -76,19 +71,13 @@ function toJobNimbusJob(
   account: AccountWebhookData,
   salesRepId: string,
   scriptConfig: JobNimbusScriptConfig
-): Record<string, unknown> | undefined {
+): Record<string, unknown> {
   const resident = (account.resident || {}) as Record<string, string | undefined>
   const address = account.address
   const firstName = resident.firstName || ''
   const lastName = resident.lastName || ''
   const displayName = `${firstName} ${lastName}`.trim()
-  const statusName = getStatusName(account, scriptConfig)
-
-  if (!statusName) return undefined
-
   return removeUndefinedValues({
-    record_type_name: scriptConfig.workflowType || 'Customer',
-    status_name: statusName,
     name: displayName || resident.businessName || `Terros Account ${account.id}`,
     description: account.notes?.[0]?.text,
     external_id: account.id,
@@ -102,16 +91,42 @@ function toJobNimbusJob(
   })
 }
 
-function getStatusName(account: AccountWebhookData, scriptConfig: JobNimbusScriptConfig): string | undefined {
+export function getStatusName(account: AccountWebhookData, scriptConfig: JobNimbusScriptConfig): string | undefined {
   const statusFields = scriptConfig.statusFields ?? {}
   const statusValues = scriptConfig.statusValues ?? {}
   const statusName = findFirstMappedValue(account as Record<string, unknown>, statusFields, statusValues)
   if (statusName) return statusName
 
-  if (scriptConfig.defaultStatus) return scriptConfig.defaultStatus
+  return scriptConfig.defaultStatus || undefined
+}
 
-  console.log(`Missing JobNimbus status for account ${account.id}`)
+export function getCreateSkipReason(
+  account: AccountWebhookData,
+  scriptConfig: JobNimbusScriptConfig
+): string | undefined {
+  if (!getStatusName(account, scriptConfig)) return 'no JobNimbus status mapped for its stage'
+
+  const missing = findMissingRequiredFields(account, scriptConfig.requiredFields)
+  if (missing.length > 0) return `missing required ${missing.join(', ')}`
+
   return undefined
+}
+
+// Only a new record gets a status: once it exists, JobNimbus owns the status and type, so updates leave them alone.
+export function toNewJobNimbusRecord(
+  record: Record<string, unknown>,
+  statusName: string,
+  scriptConfig: JobNimbusScriptConfig
+): Record<string, unknown> {
+  return { ...record, record_type_name: scriptConfig.workflowType || 'Customer', status_name: statusName }
+}
+
+function findMissingRequiredFields(account: AccountWebhookData, requiredFields: string | undefined): string[] {
+  const resident = (account.resident || {}) as Record<string, unknown>
+  return (requiredFields || '')
+    .split(',')
+    .map((field) => field.trim())
+    .filter((field) => field && !String(resident[field] ?? '').trim())
 }
 
 function toJobNimbusGeo(latlng: LatLng | undefined): { lat: number; lon: number } | undefined {
