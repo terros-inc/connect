@@ -15,6 +15,10 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - One package: `pnpm --filter <package name> test`, or run the script from its directory. `cli`'s `pretest` downloads the OpenAPI document (`pnpm fetch-openapi`, with `curl`) into the git-ignored `cli/terros.yml` when it is missing; rerun `pnpm fetch-openapi` there to refresh it. Only `integrations/gohighlevel` has a `pretest` that builds the SDK; build it first (`pnpm --filter @terros-inc/sdk... build`) before testing another integration that needs it.
 - Type-check an integration with `pnpm exec tsc --noEmit` in its directory (its `build` script is `tsc`). There is no root type-check script.
 
+## Engineering approach
+
+Think ambitiously, build economically. Before settling on a design, picture what solving the problem properly would look like, then build the nearest step in that direction that fully solves today's problem. Prefer the design with the fewest concepts over the smallest patch, and don't add abstractions, configuration or infrastructure for a need that doesn't exist yet.
+
 ## Integrations
 
 Each `integrations/<name>` has `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/` and `terros.json`. Use `integrations/gohighlevel` as the reference layout.
