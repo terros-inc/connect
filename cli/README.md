@@ -250,3 +250,17 @@ terros auth login
 
 If a token cannot be refreshed, the saved login may have expired. Run
 `terros auth login` to create a new session.
+
+If an endpoint or parameter was recently added and the CLI does not recognize
+it, the CLI refreshes the API schema and retries once when that schema is
+available to your account. To refresh it manually, run:
+
+```sh
+terros api refresh
+```
+
+If the CLI says to update, install the latest version and retry:
+
+```sh
+npm install -g @terros-inc/cli
+```

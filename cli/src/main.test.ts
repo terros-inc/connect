@@ -1,12 +1,14 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
 import { startMcpServer } from './mcp'
 import { main } from './main'
-import { loadEndpoints } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
 import { authCommands } from './commands/auth'
 import { clearOpenApiCache } from './cache'
+import { buildTerrosClient } from './api/query'
 
-vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn() }))
+vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn(), loadEndpointsAfterRefresh: vi.fn() }))
 vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
+vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
 vi.mock('./mcp', () => ({ startMcpServer: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
 vi.mock('./commands/connect', () => ({
@@ -31,12 +33,27 @@ const spec = (...paths: string[]): string =>
 
 const schema = (...paths: string[]) =>
   vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
+const refreshedSchema = (...paths: string[]) =>
+  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
+    endpoints: parseEndpoints(spec(...paths)),
+    internalSchemaStatus: 'available',
+  })
+const schemaWithParameter = (path: string, parameter: string) => {
+  const document = JSON.parse(spec(path))
+  document.paths[path].post.requestBody.content['application/json'].schema.properties = {
+    [parameter]: { type: 'string' },
+  }
+  return JSON.stringify(document)
+}
 const login = vi.mocked(authCommands.login.run)
+const call = vi.fn()
 let log: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   vi.resetAllMocks()
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  call.mockResolvedValue({ ok: true })
+  vi.mocked(buildTerrosClient).mockReturnValue({ call } as unknown as ReturnType<typeof buildTerrosClient>)
 })
 
 afterEach(() => {
@@ -108,38 +125,87 @@ describe('a built-in nothing lands on', () => {
   })
 })
 
-it('suggests refreshing the API schema when an endpoint command is unknown', async () => {
+it('reports that an endpoint is absent after a successful schema refresh', async () => {
   schema('/company/list')
-  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  refreshedSchema('/company/list')
 
   await main(['company', 'missing'])
 
-  expect(error).toHaveBeenCalledWith(
-    'Unknown command: terros company missing. The API schema was refreshed; check that the endpoint is deployed and available to your account.'
-  )
   expect(clearOpenApiCache).toHaveBeenCalledOnce()
-  error.mockRestore()
+  expect(process.exitCode).toBe(1)
 })
 
-it('does not execute a command that appears after the automatic schema refresh', async () => {
-  vi.mocked(loadEndpoints)
-    .mockResolvedValueOnce(parseEndpoints(spec('/company/list')))
-    .mockResolvedValueOnce(parseEndpoints(spec('/company/list', '/garden/bed/list')))
-  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+it('retries a newly available endpoint once after refreshing the schema', async () => {
+  schema('/company/list')
+  refreshedSchema('/company/list', '/garden/bed/list')
 
   await main(['garden', 'bed', 'list'])
 
-  expect(error).toHaveBeenCalledWith('API schema refreshed. Rerun `terros garden bed list` to try the endpoint.')
+  expect(call).toHaveBeenCalledWith('/garden/bed/list', {})
   expect(clearOpenApiCache).toHaveBeenCalledOnce()
-  expect(log).not.toHaveBeenCalled()
-  expect(process.exitCode).toBe(1)
-  error.mockRestore()
+  expect(process.exitCode).toBeUndefined()
 })
 
-it('does not refresh the schema for an unknown built-in subcommand', async () => {
+it('refreshes and retries when an endpoint gains a parameter', async () => {
+  schema('/garden/bed/list')
+  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
+    endpoints: parseEndpoints(schemaWithParameter('/garden/bed/list', 'newFilter')),
+    internalSchemaStatus: 'available',
+  })
+
+  await main(['garden', 'bed', 'list', '--newFilter', 'active'])
+
+  expect(call).toHaveBeenCalledWith('/garden/bed/list', { newFilter: 'active' })
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
+  expect(process.exitCode).toBeUndefined()
+})
+
+it('does not execute an unknown command when the internal schema is unavailable', async () => {
+  schema('/company/list')
+  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
+    endpoints: parseEndpoints(spec('/company/list')),
+    internalSchemaStatus: 'unavailable',
+  })
+  await main(['company', 'missing'])
+
+  expect(loadEndpointsAfterRefresh).toHaveBeenCalledOnce()
+  expect(call).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+})
+
+it('does not refresh the schema for a typo in a built-in subcommand', async () => {
   schema('/company/list')
 
-  await main(['auth', 'missing'])
+  await main(['auth', 'logn'])
 
   expect(clearOpenApiCache).not.toHaveBeenCalled()
+})
+
+it('does not refresh for a likely typo in a built-in subcommand', async () => {
+  schema('/company/list')
+
+  await main(['api', 'refesh'])
+
+  expect(clearOpenApiCache).not.toHaveBeenCalled()
+  expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
+})
+
+it('refreshes for a new API endpoint under a built-in group', async () => {
+  schema('/company/list')
+  refreshedSchema('/company/list', '/api/foo')
+
+  await main(['api', 'foo'])
+
+  expect(call).toHaveBeenCalledWith('/api/foo', {})
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
+})
+
+it('lets api refresh recover from a stale endpoint collision', async () => {
+  schema('/api/refresh')
+  refreshedSchema('/api/refresh')
+
+  await main(['api', 'refresh'])
+
+  expect(loadEndpointsAfterRefresh).toHaveBeenCalledOnce()
+  expect(clearOpenApiCache).toHaveBeenCalledOnce()
 })

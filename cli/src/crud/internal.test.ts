@@ -5,7 +5,7 @@ import { parseEndpoints } from '@terros-inc/mcp-core'
 import { getTokens } from '@terros-inc/connect-common/auth'
 import { clearOpenApiCache, clearRuntimeCaches } from '../cache'
 import { buildTerrosClient } from '../api/query'
-import { loadInternalSchema } from './internal'
+import { loadInternalSchema, loadInternalSchemaWithStatus } from './internal'
 
 const home = vi.hoisted(() => ({ path: '' }))
 vi.mock('node:os', async (importOriginal) => ({
@@ -101,7 +101,15 @@ it('identifies internal users by company ID regardless of the flag', async () =>
 it('does not fetch a profile or schema without authentication', async () => {
   vi.mocked(getTokens).mockResolvedValue(null)
   expect(await loadInternalSchema()).toBeUndefined()
+  expect(await loadInternalSchemaWithStatus()).toEqual({ status: 'unavailable' })
   expect(call).not.toHaveBeenCalled()
+  expect(get).not.toHaveBeenCalled()
+})
+
+it('reports when the internal schema could not be fetched', async () => {
+  call.mockRejectedValue(new Error('Offline'))
+
+  expect(await loadInternalSchemaWithStatus()).toEqual({ status: 'failed' })
   expect(get).not.toHaveBeenCalled()
 })
 

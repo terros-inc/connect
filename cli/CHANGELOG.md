@@ -2,6 +2,12 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## Unreleased
+
+### Bug fix: refresh and retry when API commands or parameters are missing
+
+The CLI refreshes the API schema and retries once when an endpoint or parameter is missing. If the internal schema cannot be fetched or is not available to the account, it directs the user to update the CLI instead of reporting a false refresh success. Built-in command typos do not trigger a refresh, and `terros api refresh` can recover from a stale schema collision.
+
 ## 2.0.1
 
 ### Bug fix: built-in commands no longer hide an endpoint that lands on them
