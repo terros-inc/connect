@@ -40,17 +40,20 @@ The groupBy cell is a user/team/company/task object when the group key identifie
 milliseconds for time grouping, or otherwise the group key. Without {"value":"groupBy"}, rows contain no group
 label. Each other cell is the KPI value requested at that array position.
 
-Setter and closer stage counts count accounts that reached the stage within the filter dates; they attribute the
-count through the account's setter or closer. They do not mean "currently in this stage" unless
---searchByCurrentStatus true is also sent. Use the accumulator returned by "terros report column": use sum for
-additive values such as action occurrences, and distinct/query for account counts that need a separate
-company-grouped total rather than a sum of row counts.
+Setter and closer stage counts count accounts whose stage-entry date is within the filter dates; they do not use
+the account's last-action date. They attribute the count through the account's setter or closer, and do not mean
+"currently in this stage" unless --searchByCurrentStatus true is also sent. Use the accumulator returned by
+"terros report column": use sum for additive values such as action occurrences, and distinct/query for account
+counts that need a separate company-grouped total rather than a sum of row counts.
 
-filter.startDate and filter.endDate are inclusive activity boundaries, applied to the activity/last-action date.
-Millisecond inputs are exact instants. Date strings with Z or an explicit offset use that timezone; strings without
-a timezone use the API's default timezone, not the querying user's timezone. Equal boundaries select only that
-instant, not a whole day, so a start and end at the same midnight commonly return no rows; for one calendar day,
-pass its start and its inclusive end (for example 00:00:00.000 through 23:59:59.999 with the same timezone).
+filter.startDate and filter.endDate are inclusive when enforced. Most activity KPIs apply them to the activity or
+account last-action date; setter/closer stage counts apply them to the stage-entry date. On the account-history
+stage-count path, no date range is applied without filter.startDate, so filter.endDate alone is not enforced;
+always supply both boundaries for setter/closer counts. Millisecond inputs are exact instants. Date strings with Z
+or an explicit offset use that timezone; strings without a timezone use the API's default timezone, not the
+querying user's timezone. Equal boundaries select only that instant, not a whole day, so a start and end at the
+same midnight commonly return no rows; for one calendar day, pass its start and its inclusive end (for example
+00:00:00.000 through 23:59:59.999 with the same timezone).
 
 A ratio is calculated per row and is not additive. Its totalRow cell is null when no supported accumulator defines
 how to total it. Copy the ratio's accumulator from "terros report column": avg combines row ratios, while
@@ -64,9 +67,9 @@ Example (synthetic IDs; one UTC day):
 
 const REPORT_KPI_PARAMETER_DESCRIPTIONS: Record<string, string> = {
   'filter.startDate':
-    "Inclusive activity start. Uses last action date. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+    "Inclusive start. Most activity KPIs use the activity or account last-action date; setter/closer counts use the stage-entry date. Supply both date boundaries for setter/closer counts. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
   'filter.endDate':
-    "Inclusive activity end. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+    "Inclusive end when enforced. An end date alone is not enforced on the account-history setter/closer count path; supply both date boundaries. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
 }
 
 export function getReportKpiHelpParameters(parameters: EndpointParameter[]): EndpointParameter[] {

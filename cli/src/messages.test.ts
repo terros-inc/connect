@@ -113,7 +113,7 @@ Subcommands:
 })
 
 describe('getReportKpiHelpParameters', () => {
-  it('replaces incorrect generated timezone claims only for KPI date boundaries', () => {
+  it('replaces incorrect generated KPI date descriptions only for KPI date boundaries', () => {
     expect(
       getReportKpiHelpParameters([
         {
@@ -136,14 +136,14 @@ describe('getReportKpiHelpParameters', () => {
         type: 'string | number',
         required: false,
         description:
-          "Inclusive activity start. Uses last action date. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+          "Inclusive start. Most activity KPIs use the activity or account last-action date; setter/closer counts use the stage-entry date. Supply both date boundaries for setter/closer counts. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
       },
       {
         name: 'filter.endDate',
         type: 'string | number',
         required: false,
         description:
-          "Inclusive activity end. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
+          "Inclusive end when enforced. An end date alone is not enforced on the account-history setter/closer count path; supply both date boundaries. Numeric milliseconds are exact instants; date strings without a timezone use the API's default timezone.",
       },
       { name: 'grouping', type: 'object', required: true, description: 'Grouping description.' },
     ])
