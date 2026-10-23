@@ -44,7 +44,7 @@
       "authSchema": {
         "apiKey": "JobNimbus API key"
       },
-      "permissions": ["account/update"],
+      "permissions": ["account:save"],
       "slug": "jobnimbus-send"
     },
     {
@@ -69,7 +69,7 @@
         }
       ],
       "authSchema": {},
-      "permissions": ["account/upsert"],
+      "permissions": [],
       "slug": "jobnimbus-webhook"
     }
   ]
