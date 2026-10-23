@@ -36,9 +36,15 @@ reporting configuration, and the selected workflows/programs. Important value fo
 Action summary values such as action.daysWorked, action.hoursWorked, action.headcount, and action.accounts are
 also supported when returned by "terros report column".
 
-The groupBy cell is a user/team/company/task object when the group key identifies one, the bucket-start epoch
-milliseconds for time grouping, or otherwise the group key. Without {"value":"groupBy"}, rows contain no group
-label. Each other cell is the KPI value requested at that array position.
+Reading the response: rows and totalRow are positional arrays aligned index-by-index with --kpis, so
+rows[rowIndex][kpiIndex] is that row's value for --kpis[kpiIndex] and totalRow[kpiIndex] is the report-wide total
+for --kpis[kpiIndex]. Include {"value":"groupBy"} in --kpis (typically at index 0) so that rows[rowIndex][0]
+identifies the group (a user/team/company/task object when the group key identifies one, the bucket-start epoch
+milliseconds for time grouping, or otherwise the scalar group key) and totalRow[0] holds "Total" or null. Without
+{"value":"groupBy"}, rows contain only metric values and no group identifier. Each other cell is the KPI value
+requested at that array position. The /report/kpi response does not repeat column metadata (label, description,
+type, formatters); to label or format each column in rows and totalRow, match --kpis[kpiIndex].value to the
+columns or leaderboardColumns returned by "terros report column".
 
 Setter and closer stage counts count accounts whose stage-entry date is within the filter dates; they do not use
 the account's last-action date. They attribute the count through the account's setter or closer, and do not mean
@@ -63,6 +69,10 @@ Example (synthetic IDs; one UTC day):
   terros report kpi --version 2 --grouping '{"type":"user"}' \\
     --kpis '[{"value":"groupBy"},{"value":"action|A.example|count","accumulator":"sum"},{"value":"setter|S.example|count","accumulator":"distinct"}]' \\
     --filter.startDate 1767225600000 --filter.endDate 1767311999999
+  # Result mapping for the 3 --kpis entries:
+  #   rows[i][0] = user object for groupBy               totalRow[0] = "Total"
+  #   rows[i][1] = count for action|A.example|count      totalRow[1] = sum across rows
+  #   rows[i][2] = count for setter|S.example|count      totalRow[2] = distinct total
 `.trim()
 
 const REPORT_KPI_PARAMETER_DESCRIPTIONS: Record<string, string> = {
