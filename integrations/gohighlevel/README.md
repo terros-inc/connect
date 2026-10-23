@@ -2,12 +2,12 @@
 
 Connects a Terros company to one GoHighLevel location. Four scripts, one install.
 
-| Script                          | Slug                              | Direction            | What it does                                                                                                                                                                                  |
-| ------------------------------- | --------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GoHighLevel Account Sync        | `gohighlevel-account-sync`        | Terros → GoHighLevel | On each account change: creates or updates the contact, syncs notes both ways, saves the contact ID on the account, and creates the opportunity when the account enters an opportunity stage. |
-| GoHighLevel Opportunity Webhook | `gohighlevel-opportunity-webhook` | GoHighLevel → Terros | A GoHighLevel workflow reports the pipeline stage a contact moved to. Moves the matching Terros account to the matching stage and imports notes.                                              |
-| GoHighLevel Appointment Sync    | `gohighlevel-appointment-sync`    | Terros → GoHighLevel | Creates a GoHighLevel appointment for a Terros consultation, moves it when the Terros event moves, cancels it when the event is removed.                                                      |
-| GoHighLevel Appointment Webhook | `gohighlevel-appointment-webhook` | GoHighLevel → Terros | A GoHighLevel workflow reports an appointment change. Moves or removes the linked Terros event.                                                                                               |
+| Script                          | Slug                              | Direction            | What it does                                                                                                                                                                                                                       |
+| ------------------------------- | --------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GoHighLevel Account Sync        | `gohighlevel-account-sync`        | Terros → GoHighLevel | On each account change: creates or updates the contact, syncs notes both ways, saves the contact ID on the account, and creates the opportunity when the account enters an opportunity stage. Skips an account with no closer yet. |
+| GoHighLevel Opportunity Webhook | `gohighlevel-opportunity-webhook` | GoHighLevel → Terros | A GoHighLevel workflow reports the pipeline stage a contact moved to. Moves the matching Terros account to the matching stage and imports notes.                                                                                   |
+| GoHighLevel Appointment Sync    | `gohighlevel-appointment-sync`    | Terros → GoHighLevel | Creates a GoHighLevel appointment for a Terros consultation, moves it when the Terros event moves, cancels it when the event is removed.                                                                                           |
+| GoHighLevel Appointment Webhook | `gohighlevel-appointment-webhook` | GoHighLevel → Terros | A GoHighLevel workflow reports an appointment change. Moves or removes the linked Terros event.                                                                                                                                    |
 
 Once an opportunity or appointment exists, GoHighLevel owns its stage, status and title. Terros only fills in a missing owner (opportunity) or moves an appointment in time and fills in a missing assignee.
 
@@ -35,8 +35,8 @@ Switches are text. Blank or `false` (also `no`, `off`, `0`) is off. `true` (also
 | `contactFieldMappings` | key/value rows                     | Account Sync                          | no       | none              | Copies Terros account fields into GoHighLevel contact custom fields. Key: `account.<path>` (for example `account.owner.email`) or a custom field ID `CF.…`. Value: a merge field written exactly `{{ contact.field_key }}`. A value in any other form is skipped with a warning. Only text, numbers and true/false can be sent. |
 | `opportunityStages`    | comma-separated Terros stage names | Account Sync                          | no       | `Appointment Set` | An account in one of these stages gets an opportunity if it has none. Names are matched ignoring case. Blank means the default.                                                                                                                                                                                                 |
 | `opportunityIdFieldId` | `CF.…` custom field ID             | Account Sync                          | no       | none              | Receives the GoHighLevel opportunity ID. Without it the ID is not stored and each run searches for the opportunity again. A value not starting with `CF.` is ignored with a warning.                                                                                                                                            |
-| `alertWebhookUrl`      | URL                                | Account Sync, Appointment Sync        | no       | none              | Receives a JSON POST when a sync needs attention (see Alerts).                                                                                                                                                                                                                                                                  |
-| `alertRecipients`      | comma-separated emails             | Account Sync, Appointment Sync        | no       | none              | Copied into the alert JSON as `recipients`. Nothing is emailed by this integration.                                                                                                                                                                                                                                             |
+| `alertWebhookUrl`      | URL                                | Appointment Sync                      | no       | none              | Receives a JSON POST when a sync needs attention (see Alerts).                                                                                                                                                                                                                                                                  |
+| `alertRecipients`      | comma-separated emails             | Appointment Sync                      | no       | none              | Copied into the alert JSON as `recipients`. Nothing is emailed by this integration.                                                                                                                                                                                                                                             |
 | `disabled`             | switch                             | all four                              | no       | off               | Kill switch. When on, the script logs that it is disabled and does nothing.                                                                                                                                                                                                                                                     |
 | `dryRun`               | switch                             | all four                              | no       | off               | Reads and logs what the script would write, and writes nothing.                                                                                                                                                                                                                                                                 |
 
@@ -52,9 +52,8 @@ So one table serves both directions only if its keys can be both: a stage name s
 
 ### Alerts
 
-`alertWebhookUrl` receives `{ "text", "accountId", "eventId"?, "stage", "message", "recipients" }` as a JSON POST. Triggers:
+`alertWebhookUrl` receives `{ "text", "accountId", "eventId"?, "stage", "message", "recipients" }` as a JSON POST. Trigger:
 
-- Account Sync: an account in an opportunity stage has no closer. Sent once per account, as long as the account has an owner to record it under: a note starting `[GoHighLevel sync alert]` is saved on the account to remember it. These notes are never copied to GoHighLevel.
 - Appointment Sync: it refused to create or change an appointment (the linked appointment is missing, on another contact, or the create limit of 2 per event was reached).
 
 Every alert is also logged as `GHL_SYNC_ALERT {…}`. A failed delivery is logged and never fails the sync. Alerts are still sent when `dryRun` is on.
@@ -78,7 +77,6 @@ Acme Solar's Account Sync and Opportunity Webhook config, using placeholder valu
     "<Terros stage id 2>": "Stage B",
     "<Terros stage id 3>": "Stage C"
   },
-  "alertWebhookUrl": "<alert webhook url>",
   "dryRun": "",
   "goHighLevelCompanyId": "<unused>",
   "teamPipelines": { "<team id>": "<pipeline id>" }
@@ -96,6 +94,7 @@ Acme Solar's Account Sync and Opportunity Webhook config, using placeholder valu
 - `GHL_SYNC_ALERT` an alert was raised; `GHL_SYNC_ALERT delivery failed` the alert webhook did not accept it.
 - `Missing required config`, `Unknown config key`, `Config key … is not used` the config needs attention.
 - `Config disabled is …` or `Config dryRun is …` a switch holds text that is not true or false.
+- `no closer yet` Account Sync skipped an account change with no closer. Expected when an account enters a stage before a booking or a dispatcher assigns the closer: Terros sends the closer's save its own webhook, the account syncs then, and nothing alerts.
 - `No GoHighLevel user matched` a closer's email has no GoHighLevel user, so nothing is assigned.
 - `no Terros account is linked to this contact, skipping` the Opportunity Webhook found no Terros account for the contact. Expected for appointments booked directly in GoHighLevel; it cannot tell that apart from a lost link, and nothing alerts.
 - `pipeline stage is blank, so only notes are imported` the workflow posted no stage (a note-change trigger, or a contact with no opportunity). The stage write is skipped and notes are imported as usual.
