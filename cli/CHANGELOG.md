@@ -28,6 +28,8 @@ Only the built-in command being run is checked: an endpoint that lands on `terro
   types once (`string` rather than `string | string | string`).
 - Enum and string-literal parameters accept a plain value, a comma-separated list or a JSON array, not only a quoted
   JSON string. An unknown value fails before the request and lists the valid values.
+- A string parameter, an id in a list included, takes a JSON-quoted value too: `--companyIds '"C.example"'` sends
+  `C.example` like `--companyIds C.example`, instead of the quoted text the API rejected with `Invalid input`.
 - A union parameter with a list member (`number | "Warn" | string[]`) takes a plain value as the matching member
   instead of wrapping it in a list, and a `|` inside a nested type or a quoted literal no longer splits the union
   (#102).

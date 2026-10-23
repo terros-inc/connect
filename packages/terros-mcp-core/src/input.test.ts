@@ -215,6 +215,33 @@ describe('buildEndpointInput', () => {
     })
   })
 
+  describe('string parameters', () => {
+    const endpoint: Endpoint = {
+      path: '/search',
+      components: { schemas: {} },
+      properties: {
+        type: 'object',
+        properties: { query: { type: 'string' }, companyIds: { type: 'array', items: { type: 'string' } } },
+      },
+    }
+    const build = (params: Record<string, unknown>): unknown => buildEndpointInput(endpoint, { _: [], ...params })
+
+    // A JSON-quoted id was sent with its quotes, so the API rejected it with `companyIds.0: Invalid input`.
+    it('accepts an id bare or JSON-quoted', () => {
+      expect(build({ companyIds: 'C.example' })).toEqual({ companyIds: ['C.example'] })
+      expect(build({ companyIds: '"C.example"' })).toEqual({ companyIds: ['C.example'] })
+      expect(build({ companyIds: '"C.example","C.other"' })).toEqual({ companyIds: ['C.example', 'C.other'] })
+      expect(build({ companyIds: '["C.example"]' })).toEqual({ companyIds: ['C.example'] })
+      expect(build({ query: '"Acme Solar"' })).toEqual({ query: 'Acme Solar' })
+    })
+
+    // Text that only starts with a quote is not a JSON string and must be sent as typed, not rejected.
+    it('sends a value that is not a JSON string unchanged', () => {
+      expect(build({ query: '"Acme' })).toEqual({ query: '"Acme' })
+      expect(build({ query: 'say "hi"' })).toEqual({ query: 'say "hi"' })
+    })
+  })
+
   describe('union parameters', () => {
     // Shaped like `/preference/update --value`: scalars, string literals, objects whose fields are unions, and
     // list members, ending in a list. The union used to be parsed as one list because the type ends in `[]`,
