@@ -1,9 +1,12 @@
 import { type AccountWebhook, wrapConnectHandler } from '@terros-inc/sdk'
 import {
   createJobNimbusRecord,
+  getCreateSkipReason,
   getSalesRepId,
+  getStatusName,
   type JobNimbusScriptConfig,
   toJobNimbusRecord,
+  toNewJobNimbusRecord,
   updateJobNimbusRecord,
 } from './jobnimbus.ts'
 import { maskEmail } from './util.ts'
@@ -28,6 +31,12 @@ export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptC
     throw Error('No JobNimbus apiKey')
   }
 
+  const skipReason = account.externalLeadId ? undefined : getCreateSkipReason(account, scriptConfig)
+  if (skipReason) {
+    console.log(`Skipping JobNimbus create for account ${account.id}: ${skipReason}`)
+    return
+  }
+
   const salesRepId = await getSalesRepId(account.owner, apiKey)
   if (!salesRepId) {
     console.log(
@@ -48,9 +57,6 @@ export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptC
   const jobNimbusPath = `${jobNimbusRecord}s`
 
   const record = toJobNimbusRecord(account, salesRepId, scriptConfig, jobNimbusRecord)
-  if (!record) {
-    throw Error('Failed to build record to push to JobNimbus')
-  }
 
   if (account.externalLeadId) {
     const updatedRecord = await updateJobNimbusRecord(apiKey, jobNimbusPath, account.externalLeadId, record)
@@ -62,7 +68,12 @@ export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptC
     return
   }
 
-  const createdRecord = await createJobNimbusRecord(apiKey, jobNimbusPath, record)
+  const statusName = getStatusName(account, scriptConfig) || ''
+  const createdRecord = await createJobNimbusRecord(
+    apiKey,
+    jobNimbusPath,
+    toNewJobNimbusRecord(record, statusName, scriptConfig)
+  )
   if (!createdRecord?.jnid) {
     console.log(`JobNimbus ${jobNimbusRecord} create response for account ${account.id} did not include jnid`)
     throw Error('Failed to detect jnid from JobNimbus response')
