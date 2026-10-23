@@ -3,3 +3,4 @@ dist/
 .idea/
 terros.yml
 .DS_Store
+.prepack/
