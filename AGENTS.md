@@ -5,14 +5,14 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - `sdk` - `@terros-inc/sdk`, API client and `wrapConnectHandler` for integration handlers
 - `cli` - `@terros-inc/cli`, the `terros` command, including `terros connect publish`
 - `packages/connect-common` - private shared package, a dependency of `sdk` and `cli`
-- `integrations/*` - one Connect app each (airtable, docusign, gohighlevel, jobnimbus, salesforce, zoho)
+- `integrations/*` - one Connect app each (acculynx, airtable, docusign, gohighlevel, jobnimbus, salesforce, zoho)
 
 ## Setup and commands
 
 - Node 24 (`.nvmrc`). The pnpm version is pinned in `package.json`.
 - Install `pnpm install --frozen-lockfile`; lint `pnpm lint`; format `pnpm format` (oxfmt, config in `.oxfmtrc.json`).
 - Build and test everything: `pnpm -r build`, `pnpm -r test` (CI runs lint, test, then build).
-- One package: `pnpm --filter <package name> test`, or run the script from its directory. `cli`'s `pretest` downloads the OpenAPI document (`pnpm fetch-openapi`, with `curl`) into the git-ignored `cli/terros.yml` when it is missing; rerun `pnpm fetch-openapi` there to refresh it. Only `integrations/gohighlevel` has a `pretest` that builds the SDK; build it first (`pnpm --filter @terros-inc/sdk... build`) before testing another integration that needs it.
+- One package: `pnpm --filter <package name> test`, or run the script from its directory. `cli`'s `pretest` downloads the OpenAPI document (`pnpm fetch-openapi`, with `curl`) into the git-ignored `cli/terros.yml` when it is missing; rerun `pnpm fetch-openapi` there to refresh it. Only `integrations/gohighlevel` and `integrations/acculynx` have a `pretest` that builds the SDK; build it first (`pnpm --filter @terros-inc/sdk... build`) before testing another integration that needs it.
 - Type-check an integration with `pnpm exec tsc --noEmit` in its directory (its `build` script is `tsc`). There is no root type-check script.
 
 ## Engineering approach
@@ -27,7 +27,7 @@ Each `integrations/<name>` has `package.json`, `tsconfig.json`, `vitest.config.t
 
 Handlers are wrapped with `wrapConnectHandler` from `@terros-inc/sdk`, which supplies the Terros client.
 
-Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel` has tests so far.
+Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel` and `acculynx` have tests so far.
 
 ## Testing
 
