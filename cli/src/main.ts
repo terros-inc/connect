@@ -13,6 +13,7 @@ import {
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
+  REPORT_KPI_HELP,
 } from './messages'
 import { loadEndpoints } from './loadEndpoints'
 import { readInputFile } from './inputFile'
@@ -123,7 +124,7 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
         level.words.join(' '),
         undefined,
         parameters,
-        endpoint.description,
+        endpoint.path === '/report/kpi' ? REPORT_KPI_HELP : endpoint.description,
         true,
         level.subcommands
       )
