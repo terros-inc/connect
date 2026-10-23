@@ -152,20 +152,16 @@ terros <command> <subcommand> help
 
 ### List and inspect games
 
-Listing and inspecting games use the same authorization and visibility as the Terros app. List the games visible to
-the signed-in user:
+Listing and inspecting games are read-only and use the same authorization and visibility as the Terros app. List the
+games visible to the signed-in user:
 
 ```sh
-terros game list
+terros game query
 ```
 
 The list can be filtered with `--startTime`, `--endTime`, or `--archived`. Owners see their own games, active
 participants see non-draft games they participate in, and other non-draft games require `game:list` permission scoped
 to the game owner or company. Each result includes its `gameType`, `ownerId`, `companyId`, and participant settings.
-
-`game list` is not a pure read. As in the Terros app, among the games it matches it permanently deletes the signed-in
-user's own draft games that were never edited after creation and were created more than a month ago, and leaves them
-out of the results. It never deletes other users' games or non-draft games.
 
 Inspect one accessible game with its participants:
 
@@ -173,8 +169,9 @@ Inspect one accessible game with its participants:
 terros game get --gameId Game.example
 ```
 
-Participants are returned only by the get operation and only after the API authorizes access to that game. Run
-`terros game list help` or `terros game get help` for the full request description and parameters.
+Participants are returned only by the get operation and only after the API authorizes access to that game. Neither
+command creates, changes, or deletes games. Run `terros game query help` or `terros game get help` for the full request
+description and parameters.
 
 Show parameters for a command (and any subcommands nested below it):
 
