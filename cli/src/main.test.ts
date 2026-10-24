@@ -1,6 +1,6 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
 import { startMcpServer } from './mcp'
-import { main } from './main'
+import { main, parseArgv } from './main'
 import { loadEndpoints } from './loadEndpoints'
 import { authCommands } from './commands/auth'
 import { buildTerrosClient } from './api/query'
@@ -125,6 +125,32 @@ describe('an endpoint command', () => {
     expect(log).toHaveBeenCalledOnce()
     expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
       company: { companyId: 'C.example', name: 'Acme Solar' },
+    })
+  })
+})
+
+// minimist alone reads `--longitude -124.5` as the short flags -1, -2 and -4, so a map query failed as unknown flags.
+describe('parseArgv', () => {
+  it.each([
+    ['-124.5', -124.5],
+    ['-3', -3],
+    ['-.5', -0.5],
+    ['-1e-3', -0.001],
+  ])('reads %s after a long flag as its value', (value, expected) => {
+    expect(parseArgv(['area', 'list', '--boundingBox.top.longitude', value, '--limit', '5'])).toEqual({
+      _: ['area', 'list'],
+      boundingBox: { top: { longitude: expected } },
+      limit: 5,
+    })
+  })
+
+  it('leaves `--flag=value`, short flags and words after `--` as minimist reads them', () => {
+    expect(parseArgv(['--a=-1', '-2', '-v', '-3', '--', '--b', '-4'])).toEqual({
+      _: ['--b', '-4'],
+      a: -1,
+      2: true,
+      v: true,
+      3: true,
     })
   })
 })
