@@ -33,7 +33,7 @@ export function matchesAccountFilter(account: AccountWebhookData, config: AccuLy
 }
 
 export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxSendConfig): Record<string, unknown> {
-  const resident = (account.resident || {}) as Record<string, string | undefined>
+  const resident = account.resident || {}
   const address = account.address
   const phone = toAccuLynxPhone(resident.phone)
 
@@ -108,7 +108,7 @@ export function getContactSearchStart(account: AccountWebhookData): number {
 }
 
 // AccuLynx accepts exactly 10 digits. A US number with a leading country code 1 is shortened; anything else is dropped.
-export function toAccuLynxPhone(phone: string | undefined): string | undefined {
+export function toAccuLynxPhone(phone: unknown): string | undefined {
   const digits = String(phone || '').replace(/\D/g, '')
   if (digits.length === 10) return digits
   if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1)
