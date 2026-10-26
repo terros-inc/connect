@@ -37,8 +37,10 @@ The workflow uses npm trusted publishing: it gets an OIDC token from GitHub (`id
 token secret. `--provenance` attaches a signed provenance statement to the package.
 
 The package's `prepack` script runs during publish. For the CLI, `prepack` downloads the current OpenAPI spec from
-`https://docs.terros.com/openapi/terros.yml` and rebuilds, so the published CLI's API commands match the spec that is
-live when you publish, not a copy committed to the repository.
+`https://docs.terros.com/openapi/terros.yml` and rebuilds, so the published CLI bundles the spec that is live when you
+publish, not a copy committed to the repository. The CLI only falls back to that bundled copy when it cannot fetch the
+live spec, so a new endpoint does not need a release; see
+[New API endpoints](cli/README.md#new-api-endpoints).
 
 ### 3. Approve the staged version
 

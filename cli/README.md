@@ -251,9 +251,20 @@ terros auth login
 If a token cannot be refreshed, the saved login may have expired. Run
 `terros auth login` to create a new session.
 
+### New API endpoints
+
+The CLI reads its API commands from the live API document at
+`https://docs.terros.com/openapi/terros.yml`, so endpoints added after your CLI
+version was released appear without updating it. It checks for a changed
+document at most every five minutes, with a request that downloads nothing when
+the document is unchanged and gives up after two seconds. When it cannot reach
+the document, it uses the last copy it downloaded, or the copy bundled with
+the CLI. Internal users signed in without impersonation get the internal
+schema instead, cached for 24 hours.
+
 If an endpoint or parameter was recently added and the CLI does not recognize
-it, the CLI refreshes the API schema and retries once when that schema is
-available to your account. To refresh it manually, run:
+it, the CLI refreshes the API schema and retries once. To refresh it manually,
+run:
 
 ```sh
 terros api refresh

@@ -8,17 +8,17 @@ import { apiLogParameters, parseApiLogParams } from './apiLogParams'
 export const apiCommands = {
   refresh: {
     description:
-      'Refresh the cached API schema for internal users. If a command is not in the schema available to your account, update the CLI.',
+      'Refresh the cached API schema, so commands for newly added endpoints appear. The CLI also does this when a command is missing.',
     async run(): Promise<void> {
       await clearOpenApiCache()
-      const { internalSchemaStatus } = await loadEndpointsAfterRefresh()
-      if (internalSchemaStatus === 'available') {
+      const { schemaStatus } = await loadEndpointsAfterRefresh()
+      if (schemaStatus === 'available') {
         console.log('API schema refreshed. Retry the endpoint command.')
         return
       }
 
       console.error(
-        'The internal API schema could not be refreshed for this account. Update the CLI with `npm install -g @terros-inc/cli` and retry.'
+        'The API schema could not be refreshed. Check your network connection, or update the CLI with `npm install -g @terros-inc/cli`, and retry.'
       )
       process.exitCode = 1
     },
