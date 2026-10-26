@@ -11,7 +11,7 @@ Connects a Terros company to AccuLynx through the [AccuLynx API v2](https://apid
 
 AccuLynx API keys are created per location by an AccuLynx admin (Account Settings > API Keys). Install the app once per location, with that location's key as the `apiKey` secret on both scripts.
 
-- **Send:** with more than one location, set `accountFilterField` (a dotted Terros account field such as `teamId`) and `accountFilterValues` (comma-separated) so each install sends only its own accounts. Without a filter an install sends every account.
+- **Send:** with more than one location, set `accountFilterField` (a dotted Terros account field such as `workflowState.workflowId`) and `accountFilterValues` (comma-separated) so each install sends only its own accounts. Without a filter an install sends every account.
 - **Webhook:** create one AccuLynx subscription per location (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key) pointing at that install's webhook URL, and set `subscriptionId` so the install refuses other subscriptions' events.
 
 Job addresses: AccuLynx needs a country with every job address and Terros addresses have none. Set `addressCountry` (such as `US` or `CA`) on each Send install to the country of that location's jobs. Without it, jobs are created with no address rather than a guessed country.
@@ -32,6 +32,7 @@ A delivery can fail partway and be retried, so Send looks for what an earlier at
    - it is the contact's only job and has no `Terros` reference, which is what a failed reference create leaves behind (Send creates one job per contact).
 
    Otherwise no job is provably this account's, and Send creates a new one rather than link a job of unknown origin.
+
 3. A new or unreferenced job gets the `Terros` reference. A failure here fails the delivery.
 
 `externalLeadId` is saved on the account last, so a linked account always has its reference and a failed save is repaired by the retry without a second contact or job.

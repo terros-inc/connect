@@ -6,11 +6,19 @@ import { fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
 function account(overrides: Partial<AccountWebhookData> = {}): AccountWebhookData {
   return {
     id: 'Account.example',
-    teamId: 'Team.north',
-    homeowner: { firstName: 'Pat', lastName: 'Example', email: 'pat@example.test', phone: '+1 312 555 0100' },
-    location: { line1: '1 Main St', locality: 'Springfield', countrySubd: 'IL', postal1: '62701' },
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    workflowState: { workflowId: 'WF.north', stageId: 'S.example' },
+    resident: { firstName: 'Pat', lastName: 'Example', email: 'pat@example.test', phone: '+1 312 555 0100' },
+    address: {
+      line1: '1 Main St',
+      locality: 'Springfield',
+      countrySubd: 'IL',
+      postal1: '62701',
+      latlng: { latitude: 0, longitude: 0 },
+    },
     ...overrides,
-  } as AccountWebhookData
+  }
 }
 
 const created = {
@@ -27,7 +35,7 @@ describe('sendAccount', () => {
     const { client, calls } = fakeAccuLynx(created)
     const { terros, updates } = fakeTerros()
 
-    await sendAccount(account(), { recordType: 'job' }, client, terros)
+    await sendAccount(account(), { recordType: 'job', addressCountry: 'US' }, client, terros)
 
     expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
       'POST /contacts/search',
@@ -36,8 +44,18 @@ describe('sendAccount', () => {
       'POST /jobs/external-references',
     ])
     expect(calls[0]!.body).toMatchObject({ searchTerm: 'Example', sort: { sortColumn: 'CreatedDate' } })
-    expect(calls[1]!.body).toMatchObject({ firstName: 'Pat', crossReference: 'Account.example' })
-    expect(calls[2]!.body).toMatchObject({ contact: { id: 'contact-1' } })
+    expect(calls[1]!.body).toMatchObject({
+      firstName: 'Pat',
+      lastName: 'Example',
+      crossReference: 'Account.example',
+      phoneNumbers: [{ number: '3125550100', type: 'Home', primary: true }],
+      emailAddresses: [{ address: 'pat@example.test', type: 'Personal', primary: true }],
+      mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+    })
+    expect(calls[2]!.body).toMatchObject({
+      contact: { id: 'contact-1' },
+      locationAddress: { street1: '1 Main St', city: 'Springfield', state: 'IL', country: 'US', zipCode: '62701' },
+    })
     expect(calls[3]!.body).toEqual({ jobId: 'job-1', source: 'Terros', projectId: 'Account.example' })
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'job-1' } }])
   })
@@ -61,7 +79,7 @@ describe('sendAccount', () => {
     await sendAccount(account({ externalLeadId: 'job-0' }), { recordType: 'job' }, client, terros)
     await sendAccount(
       account(),
-      { recordType: 'job', accountFilterField: 'teamId', accountFilterValues: 'Team.south, Team.west' },
+      { recordType: 'job', accountFilterField: 'workflowState.workflowId', accountFilterValues: 'WF.south, WF.west' },
       client,
       terros
     )
@@ -77,7 +95,11 @@ describe('sendAccount', () => {
 
     await sendAccount(
       account(),
-      { recordType: 'contact', accountFilterField: 'teamId', accountFilterValues: 'Team.south,Team.north' },
+      {
+        recordType: 'contact',
+        accountFilterField: 'workflowState.workflowId',
+        accountFilterValues: 'WF.south,WF.north',
+      },
       client,
       terros
     )
@@ -231,7 +253,15 @@ describe('AccuLynx record mapping', () => {
       zipCode: '62701',
     })
     expect(toAccuLynxJob(account(), 'contact-1', {}).locationAddress).toBeUndefined()
-    const noZip = account({ location: { line1: '1 Main St', locality: 'Springfield', countrySubd: 'IL' } as never })
+    const noZip = account({
+      address: {
+        line1: '1 Main St',
+        locality: 'Springfield',
+        countrySubd: 'IL',
+        postal1: '',
+        latlng: { latitude: 0, longitude: 0 },
+      },
+    })
     expect(toAccuLynxJob(noZip, 'contact-1', { addressCountry: 'US' }).locationAddress).toBeUndefined()
   })
 

@@ -27,7 +27,7 @@
         {
           "name": "accountFilterField",
           "type": "string",
-          "description": "Optional. Dotted Terros account field, such as teamId, that decides which AccuLynx location an account belongs to. Blank sends every account."
+          "description": "Optional. Dotted Terros account field, such as workflowState.workflowId, that decides which AccuLynx location an account belongs to. Blank sends every account."
         },
         {
           "name": "accountFilterValues",

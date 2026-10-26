@@ -33,8 +33,8 @@ export function matchesAccountFilter(account: AccountWebhookData, config: AccuLy
 }
 
 export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxSendConfig): Record<string, unknown> {
-  const resident = (account.homeowner || {}) as Record<string, string | undefined>
-  const address = account.location
+  const resident = (account.resident || {}) as Record<string, string | undefined>
+  const address = account.address
   const phone = toAccuLynxPhone(resident.phone)
 
   return removeEmpty({
@@ -62,7 +62,7 @@ export function toAccuLynxJob(
   contactId: string,
   config: AccuLynxSendConfig
 ): Record<string, unknown> {
-  const address = account.location
+  const address = account.address
   const country = getAddressCountry(config.addressCountry)
   const hasFullAddress = address?.line1 && address.locality && address.countrySubd && address.postal1 && country
 
