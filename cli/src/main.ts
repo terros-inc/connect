@@ -2,6 +2,7 @@ import minimist from 'minimist'
 import {
   buildEndpointInput,
   CommandCollisionError,
+  UnknownParameterError,
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
   type EndpointGroups,
@@ -18,6 +19,7 @@ import {
 } from './messages'
 import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
 import { readInputFile } from './inputFile'
+import type { InternalSchemaResult } from './crud/internal'
 import {
   buildCliCommandTree,
   checkBuiltinCollisions,
@@ -102,7 +104,7 @@ export async function main(argv: string[]): Promise<void> {
   try {
     input = buildEndpointInput(endpoint, flags, base)
   } catch (error) {
-    if (!isUnknownParameterError(error)) throw error
+    if (!(error instanceof UnknownParameterError)) throw error
     if (refreshStatus !== undefined) {
       console.error(unknownParameterMessage(error, refreshStatus))
       process.exitCode = 1
@@ -124,7 +126,7 @@ export async function main(argv: string[]): Promise<void> {
     try {
       input = buildEndpointInput(endpoint, flags, base)
     } catch (retryError) {
-      if (!isUnknownParameterError(retryError)) throw retryError
+      if (!(retryError instanceof UnknownParameterError)) throw retryError
       console.error(unknownParameterMessage(retryError, refreshStatus))
       process.exitCode = 1
       return
@@ -158,7 +160,7 @@ async function loadCommandLevel(
 
 async function loadCommandLevelWithRefresh(words: string[]): Promise<{
   level: CommandLevel
-  refreshStatus?: 'available' | 'unavailable' | 'failed'
+  refreshStatus?: InternalSchemaResult['status']
 }> {
   const level = await loadCommandLevel(words)
   if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words, level)) return { level }
@@ -216,7 +218,7 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
 function unknownCommandMessage(
   words: string[],
   level: CommandLevel,
-  refreshStatus?: 'available' | 'unavailable' | 'failed'
+  refreshStatus?: InternalSchemaResult['status']
 ): string {
   if (isLikelyBuiltinTypo(words, level)) {
     return `Unknown built-in command: terros ${words.join(' ')}. Check the built-in command names above.`
@@ -230,7 +232,7 @@ function unknownCommandMessage(
   return `Unknown command: terros ${words.join(' ')}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
 }
 
-function unknownParameterMessage(error: unknown, refreshStatus?: 'available' | 'unavailable' | 'failed'): string {
+function unknownParameterMessage(error: unknown, refreshStatus?: InternalSchemaResult['status']): string {
   const message = error instanceof Error ? error.message : String(error)
   if (refreshStatus === 'available') {
     return `${message}. The refreshed API schema still does not include this parameter; check whether it is supported for your account. For a manual schema retry, run \`terros api refresh\`.`
@@ -239,10 +241,6 @@ function unknownParameterMessage(error: unknown, refreshStatus?: 'available' | '
     return `${message}. Internal schema loading failed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
   }
   return `${message}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
-}
-
-function isUnknownParameterError(error: unknown): boolean {
-  return error instanceof Error && error.message.startsWith('Unknown parameter(s):')
 }
 
 function isLikelyBuiltinTypo(words: string[], level: CommandLevel): boolean {
