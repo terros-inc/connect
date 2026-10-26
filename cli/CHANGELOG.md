@@ -2,13 +2,17 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
-## Unreleased
+## 2.1.0
+
+### API commands from the current public spec
+
+The bundled API document now includes endpoints published to `https://docs.terros.com/openapi/terros.yml` after
+2.0.0: `terros game list` and `terros game get`, `terros program list`, `terros program get` and the
+`terros program user` commands, and `terros externalLink list` and `terros externalLink get`.
 
 ### Bug fix: refresh and retry when API commands or parameters are missing
 
 The CLI refreshes the API schema and retries once when an endpoint or parameter is missing. If the internal schema cannot be fetched or is not available to the account, it directs the user to update the CLI instead of reporting a false refresh success. Built-in command typos do not trigger a refresh, and `terros api refresh` can recover from a stale schema collision.
-
-## 2.0.1
 
 ### Bug fix: built-in commands no longer hide an endpoint that lands on them
 
