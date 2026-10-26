@@ -2,6 +2,10 @@ import { splitTopLevelUnion } from './util.ts'
 import { getEndpointParameters, resolveSchema } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
 
+export class UnknownParameterError extends Error {
+  name = 'UnknownParameterError'
+}
+
 export type ParsedArgs = { _: string[]; [key: string]: unknown }
 
 /**
@@ -30,7 +34,9 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base:
   const knownParameterNames = new Set(parameters.map((parameter) => parameter.name))
   const unknownParameterNames = providedParameterNames.filter((name) => !knownParameterNames.has(name))
   if (unknownParameterNames.length > 0) {
-    throw new Error(`Unknown parameter(s): ${unknownParameterNames.map((name) => `--${name}`).join(', ')}`)
+    throw new UnknownParameterError(
+      `Unknown parameter(s): ${unknownParameterNames.map((name) => `--${name}`).join(', ')}`
+    )
   }
 
   const missingParameters = parameters.filter(

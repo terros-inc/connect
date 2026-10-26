@@ -1,9 +1,18 @@
 import { expect } from 'vitest'
 import { getEndpointParameters } from './parameters.ts'
-import { buildEndpointInput, getEndpointInputParameters, type ParsedArgs } from './input.ts'
+import { buildEndpointInput, getEndpointInputParameters, UnknownParameterError, type ParsedArgs } from './input.ts'
 import type { Endpoint } from './endpoint.ts'
 
 describe('buildEndpointInput', () => {
+  it('identifies unknown flags by error type so schema refresh does not depend on wording', () => {
+    const endpoint: Endpoint = {
+      path: '/garden/list',
+      components: { schemas: {} },
+      properties: { type: 'object', properties: {} },
+    }
+    expect(() => buildEndpointInput(endpoint, { _: [], unsupported: true })).toThrow(UnknownParameterError)
+  })
+
   it('should not add a hidden wrapper prefix for a single non-object property', () => {
     const endpoint: Endpoint = {
       path: '/user/profile',
