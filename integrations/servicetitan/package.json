@@ -1,7 +1,8 @@
 {
   "author": "Terros Inc.",
   "dependencies": {
-    "@terros-inc/sdk": "workspace:"
+    "@terros-inc/sdk": "workspace:",
+    "zod": "catalog:"
   },
   "description": "One-way Terros Consultation sync to ServiceTitan",
   "devDependencies": {

@@ -1,13 +1,5 @@
 import type { AccountId, CalendarEventId, CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
-import {
-  retryWithBackoff,
-  type CustomField,
-  type Contact,
-  type Job,
-  type ServiceTitanClient,
-  type Technician,
-  type Result,
-} from './servicetitan.ts'
+import type { Contact, CustomField, Job, Result, ServiceTitanClient, Technician } from './servicetitan.ts'
 import type { Config } from './config.ts'
 import { toState, toZip } from './address.ts'
 
@@ -51,12 +43,36 @@ export type Outcome =
   | { kind: 'updated'; changes: string[] }
   | { kind: 'unchanged' }
 
+function eventSkipReason(event: EventData): string | undefined {
+  if (event.eventType !== 'Consultation') return 'non-Consultation event'
+  if (!event.attendee) return 'missing attendee'
+  if (!event.owner) return 'missing owner'
+  if (!event.account) return 'missing account'
+}
 export function skipReason(payload: CalendarEventWebhook): string | undefined {
   if (payload.action === 'remove') return 'removed event'
-  if (payload.data.eventType !== 'Consultation') return 'non-Consultation event'
-  if (!payload.data.attendee) return 'missing attendee'
-  if (!payload.data.owner) return 'missing owner'
-  if (!payload.data.account) return 'missing account'
+  return eventSkipReason(payload.data)
+}
+
+export type JobLink =
+  | { kind: 'none' }
+  | { kind: 'job'; jobId: number }
+  | { kind: 'otherTenant' }
+  | { kind: 'invalid'; value: string }
+
+// Links are stored as `tenantId:jobId`; bare numeric job IDs written before tenant prefixes are read as this tenant's.
+export function parseJobLink(value: unknown, tenantId: string): JobLink {
+  if (value === undefined || value === null) return { kind: 'none' }
+  const text = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : JSON.stringify(value)
+  if (!text) return { kind: 'none' }
+  const match = /^(?:(\d+):)?(\d+)$/.exec(text)
+  const jobId = Number(match?.[2])
+  if (!match || !Number.isSafeInteger(jobId) || jobId <= 0) return { kind: 'invalid', value: text }
+  if (match[1] !== undefined && match[1] !== tenantId) return { kind: 'otherTenant' }
+  return { kind: 'job', jobId }
+}
+export function formatJobLink(tenantId: string, jobId: number): string {
+  return `${tenantId}:${jobId}`
 }
 
 function getName(user: User): string {
@@ -71,7 +87,7 @@ export function determineCampaignId(status: string | undefined, config: Config):
 function jobFields(event: EventData, config: Config): CustomField[] {
   const fields: CustomField[] = []
   if (config.customFieldSetter) fields.push({ typeId: config.customFieldSetter, value: getName(event.owner!) })
-  if (config.customFieldAppointmentOutcome)
+  if (config.customFieldAppointmentOutcome && event.status)
     fields.push({ typeId: config.customFieldAppointmentOutcome, value: event.status })
   return fields
 }
@@ -99,10 +115,14 @@ function checked<T>(result: Result<T>): T {
   return result.value
 }
 
-async function findOrCreateCustomer(api: ServiceTitanClient, account: Account, config: Config) {
+async function findOrCreateCustomer(
+  api: ServiceTitanClient,
+  account: Account,
+  config: Config
+): Promise<{ customerId: number; locationId: number } | undefined> {
   const resident = account.resident
   const location = account.location!
-  if (!resident || !Object.keys(resident).length) throw new Error('Missing resident')
+  if (!resident || !Object.keys(resident).length) return undefined
   const text = (key: string) => (typeof resident[key] === 'string' ? (resident[key] as string) : '')
   const name =
     text('businessName') ||
@@ -116,44 +136,37 @@ async function findOrCreateCustomer(api: ServiceTitanClient, account: Account, c
     ...(location.latlng ? { latitude: location.latlng.latitude, longitude: location.latlng.longitude } : {}),
   }
   if (config.customFieldCustomerId) {
-    const result = await api.searchCustomers({
-      name,
-      street: address.street,
-      city: address.city,
-      state: address.state,
-      zip: address.zip,
-    })
-    const match = result.ok
-      ? result.value.data.find(
-          (customer) =>
-            customer.customFields?.find((cf) => cf.typeId === config.customFieldCustomerId)?.value === account.accountId
-        )
-      : undefined
-    if (match) {
-      const found = await retryWithBackoff(() => api.getLocation(match.id), 3000)
-      return { customerId: match.id, locationId: found.id }
-    }
+    const result = checked(
+      await api.searchCustomers({
+        name,
+        street: address.street,
+        city: address.city,
+        state: address.state,
+        zip: address.zip,
+      })
+    )
+    const match = result.data.find(
+      (customer) =>
+        customer.customFields?.find((cf) => cf.typeId === config.customFieldCustomerId)?.value === account.accountId
+    )
+    if (match) return { customerId: match.id, locationId: checked(await api.getLocation(match.id)).id }
   }
   const contacts: Contact[] = []
   if (text('email')) contacts.push({ type: 'Email' as const, value: text('email'), memo: 'email' })
   if (text('phone')) contacts.push({ type: 'Phone' as const, value: text('phone'), memo: 'phone' })
   const fields = (id?: number) => (id ? [{ typeId: id, value: account.accountId }] : undefined)
+  // Not retried: a create that timed out may have succeeded.
   const customer = checked(
-    await retryWithBackoff(
-      () =>
-        api.createCustomer({
-          name,
-          type: 'Residential',
-          address,
-          contacts,
-          customFields: fields(config.customFieldCustomerId),
-          locations: [{ name, address, contacts, customFields: fields(config.customFieldLocationId) }],
-        }),
-      5000
-    )
+    await api.createCustomer({
+      name,
+      type: 'Residential',
+      address,
+      contacts,
+      customFields: fields(config.customFieldCustomerId),
+      locations: [{ name, address, contacts, customFields: fields(config.customFieldLocationId) }],
+    })
   )
-  const found = await retryWithBackoff(() => api.getLocation(customer.id), 3000)
-  return { customerId: customer.id, locationId: found.id }
+  return { customerId: customer.id, locationId: checked(await api.getLocation(customer.id)).id }
 }
 
 async function createJob(
@@ -166,50 +179,72 @@ async function createJob(
   const businessUnitId =
     (technician.team ? config.teamToBusinessUnitMap[technician.team] : undefined) ?? technician.businessUnitId
   if (!businessUnitId) throw new Error('BusinessUnitId is required to create ServiceTitan job')
+  // Not retried: a create that timed out may have succeeded.
   return checked(
-    await retryWithBackoff(
-      () =>
-        api.createJob({
-          customerId: customer.customerId,
-          locationId: customer.locationId,
-          jobTypeId: config.jobTypeId,
-          priority: 'Normal',
-          businessUnitId,
-          campaignId: determineCampaignId(event.owner!.closerStatus, config),
-          customFields: jobFields(event, config),
-          appointments: [{ ...times(event), technicianIds: [technician.id] }],
-        }),
-      5000
-    )
+    await api.createJob({
+      customerId: customer.customerId,
+      locationId: customer.locationId,
+      jobTypeId: config.jobTypeId,
+      priority: 'Normal',
+      businessUnitId,
+      campaignId: determineCampaignId(event.owner!.closerStatus, config),
+      customFields: jobFields(event, config),
+      appointments: [{ ...times(event), technicianIds: [technician.id] }],
+    })
   )
 }
 
+// ServiceTitan API failures throw so the run fails and is retried; compare-before-write keeps retries safe.
+// `skipped` is only for business-rule skips and permanent input problems.
 export async function sync(
   payload: CalendarEventWebhook,
   config: Config,
   api: ServiceTitanClient,
   ports: Ports
 ): Promise<Outcome> {
-  const reason = skipReason(payload)
-  if (reason) return { kind: 'skipped', reason }
   if (payload.action === 'remove') return { kind: 'skipped', reason: 'removed event' }
   const event = payload.data
+  const reason = eventSkipReason(event)
+  if (reason) return { kind: 'skipped', reason }
   const account = await ports.readAccount(event.account!.accountId)
   if (account.accountSource !== 'Terros') return { kind: 'skipped', reason: 'account source is not Terros' }
   if (!account.location) throw new Error('Account has no location')
-  const technicians = await api.searchTechnicians({
-    ids: event.attendee!.clientUserId ? [event.attendee!.clientUserId] : undefined,
-    name: getName(event.attendee!),
-  })
-  const technician = technicians.ok ? technicians.value.data[0] : undefined
+
+  const tenantId = api.tenantId
+  let linked: number | undefined
+  const stored = parseJobLink(account.customFields?.[config.serviceTitanJobId], tenantId)
+  if (stored.kind === 'invalid') {
+    throw new Error(`Invalid ServiceTitan job link "${stored.value}" in account field ${config.serviceTitanJobId}`)
+  }
+  if (stored.kind === 'otherTenant') return { kind: 'skipped', reason: 'job linked to another ServiceTitan tenant' }
+  if (stored.kind === 'job') linked = stored.jobId
+  else {
+    // An empty field may be hidden from or inactive for this token; the event keeps its own copy of the link.
+    const fromEvent = parseJobLink(event.sourceId, tenantId)
+    if (fromEvent.kind === 'otherTenant')
+      return { kind: 'skipped', reason: 'event linked to another ServiceTitan tenant' }
+    if (fromEvent.kind === 'job') linked = fromEvent.jobId
+  }
+
+  const technicians = checked(
+    await api.searchTechnicians({
+      ids: event.attendee!.clientUserId ? [event.attendee!.clientUserId] : undefined,
+      name: getName(event.attendee!),
+    })
+  )
+  const technician = technicians.data[0]
   if (!technician) return { kind: 'skipped', reason: 'no matching technician' }
+
   const changes: string[] = []
   const link = async (jobId: number) => {
-    const value = String(jobId)
-    if (account.customFields?.[config.serviceTitanJobId] !== value) {
-      // Account update replaces the map; retain every existing field.
+    const value = formatJobLink(tenantId, jobId)
+    // TODO: switch to a sales partial custom-field update endpoint once one exists. account.update replaces the
+    // whole map, so this re-reads right before writing and changes only the job link key; fields the token
+    // cannot view are still dropped. GoHighLevel src/outgoing.ts (saveOpportunityId) needs the same endpoint.
+    const fresh = await ports.readAccount(account.accountId)
+    if (fresh.customFields?.[config.serviceTitanJobId] !== value) {
       await ports.writeAccountCustomField(account.accountId, {
-        ...account.customFields,
+        ...fresh.customFields,
         [config.serviceTitanJobId]: value,
       })
       changes.push('account custom field')
@@ -219,62 +254,53 @@ export async function sync(
       changes.push('event sourceId')
     }
   }
-  const stored = account.customFields?.[config.serviceTitanJobId]
-  const jobId = stored === undefined || stored === null || stored === '' ? undefined : Number(stored)
-  if (jobId !== undefined && !Number.isNaN(jobId)) {
-    const job = await api.getJob(jobId)
+
+  if (linked !== undefined) {
+    const job = checked(await api.getJob(linked))
     const assignments = job.lastAppointmentId
-      ? await api.searchAppointmentAssignments([job.lastAppointmentId])
+      ? checked(await api.searchAppointmentAssignments([job.lastAppointmentId]))
       : undefined
-    const active = assignments?.ok ? assignments.value.data.find((assignment) => assignment.active) : undefined
+    const active = assignments?.data.find((assignment) => assignment.active)
     if (active && active.technicianId !== technician.id) {
+      // Link the replacement before cancelling: a retry then follows the new link instead of creating another job.
       const created = await createJob(api, job, event, config, technician)
       await link(created.id)
-      const cancel = await retryWithBackoff(
-        () =>
-          api.cancelJob(job.id, {
-            reasonId: config.cancelReasonId,
-            memo: 'Closer reassigned via automation',
-          }),
-        5000
-      )
-      if (!cancel.ok) console.error('ServiceTitan previous job cancellation failed')
+      const cancel = await api.cancelJob(job.id, {
+        reasonId: config.cancelReasonId,
+        memo: 'Closer reassigned via automation',
+      })
+      if (!cancel.ok) {
+        throw new Error(
+          `Reassigned to ServiceTitan job ${created.id}, but cancelling previous job ${job.id} failed: ${cancel.message}`
+        )
+      }
       return { kind: 'reassigned', oldJobId: job.id, jobId: created.id }
     }
     if (shouldUpdateJob(job, event, config)) {
-      const result = await retryWithBackoff(
-        () =>
-          api.updateJob(job.id, {
-            campaignId: determineCampaignId(event.owner!.closerStatus, config),
-            customFields: jobFields(event, config),
-          }),
-        5000
+      checked(
+        await api.updateJob(job.id, {
+          campaignId: determineCampaignId(event.owner!.closerStatus, config),
+          customFields: jobFields(event, config),
+        })
       )
-      if (result.ok) changes.push('job')
-      else console.error('ServiceTitan job update failed')
+      changes.push('job')
     }
     if (job.lastAppointmentId) {
-      const appointment = await api.getAppointment(job.lastAppointmentId)
+      const appointment = checked(await api.getAppointment(job.lastAppointmentId))
       const desired = times(event)
       if (
         Date.parse(appointment.start) !== Date.parse(desired.start) ||
         Date.parse(appointment.end) !== Date.parse(desired.end)
       ) {
-        const result = await retryWithBackoff(() => api.updateAppointment(appointment.id, desired), 5000)
-        if (result.ok) changes.push('appointment')
-        else console.error('ServiceTitan appointment update failed')
+        checked(await api.updateAppointment(appointment.id, desired))
+        changes.push('appointment')
       }
     }
     await link(job.id)
     return changes.length ? { kind: 'updated', changes } : { kind: 'unchanged' }
   }
-  let customer
-  try {
-    customer = await findOrCreateCustomer(api, account, config)
-  } catch {
-    console.error('ServiceTitan customer lookup or creation failed')
-    return { kind: 'skipped', reason: 'customer lookup or creation failed' }
-  }
+  const customer = await findOrCreateCustomer(api, account, config)
+  if (!customer) return { kind: 'skipped', reason: 'missing resident' }
   const created = await createJob(api, customer, event, config, technician)
   await link(created.id)
   return { kind: 'created', jobId: created.id }

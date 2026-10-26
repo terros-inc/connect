@@ -109,6 +109,7 @@ export function toState(state = ''): string {
 }
 
 export function toZip(zip = ''): string {
-  if (zip.includes('-')) return zip.split('-')[0]!
-  return zip.trim()
+  const trimmed = zip.trim()
+  if (trimmed.includes('-')) return trimmed.split('-')[0]!.trim()
+  return trimmed
 }

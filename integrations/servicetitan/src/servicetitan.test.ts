@@ -3,14 +3,12 @@ import { fakeServiceTitan } from './fakeServiceTitan.ts'
 
 afterEach(() => vi.useRealTimers())
 
-it('keeps OAuth tokens isolated by both client ID and client secret across installs', async () => {
+// Installs share the Lambda, so one install's token must never be sent for another tenant.
+it('keeps OAuth tokens isolated per client ID and tenant across installs', async () => {
   const fake = fakeServiceTitan()
   await fake.client.searchTechnicians({ ids: ['2000'] })
   await new ServiceTitanClient(fake.secrets, fake.fakeFetch).searchTechnicians({})
-  await new ServiceTitanClient(
-    { ...fake.secrets, clientSecret: 'other-example-secret' },
-    fake.fakeFetch
-  ).searchTechnicians({})
+  await new ServiceTitanClient({ ...fake.secrets, tenantId: '1001' }, fake.fakeFetch).searchTechnicians({})
   await new ServiceTitanClient({ ...fake.secrets, clientId: 'other-example-client' }, fake.fakeFetch).searchTechnicians(
     {}
   )
@@ -46,10 +44,101 @@ it('sends tenant-scoped URLs, credentials, app key and timeouts without mixing n
   expect(fake.calls.at(-1)!.url.searchParams.get('name')).toBe('Example Closer')
 })
 
-it('throws on missing linked records while returning write failures for legacy handling', async () => {
+const apiCalls = (fake: ReturnType<typeof fakeServiceTitan>) =>
+  fake.calls.filter((call) => call.url.hostname === 'api.servicetitan.io')
+
+const jobInput = {
+  customerId: 1,
+  locationId: 1,
+  jobTypeId: 1,
+  businessUnitId: 1,
+  priority: 'Normal' as const,
+  campaignId: 1,
+  customFields: [],
+  appointments: [],
+}
+
+async function settle<T>(pending: Promise<T>): Promise<T> {
+  await vi.runAllTimersAsync()
+  return pending
+}
+
+it('returns missing records and failed writes as non-retryable failures without retrying', async () => {
   const fake = fakeServiceTitan()
-  await expect(fake.client.getJob(9999)).rejects.toThrow('job not found')
-  await expect(fake.client.getAppointment(9999)).rejects.toThrow('appointment not found')
-  await expect(fake.client.getLocation(9999)).rejects.toThrow('location not found')
-  expect(await fake.client.updateJob(9999, { campaignId: 1002, customFields: [] })).toMatchObject({ ok: false })
+  expect(await fake.client.getJob(9999)).toMatchObject({ ok: false, retryable: false })
+  expect(await fake.client.getAppointment(9999)).toMatchObject({ ok: false, retryable: false })
+  expect(await fake.client.updateJob(9999, { campaignId: 1002, customFields: [] })).toMatchObject({
+    ok: false,
+    retryable: false,
+  })
+  expect(apiCalls(fake)).toHaveLength(3)
+})
+
+// request returns failures as values, so the old throw-based retry never retried anything.
+it.each([
+  ['HTTP 429', { status: 429 }],
+  ['HTTP 503', { status: 503 }],
+  ['a network error', { error: 'network' as const }],
+  ['a timeout', { error: 'timeout' as const }],
+])('retries reads and updates after %s', async (_name, reply) => {
+  vi.useFakeTimers()
+  const fake = fakeServiceTitan()
+  fake.replies.set('GET /settings/v2/tenant/1000/technicians', [reply, reply])
+  expect(await settle(fake.client.searchTechnicians({ ids: ['2000'] }))).toMatchObject({ ok: true })
+  const job = { campaignId: 1002, customFields: [] }
+  fake.jobs.set(4000, { id: 4000, customerId: 4001, locationId: 4002, campaignId: 1001 })
+  fake.replies.set('PATCH /jpm/v2/tenant/1000/jobs/4000', [reply])
+  expect(await settle(fake.client.updateJob(4000, job))).toMatchObject({ ok: true })
+  expect(apiCalls(fake).map((call) => call.method)).toEqual(['GET', 'GET', 'GET', 'PATCH', 'PATCH'])
+})
+
+it('gives up after three attempts and does not retry client errors', async () => {
+  vi.useFakeTimers()
+  const fake = fakeServiceTitan()
+  fake.replies.set('GET /settings/v2/tenant/1000/technicians', [{ status: 500 }, { status: 500 }, { status: 500 }])
+  expect(await settle(fake.client.searchTechnicians({}))).toMatchObject({ ok: false, retryable: true })
+  expect(apiCalls(fake)).toHaveLength(3)
+  fake.calls.length = 0
+  fake.replies.set('GET /settings/v2/tenant/1000/technicians', [{ status: 400 }])
+  expect(await settle(fake.client.searchTechnicians({}))).toMatchObject({ ok: false, retryable: false })
+  expect(apiCalls(fake)).toHaveLength(1)
+})
+
+// A create that timed out may have succeeded, so retrying it would duplicate the job or customer.
+it.each([{ error: 'timeout' as const }, { status: 503 }])(
+  'never retries job or customer creates (%j)',
+  async (reply) => {
+    vi.useFakeTimers()
+    const fake = fakeServiceTitan()
+    fake.replies.set('POST /jpm/v2/tenant/1000/jobs', [reply])
+    fake.replies.set('POST /crm/v2/tenant/1000/customers', [reply])
+    const address = { street: '', city: '', state: '', zip: '', country: 'USA' as const }
+    expect(await settle(fake.client.createJob(jobInput))).toMatchObject({ ok: false })
+    expect(
+      await settle(
+        fake.client.createCustomer({ name: 'Acme Solar', type: 'Residential', address, contacts: [], locations: [] })
+      )
+    ).toMatchObject({ ok: false })
+    expect(apiCalls(fake).map((call) => call.method)).toEqual(['POST', 'POST'])
+    expect(fake.jobs.size).toBe(0)
+    expect(fake.customers).toHaveLength(0)
+  }
+)
+
+// An unvalidated response let a missing id become the string "undefined" in the account link.
+it('rejects responses without a valid ID instead of returning undefined', async () => {
+  const fake = fakeServiceTitan()
+  fake.replies.set('POST /jpm/v2/tenant/1000/jobs', [{ status: 200, body: { customerId: 1 } }])
+  fake.replies.set('GET /jpm/v2/tenant/1000/jobs/4000', [{ status: 200, body: { id: 'abc' } }])
+  expect(await fake.client.createJob(jobInput)).toMatchObject({ ok: false, retryable: false })
+  expect(await fake.client.getJob(4000)).toMatchObject({
+    ok: false,
+    message: expect.stringContaining('invalid response'),
+  })
+})
+
+it('treats a successful empty update response as success', async () => {
+  const fake = fakeServiceTitan()
+  fake.replies.set('PUT /jpm/v2/tenant/1000/jobs/4000/cancel', [{ status: 204 }])
+  expect(await fake.client.cancelJob(4000, { reasonId: 1, memo: 'example' })).toMatchObject({ ok: true })
 })

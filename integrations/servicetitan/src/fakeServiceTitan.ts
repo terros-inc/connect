@@ -10,7 +10,7 @@ import {
 } from './servicetitan.ts'
 
 export type FakeCall = { url: URL; method: string; headers: Headers; body?: unknown; signal?: AbortSignal | null }
-type Reply = { status: number; body?: unknown }
+type Reply = { status: number; body?: unknown } | { error: 'network' | 'timeout' }
 
 // An in-memory server behind the real client, with optional queued failures for individual requests.
 export function fakeServiceTitan() {
@@ -33,6 +33,11 @@ export function fakeServiceTitan() {
       : undefined
     calls.push({ url, method, body, headers: new Headers(init?.headers), signal: init?.signal })
     const queued = replies.get(`${method} ${url.pathname}`)?.shift()
+    if (queued && 'error' in queued) {
+      if (queued.error === 'timeout') throw new DOMException('The operation timed out.', 'TimeoutError')
+      throw new TypeError('fetch failed')
+    }
+    if (queued?.status === 204) return new Response(null, { status: 204 })
     if (queued) return Response.json(queued.body ?? {}, { status: queued.status })
     if (url.hostname === 'auth.servicetitan.io')
       return Response.json({ access_token: 'example-token', expires_in: 900 })

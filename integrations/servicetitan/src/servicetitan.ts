@@ -1,18 +1,35 @@
+import { z } from 'zod'
 import type { Secrets } from './config.ts'
 
-export type CustomField = { typeId?: number | null; value?: string | null }
-export type Customer = { id: number; customFields?: CustomField[] }
-export type Technician = { id: number; name: string; team?: string | null; businessUnitId?: number | null }
-export type Appointment = { id: number; start: string; end: string }
-export type Assignment = { appointmentId: number; technicianId: number; active: boolean }
-export type Job = {
-  id: number
-  customerId: number
-  locationId: number
-  campaignId: number
-  lastAppointmentId?: number
-  customFields?: CustomField[]
-}
+const id = z.number().int().positive()
+const customField = z.object({ typeId: z.number().nullish(), value: z.string().nullish() })
+const instant = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'expected a date-time')
+const customerSchema = z.object({ id, customFields: z.array(customField).nullish() })
+const technicianSchema = z.object({
+  id,
+  name: z.string(),
+  team: z.string().nullish(),
+  businessUnitId: id.nullish(),
+})
+const appointmentSchema = z.object({ id, start: instant, end: instant })
+const assignmentSchema = z.object({ appointmentId: id, technicianId: id, active: z.boolean() })
+const jobSchema = z.object({
+  id,
+  customerId: id,
+  locationId: id,
+  campaignId: id,
+  lastAppointmentId: id.nullish(),
+  customFields: z.array(customField).nullish(),
+})
+const page = <T extends z.ZodType>(item: T) => z.object({ data: z.array(item) })
+const tokenSchema = z.object({ access_token: z.string().min(1), expires_in: z.number().positive().optional() })
+
+export type CustomField = z.infer<typeof customField>
+export type Customer = z.infer<typeof customerSchema>
+export type Technician = z.infer<typeof technicianSchema>
+export type Appointment = z.infer<typeof appointmentSchema>
+export type Assignment = z.infer<typeof assignmentSchema>
+export type Job = z.infer<typeof jobSchema>
 export type Address = {
   street: string
   city: string
@@ -40,18 +57,33 @@ export type JobInput = JobUpdate & {
   priority: 'Normal'
   appointments: { start: string; end: string; technicianIds: number[] }[]
 }
-export type Result<T> = { ok: true; value: T } | { ok: false; message: string }
+// retryable marks failures that may succeed on a later attempt: HTTP 429, 5xx and network errors or timeouts.
+export type Result<T> = { ok: true; value: T } | { ok: false; message: string; retryable: boolean }
 
-// Errors returned by legacy fetch were values: retryWithBackoff only retried thrown errors.
-export async function retryWithBackoff<T>(fn: () => Promise<T>, backoff: number): Promise<T> {
+const READ_BACKOFF = 3000
+const UPDATE_BACKOFF = 5000
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500
+}
+
+class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message)
+  }
+}
+
+// Three attempts with exponential delay and 0-10% jitter, retrying only retryable failures.
+// Only reads and updates use it: a timed-out create may have succeeded, so retrying it can duplicate records.
+export async function retryWithBackoff<T>(fn: () => Promise<Result<T>>, backoff: number): Promise<Result<T>> {
   for (let attempt = 1; ; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      if (attempt === 3) throw error
-      const delay = backoff * 2 ** (attempt - 1)
-      await new Promise((resolve) => setTimeout(resolve, delay + Math.floor(Math.random() * delay * 0.1)))
-    }
+    const result = await fn()
+    if (result.ok || !result.retryable || attempt === 3) return result
+    const delay = backoff * 2 ** (attempt - 1)
+    await new Promise((resolve) => setTimeout(resolve, delay + Math.floor(Math.random() * delay * 0.1)))
   }
 }
 
@@ -62,8 +94,13 @@ export class ServiceTitanClient {
     private fetcher: typeof fetch = fetch
   ) {}
 
+  get tenantId(): string {
+    return this.secrets.tenantId
+  }
+
+  // Installs share the Lambda, so tokens are cached per credential: OAuth client and tenant.
   private async token(): Promise<string> {
-    const key = `${this.secrets.clientId}:${this.secrets.clientSecret}`
+    const key = `${this.secrets.clientId}:${this.secrets.tenantId}`
     const now = Date.now()
     const cached = ServiceTitanClient.tokens.get(key)
     if (cached && cached.expiry > now) return cached.token
@@ -77,17 +114,26 @@ export class ServiceTitanClient {
       }),
       signal: AbortSignal.timeout(30_000),
     })
-    if (!response.ok) throw new Error(`ServiceTitan OAuth failed (HTTP ${response.status})`)
-    const data = (await response.json()) as { access_token?: string; expires_in?: number }
-    if (!data.access_token) throw new Error('ServiceTitan OAuth response has no access token')
+    if (!response.ok) throw new HttpError(`ServiceTitan OAuth failed (HTTP ${response.status})`, response.status)
+    const data = tokenSchema.safeParse(await response.json())
+    if (!data.success) throw new HttpError('ServiceTitan OAuth response has no access token', 502)
     ServiceTitanClient.tokens.set(key, {
-      token: data.access_token,
-      expiry: now + (data.expires_in || 900) * 1000 - 60_000,
+      token: data.data.access_token,
+      expiry: now + (data.data.expires_in || 900) * 1000 - 60_000,
     })
-    return data.access_token
+    return data.data.access_token
   }
 
-  private async request<T>(area: string, path: string, method = 'GET', body?: object): Promise<Result<T>> {
+  // One attempt. Never throws; failures and invalid responses come back as values.
+  private async send<T>(
+    schema: z.ZodType<T>,
+    area: string,
+    path: string,
+    method = 'GET',
+    body?: object
+  ): Promise<Result<T>> {
+    const label = `ServiceTitan ${method} ${area}/${path.split('?')[0]}`
+    let text: string
     try {
       const token = await this.token()
       const response = await this.fetcher(
@@ -103,62 +149,84 @@ export class ServiceTitanClient {
           signal: AbortSignal.timeout(30_000),
         }
       )
-      if (!response.ok)
-        return { ok: false, message: `ServiceTitan ${method} ${area} request failed (HTTP ${response.status})` }
-      return { ok: true, value: (await response.json()) as T }
-    } catch {
-      return { ok: false, message: `ServiceTitan ${method} ${area} request failed` }
+      if (!response.ok) {
+        return {
+          ok: false,
+          message: `${label} failed (HTTP ${response.status})`,
+          retryable: isRetryableStatus(response.status),
+        }
+      }
+      text = await response.text()
+    } catch (error) {
+      if (error instanceof HttpError) {
+        return { ok: false, message: error.message, retryable: isRetryableStatus(error.status) }
+      }
+      return { ok: false, message: `${label} failed (network error or timeout)`, retryable: true }
     }
+    let json: unknown
+    try {
+      json = text ? JSON.parse(text) : undefined
+    } catch {
+      json = undefined
+    }
+    const parsed = schema.safeParse(json)
+    if (!parsed.success) return { ok: false, message: `${label} returned an invalid response`, retryable: false }
+    return { ok: true, value: parsed.data }
   }
 
-  private async required<T>(result: Promise<Result<T>>, label: string): Promise<T> {
-    const response = await result
-    if (!response.ok) throw new Error(`ServiceTitan ${label} not found`)
-    return response.value
+  private read<T>(schema: z.ZodType<T>, area: string, path: string): Promise<Result<T>> {
+    return retryWithBackoff(() => this.send(schema, area, path), READ_BACKOFF)
   }
 
-  searchCustomers(query: Record<string, string | undefined>) {
+  // Update responses are not used, so any successful status counts, including an empty body.
+  private update(area: string, path: string, method: string, body: object): Promise<Result<unknown>> {
+    return retryWithBackoff(() => this.send(z.unknown(), area, path, method, body), UPDATE_BACKOFF)
+  }
+
+  searchCustomers(query: Record<string, string | undefined>): Promise<Result<{ data: Customer[] }>> {
     const params = new URLSearchParams(
       Object.entries(query).filter((entry): entry is [string, string] => Boolean(entry[1]))
     )
-    return this.request<{ data: Customer[] }>('crm', `customers?${params}`)
+    return this.read(page(customerSchema), 'crm', `customers?${params}`)
   }
-  createCustomer(body: CustomerInput) {
-    return this.request<Customer>('crm', 'customers', 'POST', body)
+  createCustomer(body: CustomerInput): Promise<Result<Customer>> {
+    return this.send(customerSchema, 'crm', 'customers', 'POST', body)
   }
-  async getLocation(customerId: number): Promise<{ id: number }> {
-    const result = await this.required(
-      this.request<{ data: { id: number }[] }>('crm', `locations?customerId=${customerId}`),
-      'location'
-    )
-    if (!result.data[0]) throw new Error('ServiceTitan location not found')
-    return result.data[0]
+  // A just-created customer's location can lag, so an empty page is retried like a transient failure.
+  getLocation(customerId: number): Promise<Result<{ id: number }>> {
+    return retryWithBackoff(async () => {
+      const result = await this.send(page(z.object({ id })), 'crm', `locations?customerId=${customerId}`)
+      if (!result.ok) return result
+      const location = result.value.data[0]
+      if (!location) return { ok: false, message: 'ServiceTitan location not found', retryable: true }
+      return { ok: true, value: location }
+    }, READ_BACKOFF)
   }
-  searchTechnicians(query: { ids?: string[]; name?: string }) {
-    const params = new URLSearchParams(
-      query.ids?.length ? { ids: query.ids.join(',') } : query.name ? { name: query.name } : {}
-    )
-    return this.request<{ data: Technician[] }>('settings', `technicians?${params}`)
+  searchTechnicians(query: { ids?: string[]; name?: string }): Promise<Result<{ data: Technician[] }>> {
+    const params = new URLSearchParams()
+    if (query.ids?.length) params.set('ids', query.ids.join(','))
+    else if (query.name) params.set('name', query.name)
+    return this.read(page(technicianSchema), 'settings', `technicians?${params}`)
   }
-  createJob(body: JobInput) {
-    return this.request<Job>('jpm', 'jobs', 'POST', body)
+  createJob(body: JobInput): Promise<Result<Job>> {
+    return this.send(jobSchema, 'jpm', 'jobs', 'POST', body)
   }
-  getJob(id: number) {
-    return this.required(this.request<Job>('jpm', `jobs/${id}`), 'job')
+  getJob(jobId: number): Promise<Result<Job>> {
+    return this.read(jobSchema, 'jpm', `jobs/${jobId}`)
   }
-  updateJob(id: number, body: JobUpdate) {
-    return this.request<Job>('jpm', `jobs/${id}`, 'PATCH', body)
+  updateJob(jobId: number, body: JobUpdate): Promise<Result<unknown>> {
+    return this.update('jpm', `jobs/${jobId}`, 'PATCH', body)
   }
-  cancelJob(id: number, body: { reasonId: number; memo: string }) {
-    return this.request<Job>('jpm', `jobs/${id}/cancel`, 'PUT', body)
+  cancelJob(jobId: number, body: { reasonId: number; memo: string }): Promise<Result<unknown>> {
+    return this.update('jpm', `jobs/${jobId}/cancel`, 'PUT', body)
   }
-  getAppointment(id: number) {
-    return this.required(this.request<Appointment>('jpm', `appointments/${id}`), 'appointment')
+  getAppointment(appointmentId: number): Promise<Result<Appointment>> {
+    return this.read(appointmentSchema, 'jpm', `appointments/${appointmentId}`)
   }
-  updateAppointment(id: number, body: { start: string; end: string }) {
-    return this.request<Appointment>('jpm', `appointments/${id}/reschedule`, 'PATCH', body)
+  updateAppointment(appointmentId: number, body: { start: string; end: string }): Promise<Result<unknown>> {
+    return this.update('jpm', `appointments/${appointmentId}/reschedule`, 'PATCH', body)
   }
-  searchAppointmentAssignments(ids: number[]) {
-    return this.request<{ data: Assignment[] }>('dispatch', `appointment-assignments?appointmentIds=${ids.join(',')}`)
+  searchAppointmentAssignments(ids: number[]): Promise<Result<{ data: Assignment[] }>> {
+    return this.read(page(assignmentSchema), 'dispatch', `appointment-assignments?appointmentIds=${ids.join(',')}`)
   }
 }

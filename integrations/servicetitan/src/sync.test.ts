@@ -1,5 +1,6 @@
 import {
   determineCampaignId,
+  parseJobLink,
   sync,
   type Account,
   type CalendarEventWebhook,
@@ -43,14 +44,17 @@ function fixture() {
       line1: '1 Example Street',
       locality: 'Example City',
       countrySubd: ' California ',
-      postal1: '00000-0000',
+      postal1: ' 00000-0000',
     },
   }
   const writes: unknown[] = []
+  // Write order relative to ServiceTitan calls, e.g. 'account@3' means after three fake requests.
+  const order: string[] = []
   const ports: Ports = {
-    readAccount: async () => account,
+    readAccount: async () => structuredClone(account),
     writeAccountCustomField: async (_id, fields) => {
       writes.push(fields)
+      order.push(`account@${fake.calls.length}`)
       account.customFields = fields
     },
     writeEventSourceId: async (_id, value) => {
@@ -61,7 +65,9 @@ function fixture() {
   const run = () => sync({ entity: 'Event', action: 'update', data: event }, config, fake.client, ports)
   const stWrites = () =>
     fake.calls.filter((call) => call.method !== 'GET' && call.url.hostname === 'api.servicetitan.io')
-  return { fake, config, event, account, writes, ports, run, stWrites }
+  const jobs = () => [...fake.jobs.values()]
+  const link = (jobId: number) => `${fake.secrets.tenantId}:${jobId}`
+  return { fake, config, event, account, writes, order, ports, run, stWrites, jobs, link }
 }
 
 it('creates the legacy customer and job bodies, retains other fields, then makes zero writes on the echoed run', async () => {
@@ -90,7 +96,8 @@ it('creates the legacy customer and job bodies, retains other fields, then makes
     appointments: [{ start: '2026-10-26T17:00:00.000Z', end: '2026-10-26T18:00:00.000Z', technicianIds: [2000] }],
   })
   expect(f.account.customFields!['CF.example']).toBe('keep')
-  expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.event.sourceId)
+  expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.link(f.jobs()[0]!.id))
+  expect(f.event.sourceId).toBe(f.link(f.jobs()[0]!.id))
   f.fake.calls.length = 0
   f.writes.length = 0
   expect(await f.run()).toEqual({ kind: 'unchanged' })
@@ -138,7 +145,31 @@ it('reassigns only the first active assignment and cancels the old job using the
   expect(f.stWrites().at(-1)!.body).toEqual({ reasonId: 9001, memo: 'Closer reassigned via automation' })
   expect(f.stWrites()[0]!.body).not.toHaveProperty('id')
   expect(f.stWrites()[0]!.body).not.toHaveProperty('lastAppointmentId')
-  expect(f.event.sourceId).toBe(String(replacement.id))
+  expect(f.event.sourceId).toBe(f.link(replacement.id))
+  expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.link(replacement.id))
+})
+
+// A retry after a failed cancel must follow the new link, not create a second replacement job.
+it('links the replacement before cancelling and fails with the old job ID when the cancel fails', async () => {
+  const f = fixture()
+  await f.run()
+  const oldJob = f.jobs()[0]!
+  f.fake.technicians.push({ id: 2001, name: 'Example Replacement', businessUnitId: 3002 })
+  f.event.attendee!.clientUserId = '2001'
+  f.fake.calls.length = 0
+  f.order.length = 0
+  f.fake.replies.set(`PUT /jpm/v2/tenant/1000/jobs/${oldJob.id}/cancel`, [{ status: 400 }])
+  await expect(f.run()).rejects.toThrow(`previous job ${oldJob.id}`)
+  const replacement = f.jobs()[1]!
+  const createdAt = f.fake.calls.findIndex((call) => call.method === 'POST')
+  const cancelAt = f.fake.calls.findIndex((call) => call.method === 'PUT')
+  expect(f.order).toHaveLength(1)
+  const linkedAt = Number(f.order[0]!.split('@')[1])
+  expect(createdAt).toBeLessThan(linkedAt)
+  expect(linkedAt).toBeLessThanOrEqual(cancelAt)
+  expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.link(replacement.id))
+  expect(await f.run()).toEqual({ kind: 'unchanged' })
+  expect(f.fake.jobs.size).toBe(2)
 })
 
 it('backfills migrated event links once without rewriting the account or unchanged ServiceTitan job', async () => {
@@ -228,15 +259,149 @@ it('fails missing locations instead of creating an unaddressed customer', async 
   expect(f.stWrites()).toEqual([])
 })
 
-it('skips customer create failures instead of creating a job without a customer', async () => {
+it('fails customer create errors instead of skipping or creating a job without a customer', async () => {
   const f = fixture()
   f.fake.replies.set('POST /crm/v2/tenant/1000/customers', [{ status: 400 }])
-  expect(await f.run()).toEqual({ kind: 'skipped', reason: 'customer lookup or creation failed' })
+  await expect(f.run()).rejects.toThrow('HTTP 400')
   expect(f.fake.jobs.size).toBe(0)
   expect(f.writes).toEqual([])
 })
 
-it('retries thrown location reads with legacy backoff before using the new customer', async () => {
+it('skips accounts without a resident before calling ServiceTitan writes', async () => {
+  const f = fixture()
+  delete f.account.resident
+  expect(await f.run()).toEqual({ kind: 'skipped', reason: 'missing resident' })
+  expect(f.stWrites()).toEqual([])
+})
+
+// A failed search used to look like "no match" and created a duplicate customer.
+it('fails a customer search error instead of creating a duplicate customer', async () => {
+  const f = fixture()
+  f.fake.replies.set('GET /crm/v2/tenant/1000/customers', [{ status: 401 }])
+  await expect(f.run()).rejects.toThrow('HTTP 401')
+  expect(f.stWrites()).toEqual([])
+})
+
+// A failed technician lookup used to skip, acknowledging the event without syncing it.
+it('fails a technician lookup error instead of skipping', async () => {
+  const f = fixture()
+  f.fake.replies.set('GET /settings/v2/tenant/1000/technicians', [{ status: 403 }])
+  await expect(f.run()).rejects.toThrow('HTTP 403')
+  expect(f.stWrites()).toEqual([])
+})
+
+// A failed assignment lookup used to read as "no active assignment", so a reassignment was silently missed.
+it('fails an assignment lookup error instead of treating it as no reassignment', async () => {
+  const f = fixture()
+  await f.run()
+  f.fake.calls.length = 0
+  f.writes.length = 0
+  f.fake.replies.set('GET /dispatch/v2/tenant/1000/appointment-assignments', [{ status: 400 }])
+  await expect(f.run()).rejects.toThrow('HTTP 400')
+  expect(f.stWrites()).toEqual([])
+  expect(f.writes).toEqual([])
+})
+
+it.each(['job', 'appointment'] as const)('fails a %s update error so the run is retried', async (target) => {
+  const f = fixture()
+  await f.run()
+  const job = f.jobs()[0]!
+  if (target === 'job') {
+    f.event.status = 'Completed'
+    f.fake.replies.set(`PATCH /jpm/v2/tenant/1000/jobs/${job.id}`, [{ status: 400 }])
+  } else {
+    f.event.duration = 90
+    f.fake.replies.set(`PATCH /jpm/v2/tenant/1000/appointments/${job.lastAppointmentId}/reschedule`, [{ status: 400 }])
+  }
+  await expect(f.run()).rejects.toThrow('HTTP 400')
+})
+
+it('does not write a blank outcome when the event has no status', async () => {
+  const f = fixture()
+  delete f.event.status
+  await f.run()
+  expect(f.jobs()[0]!.customFields).toEqual([{ typeId: 1007, value: 'Example Setter' }])
+  f.fake.calls.length = 0
+  expect(await f.run()).toEqual({ kind: 'unchanged' })
+})
+
+// account.update replaces the whole map, so a stale copy would drop a field another writer added mid-run.
+it('re-reads the account before writing the link and changes only the job link key', async () => {
+  const f = fixture()
+  let reads = 0
+  f.ports.readAccount = async () => {
+    reads++
+    if (reads === 2) f.account.customFields = { ...f.account.customFields, 'CF.added': 'new' }
+    return structuredClone(f.account)
+  }
+  await f.run()
+  expect(f.writes[0]).toEqual({
+    'CF.example': 'keep',
+    'CF.added': 'new',
+    'CF.servicetitanjob': f.link(f.jobs()[0]!.id),
+  })
+})
+
+it.each([
+  ['a tenant-prefixed', (jobId: number) => `1000:${jobId}`],
+  ['a legacy bare numeric', (jobId: number) => String(jobId)],
+])('follows %s event sourceId when the account field is empty', async (_name, format) => {
+  const f = fixture()
+  await f.run()
+  const job = f.jobs()[0]!
+  delete f.account.customFields!['CF.servicetitanjob']
+  f.event.sourceId = format(job.id)
+  f.fake.calls.length = 0
+  const result = await f.run()
+  expect(result).toMatchObject({ kind: 'updated', changes: expect.arrayContaining(['account custom field']) })
+  expect(f.fake.jobs.size).toBe(1)
+  expect(f.stWrites()).toEqual([])
+  expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.link(job.id))
+})
+
+it('reads a legacy bare numeric account link and rewrites it with the tenant prefix', async () => {
+  const f = fixture()
+  await f.run()
+  const job = f.jobs()[0]!
+  f.account.customFields!['CF.servicetitanjob'] = String(job.id)
+  f.event.sourceId = String(job.id)
+  f.fake.calls.length = 0
+  expect(await f.run()).toEqual({ kind: 'updated', changes: ['account custom field', 'event sourceId'] })
+  expect(f.stWrites()).toEqual([])
+  expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.link(job.id))
+})
+
+// A malformed link used to fall through to creating a new job on every sync.
+it.each(['abc', '0', '1000:abc', '1000:', '9007199254740993'])(
+  'fails an invalid account link %j without creating anything',
+  async (value) => {
+    const f = fixture()
+    f.account.customFields!['CF.servicetitanjob'] = value
+    await expect(f.run()).rejects.toThrow(`Invalid ServiceTitan job link "${value}"`)
+    expect(f.fake.calls).toEqual([])
+    expect(f.writes).toEqual([])
+  }
+)
+
+it('skips a job linked to another ServiceTitan tenant', async () => {
+  const f = fixture()
+  f.account.customFields!['CF.servicetitanjob'] = '1001:4000'
+  expect(await f.run()).toEqual({ kind: 'skipped', reason: 'job linked to another ServiceTitan tenant' })
+  expect(f.fake.calls).toEqual([])
+})
+
+it('parses tenant-prefixed and legacy links and rejects the rest', () => {
+  expect(parseJobLink(undefined, '1000')).toEqual({ kind: 'none' })
+  expect(parseJobLink(' ', '1000')).toEqual({ kind: 'none' })
+  expect(parseJobLink('1000:42', '1000')).toEqual({ kind: 'job', jobId: 42 })
+  expect(parseJobLink(' 42 ', '1000')).toEqual({ kind: 'job', jobId: 42 })
+  expect(parseJobLink(42, '1000')).toEqual({ kind: 'job', jobId: 42 })
+  expect(parseJobLink('2000:42', '1000')).toEqual({ kind: 'otherTenant' })
+  expect(parseJobLink('-1', '1000')).toEqual({ kind: 'invalid', value: '-1' })
+  expect(parseJobLink('undefined', '1000')).toEqual({ kind: 'invalid', value: 'undefined' })
+})
+
+it('retries failed location reads with backoff before using the new customer', async () => {
   vi.useFakeTimers()
   try {
     const f = fixture()
