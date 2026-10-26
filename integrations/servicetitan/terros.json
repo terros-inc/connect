@@ -1,0 +1,79 @@
+{
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
+  "appId": "App.placeholder",
+  "scripts": [
+    {
+      "name": "ServiceTitan Appointment Sync",
+      "description": "Terros to ServiceTitan: one-way sync of Consultation events to jobs and appointments.",
+      "entrypoint": "src/appointment.ts",
+      "type": "outgoing",
+      "dataType": "Event",
+      "slug": "servicetitan-appointment-sync",
+      "permissions": ["account:list", "account:save", "event:read", "event:save"],
+      "authSchema": {
+        "appKey": "ServiceTitan application key with access to the configured tenant.",
+        "clientId": "ServiceTitan OAuth client ID for this install.",
+        "clientSecret": "ServiceTitan OAuth client secret for this install.",
+        "tenantId": "Required. Numeric ServiceTitan ID of the tenant to synchronize."
+      },
+      "configSchema": [
+        {
+          "name": "jobTypeId",
+          "type": "string",
+          "description": "Required. Numeric ServiceTitan ID of the job type used for new jobs."
+        },
+        {
+          "name": "serviceTitanJobId",
+          "type": "string",
+          "description": "Required. Terros account text custom field ID (CF.*) storing the ServiceTitan job ID."
+        },
+        {
+          "name": "cancelReasonId",
+          "type": "string",
+          "description": "Required. Numeric ServiceTitan ID of the job cancellation reason used when a closer is reassigned."
+        },
+        {
+          "name": "customFieldCustomerId",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the customer custom field type storing the Terros account ID; enables customer deduplication."
+        },
+        {
+          "name": "customFieldLocationId",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the location custom field type storing the Terros account ID."
+        },
+        {
+          "name": "customFieldSetter",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the job custom field type storing the owner name."
+        },
+        {
+          "name": "customFieldAppointmentOutcome",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the job custom field type storing the event status."
+        },
+        {
+          "name": "campaignIdSetterGen",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the campaign for an owner with Needs_Help closer status."
+        },
+        {
+          "name": "campaignIdCloserGen",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the fallback closer-generated campaign."
+        },
+        {
+          "name": "campaignIdUnknown",
+          "type": "string",
+          "description": "Optional. Numeric ServiceTitan ID of the final fallback campaign. Configure at least one campaign applicable to each owner."
+        },
+        {
+          "name": "teamToBusinessUnitMap",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Optional. ServiceTitan technician team name to business unit mapping; each value is a numeric ServiceTitan ID. Unmapped technicians use their own business unit."
+        }
+      ]
+    }
+  ]
+}
