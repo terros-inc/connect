@@ -1,4 +1,4 @@
-import { ServiceTitanClient } from './servicetitan.ts'
+import { RunBudget, ServiceTitanClient } from './servicetitan.ts'
 import { fakeServiceTitan } from './fakeServiceTitan.ts'
 
 afterEach(() => vi.useRealTimers())
@@ -15,15 +15,53 @@ it('keeps OAuth tokens isolated per client ID and tenant across installs', async
   expect(fake.calls.filter((call) => call.url.hostname.startsWith('auth.'))).toHaveLength(3)
 })
 
+// A rotated secret must not keep using a token minted with the old one.
+it('keys cached tokens by a hash of the client secret, never the raw secret', async () => {
+  const fake = fakeServiceTitan()
+  await fake.client.searchTechnicians({})
+  await new ServiceTitanClient(
+    { ...fake.secrets, clientSecret: 'rotated-example-secret' },
+    fake.fakeFetch
+  ).searchTechnicians({})
+  expect(fake.calls.filter((call) => call.url.hostname.startsWith('auth.'))).toHaveLength(2)
+  const keys = [...(ServiceTitanClient as unknown as { tokens: Map<string, unknown> }).tokens.keys()]
+  const ours = keys.filter((key) => key.startsWith(`${fake.secrets.clientId}:`))
+  expect(ours).toHaveLength(2)
+  expect(ours.join()).not.toContain('example-secret')
+})
+
+const authCalls = (fake: ReturnType<typeof fakeServiceTitan>) =>
+  fake.calls.filter((call) => call.url.hostname.startsWith('auth.'))
+
+it('drops the cached token on a 401 and re-authenticates once', async () => {
+  const fake = fakeServiceTitan()
+  await fake.client.searchTechnicians({})
+  fake.replies.set('GET /settings/v2/tenant/1000/technicians', [{ status: 401 }])
+  expect(await fake.client.searchTechnicians({})).toMatchObject({ ok: true })
+  expect(authCalls(fake)).toHaveLength(2)
+  fake.replies.set('GET /settings/v2/tenant/1000/technicians', [{ status: 401 }, { status: 401 }])
+  expect(await fake.client.searchTechnicians({})).toMatchObject({
+    ok: false,
+    retryable: false,
+    message: expect.stringContaining('HTTP 401'),
+  })
+  expect(authCalls(fake)).toHaveLength(3)
+  // The rejected token is not reused on the next call.
+  await fake.client.searchTechnicians({})
+  expect(authCalls(fake)).toHaveLength(4)
+})
+
 it('refreshes the token sixty seconds early so an expiring token is not sent', async () => {
   vi.useFakeTimers()
   const fake = fakeServiceTitan()
-  await fake.client.searchTechnicians({})
+  // A new client per run, as in the Lambda; the token cache outlives it.
+  const run = () => new ServiceTitanClient(fake.secrets, fake.fakeFetch).searchTechnicians({})
+  await run()
   vi.advanceTimersByTime(839_000)
-  await fake.client.searchTechnicians({})
+  await run()
   expect(fake.calls.filter((call) => call.url.hostname.startsWith('auth.'))).toHaveLength(1)
   vi.advanceTimersByTime(1000)
-  await fake.client.searchTechnicians({})
+  await run()
   expect(fake.calls.filter((call) => call.url.hostname.startsWith('auth.'))).toHaveLength(2)
 })
 
@@ -131,6 +169,9 @@ it('rejects responses without a valid ID instead of returning undefined', async 
   fake.replies.set('POST /jpm/v2/tenant/1000/jobs', [{ status: 200, body: { customerId: 1 } }])
   fake.replies.set('GET /jpm/v2/tenant/1000/jobs/4000', [{ status: 200, body: { id: 'abc' } }])
   expect(await fake.client.createJob(jobInput)).toMatchObject({ ok: false, retryable: false })
+  // Only the ID is required from a create, so a successful create is always linked.
+  fake.replies.set('POST /jpm/v2/tenant/1000/jobs', [{ status: 200, body: { id: 4321, customerId: null } }])
+  expect(await fake.client.createJob(jobInput)).toEqual({ ok: true, value: { id: 4321 } })
   expect(await fake.client.getJob(4000)).toMatchObject({
     ok: false,
     message: expect.stringContaining('invalid response'),
@@ -141,4 +182,36 @@ it('treats a successful empty update response as success', async () => {
   const fake = fakeServiceTitan()
   fake.replies.set('PUT /jpm/v2/tenant/1000/jobs/4000/cancel', [{ status: 204 }])
   expect(await fake.client.cancelJob(4000, { reasonId: 1, memo: 'example' })).toMatchObject({ ok: true })
+})
+
+it('times out a hung request after ten seconds', async () => {
+  vi.useFakeTimers()
+  const fake = fakeServiceTitan()
+  fake.replies.set('POST /jpm/v2/tenant/1000/jobs', [{ error: 'hang' }])
+  const started = Date.now()
+  expect(await settle(fake.client.createJob(jobInput))).toMatchObject({ ok: false, retryable: true })
+  expect(Date.now() - started).toBe(10_000)
+})
+
+it('caps a request at the remaining budget and does not retry past it', async () => {
+  vi.useFakeTimers()
+  const fake = fakeServiceTitan({ budgetMs: 18_000 })
+  fake.replies.set('GET /settings/v2/tenant/1000/technicians', [{ error: 'hang' }, { error: 'hang' }])
+  const started = Date.now()
+  expect(await settle(fake.client.searchTechnicians({}))).toMatchObject({ ok: false, retryable: true })
+  // 10 s attempt, then a retry would leave under the 15 s reserve, so it stops.
+  expect(Date.now() - started).toBe(10_000)
+  expect(apiCalls(fake)).toHaveLength(1)
+})
+
+it('sends nothing once the run budget is exhausted', async () => {
+  vi.useFakeTimers()
+  const fake = fakeServiceTitan()
+  const client = new ServiceTitanClient(fake.secrets, fake.fakeFetch, new RunBudget(5000))
+  vi.advanceTimersByTime(5000)
+  expect(await client.searchTechnicians({})).toMatchObject({
+    ok: false,
+    message: expect.stringContaining('budget exhausted'),
+  })
+  expect(fake.calls).toEqual([])
 })

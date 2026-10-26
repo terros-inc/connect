@@ -1,5 +1,14 @@
 import type { AccountId, CalendarEventId, CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
-import type { Contact, CustomField, Job, Result, ServiceTitanClient, Technician } from './servicetitan.ts'
+import {
+  CREATE_RESERVE_MS,
+  type Contact,
+  type CustomField,
+  type Job,
+  type Result,
+  type ServiceTitanClient,
+  type Technician,
+} from './servicetitan.ts'
+import { PermanentError } from './errors.ts'
 import type { Config } from './config.ts'
 import { toState, toZip } from './address.ts'
 
@@ -35,11 +44,12 @@ export type Ports = {
   readAccount: (id: AccountId) => Promise<Account>
   writeAccountCustomField: (id: AccountId, fields: CustomFieldMap) => Promise<void>
   writeEventSourceId: (id: CalendarEventId, sourceId: string) => Promise<void>
+  log: (level: 'info' | 'warn' | 'error', message: string) => void
 }
 export type Outcome =
   | { kind: 'skipped'; reason: string }
   | { kind: 'created'; jobId: number }
-  | { kind: 'reassigned'; oldJobId: number; jobId: number }
+  | { kind: 'reassigned'; oldJobId: number; jobId: number; oldJobCancelled: boolean }
   | { kind: 'updated'; changes: string[] }
   | { kind: 'unchanged' }
 
@@ -60,14 +70,16 @@ export type JobLink =
   | { kind: 'otherTenant' }
   | { kind: 'invalid'; value: string }
 
-// Links are stored as `tenantId:jobId`; bare numeric job IDs written before tenant prefixes are read as this tenant's.
-export function parseJobLink(value: unknown, tenantId: string): JobLink {
+// Links are stored as `tenantId:jobId`. Bare numeric job IDs are legacy account-field links and are read as this
+// tenant's only when allowBare is set; legacy never wrote event.sourceId, so a bare sourceId belongs to something else.
+export function parseJobLink(value: unknown, tenantId: string, allowBare = true): JobLink {
   if (value === undefined || value === null) return { kind: 'none' }
   const text = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : JSON.stringify(value)
   if (!text) return { kind: 'none' }
   const match = /^(?:(\d+):)?(\d+)$/.exec(text)
   const jobId = Number(match?.[2])
   if (!match || !Number.isSafeInteger(jobId) || jobId <= 0) return { kind: 'invalid', value: text }
+  if (match[1] === undefined && !allowBare) return { kind: 'none' }
   if (match[1] !== undefined && match[1] !== tenantId) return { kind: 'otherTenant' }
   return { kind: 'job', jobId }
 }
@@ -82,7 +94,7 @@ export function determineCampaignId(status: string | undefined, config: Config):
   if (status === 'Needs_Help' && config.campaignIdSetterGen !== undefined) return config.campaignIdSetterGen
   if (config.campaignIdCloserGen !== undefined) return config.campaignIdCloserGen
   if (config.campaignIdUnknown !== undefined) return config.campaignIdUnknown
-  throw new Error('No campaignId configured for ServiceTitan integration')
+  throw new PermanentError('No campaignId configured for ServiceTitan integration')
 }
 function jobFields(event: EventData, config: Config): CustomField[] {
   const fields: CustomField[] = []
@@ -110,19 +122,33 @@ function times(event: EventData) {
   const start = new Date(event.eventDate)
   return { start: start.toISOString(), end: new Date(start.getTime() + event.duration * 60_000).toISOString() }
 }
+// A non-retryable failure (4xx, invalid response) is permanent; retryable ones (429, 5xx, network, budget) are not.
 function checked<T>(result: Result<T>): T {
-  if (!result.ok) throw new Error(result.message)
+  if (!result.ok) throw result.retryable ? new Error(result.message) : new PermanentError(result.message)
   return result.value
+}
+// Any create failure is permanent: a timed-out or 5xx create may have succeeded, so redelivering it could duplicate.
+function checkedCreate<T>(result: Result<T>): T {
+  if (!result.ok) throw new PermanentError(`${result.message}; not retried because the create may have succeeded`)
+  return result.value
+}
+type Skip = { skip: string }
+function createBudgetSkip(api: ServiceTitanClient): Skip | undefined {
+  const remaining = api.budget.remaining()
+  if (remaining < CREATE_RESERVE_MS) {
+    return { skip: `run budget too low to start a ServiceTitan create (${Math.round(remaining / 1000)}s left)` }
+  }
 }
 
 async function findOrCreateCustomer(
   api: ServiceTitanClient,
   account: Account,
-  config: Config
-): Promise<{ customerId: number; locationId: number } | undefined> {
+  config: Config,
+  ports: Ports
+): Promise<{ customerId: number; locationId: number } | Skip> {
   const resident = account.resident
   const location = account.location!
-  if (!resident || !Object.keys(resident).length) return undefined
+  if (!resident || !Object.keys(resident).length) return { skip: 'missing resident' }
   const text = (key: string) => (typeof resident[key] === 'string' ? (resident[key] as string) : '')
   const name =
     text('businessName') ||
@@ -155,8 +181,10 @@ async function findOrCreateCustomer(
   if (text('email')) contacts.push({ type: 'Email' as const, value: text('email'), memo: 'email' })
   if (text('phone')) contacts.push({ type: 'Phone' as const, value: text('phone'), memo: 'phone' })
   const fields = (id?: number) => (id ? [{ typeId: id, value: account.accountId }] : undefined)
+  const budgetSkip = createBudgetSkip(api)
+  if (budgetSkip) return budgetSkip
   // Not retried: a create that timed out may have succeeded.
-  const customer = checked(
+  const customer = checkedCreate(
     await api.createCustomer({
       name,
       type: 'Residential',
@@ -166,6 +194,7 @@ async function findOrCreateCustomer(
       locations: [{ name, address, contacts, customFields: fields(config.customFieldLocationId) }],
     })
   )
+  ports.log('info', `ServiceTitan customer created: ${customer.id}`)
   return { customerId: customer.id, locationId: checked(await api.getLocation(customer.id)).id }
 }
 
@@ -174,13 +203,16 @@ async function createJob(
   customer: { customerId: number; locationId: number },
   event: EventData,
   config: Config,
-  technician: Technician
-) {
+  technician: Technician,
+  ports: Ports
+): Promise<{ id: number } | Skip> {
   const businessUnitId =
     (technician.team ? config.teamToBusinessUnitMap[technician.team] : undefined) ?? technician.businessUnitId
-  if (!businessUnitId) throw new Error('BusinessUnitId is required to create ServiceTitan job')
+  if (!businessUnitId) throw new PermanentError('BusinessUnitId is required to create ServiceTitan job')
+  const budgetSkip = createBudgetSkip(api)
+  if (budgetSkip) return budgetSkip
   // Not retried: a create that timed out may have succeeded.
-  return checked(
+  const created = checkedCreate(
     await api.createJob({
       customerId: customer.customerId,
       locationId: customer.locationId,
@@ -192,10 +224,14 @@ async function createJob(
       appointments: [{ ...times(event), technicianIds: [technician.id] }],
     })
   )
+  // Logged before linking, so a job whose link write fails can still be found.
+  ports.log('info', `ServiceTitan job created: ${created.id}`)
+  return created
 }
 
-// ServiceTitan API failures throw so the run fails and is retried; compare-before-write keeps retries safe.
-// `skipped` is only for business-rule skips and permanent input problems.
+// `skipped` is for business rules and a run budget too low to create. Permanent failures throw PermanentError and
+// other failures throw Error; the entrypoint logs both. Sales does not retry a script that throws, so either way the
+// event is not synced until it changes again. Compare-before-write keeps any later run from repeating writes.
 export async function sync(
   payload: CalendarEventWebhook,
   config: Config,
@@ -208,19 +244,22 @@ export async function sync(
   if (reason) return { kind: 'skipped', reason }
   const account = await ports.readAccount(event.account!.accountId)
   if (account.accountSource !== 'Terros') return { kind: 'skipped', reason: 'account source is not Terros' }
-  if (!account.location) throw new Error('Account has no location')
+  if (!account.location) throw new PermanentError('Account has no location')
 
   const tenantId = api.tenantId
   let linked: number | undefined
   const stored = parseJobLink(account.customFields?.[config.serviceTitanJobId], tenantId)
   if (stored.kind === 'invalid') {
-    throw new Error(`Invalid ServiceTitan job link "${stored.value}" in account field ${config.serviceTitanJobId}`)
+    throw new PermanentError(
+      `Invalid ServiceTitan job link "${stored.value}" in account field ${config.serviceTitanJobId}`
+    )
   }
   if (stored.kind === 'otherTenant') return { kind: 'skipped', reason: 'job linked to another ServiceTitan tenant' }
   if (stored.kind === 'job') linked = stored.jobId
   else {
-    // An empty field may be hidden from or inactive for this token; the event keeps its own copy of the link.
-    const fromEvent = parseJobLink(event.sourceId, tenantId)
+    // An empty field may be hidden from or inactive for this token; the event keeps its own copy of the link. Only
+    // the tenant-prefixed form this script writes is trusted; anything else in sourceId is ignored.
+    const fromEvent = parseJobLink(event.sourceId, tenantId, false)
     if (fromEvent.kind === 'otherTenant')
       return { kind: 'skipped', reason: 'event linked to another ServiceTitan tenant' }
     if (fromEvent.kind === 'job') linked = fromEvent.jobId
@@ -238,9 +277,10 @@ export async function sync(
   const changes: string[] = []
   const link = async (jobId: number) => {
     const value = formatJobLink(tenantId, jobId)
-    // TODO: switch to a sales partial custom-field update endpoint once one exists. account.update replaces the
-    // whole map, so this re-reads right before writing and changes only the job link key; fields the token
-    // cannot view are still dropped. GoHighLevel src/outgoing.ts (saveOpportunityId) needs the same endpoint.
+    // TODO(TECH-6973): switch to a sales partial custom-field update once one exists. account.update replaces the
+    // whole map, and account.get hides view-restricted fields from a ConnectKey token, so this write drops those
+    // fields even though it re-reads right before writing and changes only the job link key. (GoHighLevel's
+    // saveOpportunityId sends a single-key account.upsert, which merges custom fields, so it doesn't hit this.)
     const fresh = await ports.readAccount(account.accountId)
     if (fresh.customFields?.[config.serviceTitanJobId] !== value) {
       await ports.writeAccountCustomField(account.accountId, {
@@ -257,24 +297,31 @@ export async function sync(
 
   if (linked !== undefined) {
     const job = checked(await api.getJob(linked))
-    const assignments = job.lastAppointmentId
-      ? checked(await api.searchAppointmentAssignments([job.lastAppointmentId]))
-      : undefined
-    const active = assignments?.data.find((assignment) => assignment.active)
+    let active: { technicianId: number } | undefined
+    if (job.lastAppointmentId) {
+      const assignments = await api.searchAppointmentAssignments([job.lastAppointmentId])
+      // As in legacy, a failed lookup skips only the reassignment check; the job and appointment still update.
+      if (assignments.ok) active = assignments.value.data.find((assignment) => assignment.active)
+      else ports.log('warn', `ServiceTitan reassignment check skipped for job ${job.id}: ${assignments.message}`)
+    }
     if (active && active.technicianId !== technician.id) {
-      // Link the replacement before cancelling: a retry then follows the new link instead of creating another job.
-      const created = await createJob(api, job, event, config, technician)
+      // Link the replacement before cancelling, so no later run creates another replacement.
+      const created = await createJob(api, job, event, config, technician, ports)
+      if ('skip' in created) return { kind: 'skipped', reason: created.skip }
       await link(created.id)
       const cancel = await api.cancelJob(job.id, {
         reasonId: config.cancelReasonId,
         memo: 'Closer reassigned via automation',
       })
       if (!cancel.ok) {
-        throw new Error(
-          `Reassigned to ServiceTitan job ${created.id}, but cancelling previous job ${job.id} failed: ${cancel.message}`
+        // Nothing retries this: the links already point at the replacement. The marker is fixed so it can be
+        // searched and alerted on; the old job must be cancelled by hand.
+        ports.log(
+          'error',
+          `SERVICETITAN_ABANDONED_CANCEL tenant=${tenantId} oldJob=${job.id} newJob=${created.id}: ${cancel.message}`
         )
       }
-      return { kind: 'reassigned', oldJobId: job.id, jobId: created.id }
+      return { kind: 'reassigned', oldJobId: job.id, jobId: created.id, oldJobCancelled: cancel.ok }
     }
     if (shouldUpdateJob(job, event, config)) {
       checked(
@@ -299,9 +346,10 @@ export async function sync(
     await link(job.id)
     return changes.length ? { kind: 'updated', changes } : { kind: 'unchanged' }
   }
-  const customer = await findOrCreateCustomer(api, account, config)
-  if (!customer) return { kind: 'skipped', reason: 'missing resident' }
-  const created = await createJob(api, customer, event, config, technician)
+  const customer = await findOrCreateCustomer(api, account, config, ports)
+  if ('skip' in customer) return { kind: 'skipped', reason: customer.skip }
+  const created = await createJob(api, customer, event, config, technician, ports)
+  if ('skip' in created) return { kind: 'skipped', reason: created.skip }
   await link(created.id)
   return { kind: 'created', jobId: created.id }
 }

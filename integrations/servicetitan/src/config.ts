@@ -1,4 +1,5 @@
 import type { CustomFieldId } from '@terros-inc/sdk'
+import { PermanentError } from './errors.ts'
 
 const numericFields = [
   'jobTypeId',
@@ -28,7 +29,7 @@ function positiveId(value: unknown, field: string): number {
     !Number.isSafeInteger(Number(value)) ||
     Number(value) <= 0
   ) {
-    throw new Error(`${field} must be a positive integer numeric ServiceTitan ID`)
+    throw new PermanentError(`${field} must be a positive integer numeric ServiceTitan ID`)
   }
   return Number(value)
 }
@@ -43,11 +44,11 @@ export function parseConfig(raw: RawConfig): Config {
   }
   const cf = raw.serviceTitanJobId
   if (typeof cf !== 'string' || !/^CF\.[A-Za-z0-9_-]+$/.test(cf.trim())) {
-    throw new Error('serviceTitanJobId is required and must be a Terros account custom field ID (CF.*)')
+    throw new PermanentError('serviceTitanJobId is required and must be a Terros account custom field ID (CF.*)')
   }
   const mapping = raw.teamToBusinessUnitMap
   if (mapping !== undefined && (typeof mapping !== 'object' || mapping === null || Array.isArray(mapping))) {
-    throw new Error('teamToBusinessUnitMap must be a mapping')
+    throw new PermanentError('teamToBusinessUnitMap must be a mapping')
   }
   return {
     ...numbers,
@@ -62,7 +63,7 @@ export function parseConfig(raw: RawConfig): Config {
 
 export function parseSecrets(raw: Record<string, string>): Secrets {
   for (const field of ['appKey', 'clientId', 'clientSecret', 'tenantId']) {
-    if (!raw[field]?.trim()) throw new Error(`Missing ServiceTitan secret: ${field}`)
+    if (!raw[field]?.trim()) throw new PermanentError(`Missing ServiceTitan secret: ${field}`)
   }
   positiveId(raw.tenantId, 'tenantId')
   return {

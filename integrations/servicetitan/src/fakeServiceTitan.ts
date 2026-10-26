@@ -1,4 +1,5 @@
 import {
+  RunBudget,
   ServiceTitanClient,
   type Appointment,
   type Assignment,
@@ -10,10 +11,10 @@ import {
 } from './servicetitan.ts'
 
 export type FakeCall = { url: URL; method: string; headers: Headers; body?: unknown; signal?: AbortSignal | null }
-type Reply = { status: number; body?: unknown } | { error: 'network' | 'timeout' }
+type Reply = { status: number; body?: unknown } | { error: 'network' | 'timeout' | 'hang' }
 
 // An in-memory server behind the real client, with optional queued failures for individual requests.
-export function fakeServiceTitan() {
+export function fakeServiceTitan(options: { budgetMs?: number } = {}) {
   const calls: FakeCall[] = []
   const customers: Customer[] = []
   const locations: { id: number; customerId: number }[] = []
@@ -33,6 +34,12 @@ export function fakeServiceTitan() {
       : undefined
     calls.push({ url, method, body, headers: new Headers(init?.headers), signal: init?.signal })
     const queued = replies.get(`${method} ${url.pathname}`)?.shift()
+    if (queued && 'error' in queued && queued.error === 'hang') {
+      // Never answers; only the client's timeout signal ends it.
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+      })
+    }
     if (queued && 'error' in queued) {
       if (queued.error === 'timeout') throw new DOMException('The operation timed out.', 'TimeoutError')
       throw new TypeError('fetch failed')
@@ -95,7 +102,7 @@ export function fakeServiceTitan() {
     tenantId: '1000',
   }
   return {
-    client: new ServiceTitanClient(secrets, fakeFetch),
+    client: new ServiceTitanClient(secrets, fakeFetch, new RunBudget(options.budgetMs)),
     fakeFetch,
     secrets,
     calls,
