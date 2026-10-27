@@ -3,6 +3,12 @@ import { z } from 'zod'
 import type { Secrets } from './config.ts'
 
 const id = z.number().int().positive()
+// Dry-run synthetic ids are negative so they cannot collide with a real ServiceTitan id. Live responses keep `id`.
+const nonZeroId = z
+  .number()
+  .int()
+  .refine((value) => value !== 0, 'expected a non-zero integer')
+const syntheticCreated = z.object({ id: nonZeroId })
 const customField = z.object({ typeId: z.number().nullish(), value: z.string().nullish() })
 const instant = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'expected a date-time')
 const customerSchema = z.object({ id, customFields: z.array(customField).nullish() })
@@ -129,11 +135,14 @@ export async function retryWithBackoff<T>(
 export class ServiceTitanClient {
   private static tokens = new Map<string, { token: string; expiry: number }>()
   private readonly tokenKey: string
+  private readonly allowSyntheticIds: boolean
   constructor(
     private secrets: Secrets,
     private fetcher: typeof fetch = fetch,
-    readonly budget: RunBudget = new RunBudget()
+    readonly budget: RunBudget = new RunBudget(),
+    options?: { allowSyntheticIds?: boolean }
   ) {
+    this.allowSyntheticIds = options?.allowSyntheticIds ?? false
     // Installs share the Lambda, so tokens are cached per credential. The secret is hashed into the key so a rotated
     // secret gets a new token; the raw secret is never stored in the key.
     const secretHash = createHash('sha256').update(secrets.clientSecret).digest('hex').slice(0, 16)
@@ -254,13 +263,14 @@ export class ServiceTitanClient {
     return this.read(page(customerSchema), 'crm', `customers?${params}`)
   }
   createCustomer(body: CustomerInput): Promise<Result<{ id: number }>> {
-    return this.send(created, 'crm', 'customers', 'POST', body)
+    return this.send(this.allowSyntheticIds ? syntheticCreated : created, 'crm', 'customers', 'POST', body)
   }
   // A just-created customer's location can lag, so an empty page is retried like a transient failure.
   getLocation(customerId: number): Promise<Result<{ id: number }>> {
     return retryWithBackoff(
       async () => {
-        const result = await this.send(page(z.object({ id })), 'crm', `locations?customerId=${customerId}`)
+        const idSchema = this.allowSyntheticIds ? nonZeroId : id
+        const result = await this.send(page(z.object({ id: idSchema })), 'crm', `locations?customerId=${customerId}`)
         if (!result.ok) return result
         const location = result.value.data[0]
         if (!location) return { ok: false, message: 'ServiceTitan location not found', retryable: true }
@@ -277,7 +287,7 @@ export class ServiceTitanClient {
     return this.read(page(technicianSchema), 'settings', `technicians?${params}`)
   }
   createJob(body: JobInput): Promise<Result<{ id: number }>> {
-    return this.send(created, 'jpm', 'jobs', 'POST', body)
+    return this.send(this.allowSyntheticIds ? syntheticCreated : created, 'jpm', 'jobs', 'POST', body)
   }
   getJob(jobId: number): Promise<Result<Job>> {
     return this.read(jobSchema, 'jpm', `jobs/${jobId}`)

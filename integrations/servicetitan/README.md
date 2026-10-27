@@ -32,8 +32,26 @@ Configure the script (IDs arrive as strings; numeric IDs must be positive safe i
 | campaignIdCloserGen           | Optional numeric ServiceTitan fallback campaign ID                                                                  |
 | campaignIdUnknown             | Optional numeric ServiceTitan final fallback campaign ID                                                            |
 | teamToBusinessUnitMap         | Optional mapping: ServiceTitan technician team name → numeric ServiceTitan business unit ID                         |
+| dryRun                        | Optional `true` or `false` (default false). `true` logs writes and does not send them. See Dry run.                 |
 
 Configure at least one campaign applicable to every owner: Needs_Help uses setterGen if set, otherwise closerGen, otherwise unknown; other statuses use closerGen then unknown. Missing an applicable campaign throws. Unmapped technician teams use the technician's businessUnitId; absence of both throws.
+
+## Dry run
+
+Set `dryRun` to the text `true` to shadow an install without creating or changing ServiceTitan or Terros records. Connect config fields are strings. Omitted, blank, or `false` leaves the sync unchanged. Any other value fails the run before a request is sent, so a typo cannot turn the pilot into live writes.
+
+While it is on:
+
+- ServiceTitan GET requests are sent, including customer, job, appointment, technician and location reads for real ids.
+- The OAuth token POST is still sent so those reads can authenticate. It is not logged. Its body contains the client secret.
+- POST, PATCH and PUT to the ServiceTitan API are not sent. Each logs one line, `SERVICETITAN_DRY_RUN event=<event id> account=<account id> method=... path=... body=<normalized JSON>`, and the sync continues with a synthetic response. Synthetic ids are negative and unique to that run, so they cannot be confused with a real ServiceTitan id. Live responses still require positive integer ids.
+- A location read for one of those customer ids returns a synthetic page. The empty-location retry would otherwise spend the run budget.
+- Account custom-field and event sourceId writes are not sent. Each logs `SERVICETITAN_DRY_RUN event=... account=... terros=accountCustomField|eventSourceId value=...`. The value is the job link only, not the rest of the custom-field map.
+- `ServiceTitan customer created` and `ServiceTitan job created` are rewritten to `note=synthetic-customer` or `note=synthetic-job` with that negative id. They are not records ServiceTitan stored.
+
+The `body` field is the request JSON, with keys sorted and undefined fields omitted. A customer create includes the resident name, email, phone and address. No other field on the line does. Treat these lines like other production request logs.
+
+Disable the legacy ServiceTitan webhook before turning dry-run off. If both are active, each can create a job for the same event.
 
 ## Flow
 
@@ -54,8 +72,8 @@ Sales does not retry a script that throws: it invokes the script synchronously a
 - **Retries.** The client returns failures as values marked retryable for HTTP 429, 5xx, network errors and timeouts. Reads and updates (job PATCH, reschedule, cancel) make up to three attempts with exponential delay and 0–10% jitter (3 seconds initially for reads, 5 seconds for updates), but only while at least 15 seconds of budget remain after the delay. Job and customer creates are never retried, because a create that timed out may have succeeded. A just-created customer's empty location page is retried like a transient failure.
 - **Terminal errors.** Failures that cannot succeed on a later run with the same input are `PermanentError`s: invalid config or secrets, an invalid account job link, a missing location, campaign or business unit, non-retryable API errors (4xx), and every create failure. The entrypoint logs them as "ServiceTitan sync failed permanently" and returns normally, so any future redelivery of thrown scripts would not replay them. Other failures (retries exhausted, budget exhausted) are rethrown and show as failed runs.
 - **Skips.** `skipped` is for business rules (guards above, non-Terros account, no matching technician, missing resident, another tenant's link) and the create budget guard.
-- **Validation.** Read responses the sync uses are validated with zod: IDs must be positive integers and appointment times must parse. A create response is validated only for its job or customer ID, so a create that succeeded is always linked; the created ID is logged before the link is saved.
-- **Tokens.** Tokens are cached per credential (clientId, tenantId and a SHA-256 prefix of the client secret, never the secret itself), since installs share the Lambda, with 60 seconds of early expiry. A 401 drops the cached token and re-authenticates once within the budget; a second 401 fails. No payloads or credential values are logged.
+- **Validation.** Read responses the sync uses are validated with zod: IDs must be positive integers and appointment times must parse. A create response is validated only for its job or customer ID, so a create that succeeded is always linked; the created ID is logged before the link is saved. Dry-run synthetic ids are the exception and are accepted only while that mode is on.
+- **Tokens.** Tokens are cached per credential (clientId, tenantId and a SHA-256 prefix of the client secret, never the secret itself), since installs share the Lambda, with 60 seconds of early expiry. A 401 drops the cached token and re-authenticates once within the budget; a second 401 fails. Credential values are never logged. Payloads are not logged unless dry-run is on, and then only as that line's `body` field.
 
 Legacy logged and skipped customer failures and logged and ignored update and cancel failures.
 

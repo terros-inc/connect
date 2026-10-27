@@ -72,6 +72,11 @@
           "type": "mapping",
           "dataType": "None",
           "description": "Optional. ServiceTitan technician team name to business unit mapping; each value is a numeric ServiceTitan ID. Unmapped technicians use their own business unit."
+        },
+        {
+          "name": "dryRun",
+          "type": "string",
+          "description": "Optional. true or false, default false. true logs the ServiceTitan and Terros writes this sync would make and does not send them. Disable the legacy ServiceTitan webhook before setting this to false, or both create jobs."
         }
       ]
     }

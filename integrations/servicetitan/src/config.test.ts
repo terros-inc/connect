@@ -26,6 +26,15 @@ it('parses string IDs and mapping values so business units are sent as numbers',
   })
   expect(() => parseConfig({ ...required, serviceTitanJobId: 'wrong' })).toThrow('serviceTitanJobId')
 })
+// A typo must not fall through as off: that would write to ServiceTitan during a dry-run pilot.
+it('defaults dryRun to false and rejects anything other than true or false', () => {
+  expect(parseConfig(required).dryRun).toBe(false)
+  expect(parseConfig({ ...required, dryRun: '' }).dryRun).toBe(false)
+  expect(parseConfig({ ...required, dryRun: ' false ' }).dryRun).toBe(false)
+  expect(parseConfig({ ...required, dryRun: 'true' }).dryRun).toBe(true)
+  expect(parseConfig({ ...required, dryRun: true }).dryRun).toBe(true)
+  expect(() => parseConfig({ ...required, dryRun: 'yes' })).toThrow('dryRun')
+})
 it('refuses incomplete credentials and malformed tenant IDs before authenticating', () => {
   expect(() => parseSecrets({})).toThrow('appKey')
   expect(() => parseSecrets({ appKey: 'key', clientId: 'client', clientSecret: 'secret', tenantId: 'tenant' })).toThrow(
