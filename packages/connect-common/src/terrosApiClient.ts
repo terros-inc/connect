@@ -1,5 +1,5 @@
 import { getTokens } from './oauth/tokens.ts'
-import { type ApiRoute, isResponseError } from './models.ts'
+import { type ApiRoute, isResponseError, TerrosApiError } from './models.ts'
 import { getAnalyticsHeaders, type TerrosHeaderMetadata } from './analytics.ts'
 
 export type TerrosClientConfig = {
@@ -55,7 +55,7 @@ export class TerrosApiClient {
     }
     if (!response.ok) throw new Error(response.statusText)
     const output: unknown = await response.json()
-    if (isResponseError(output)) throw new Error(output.message ?? output.error)
+    if (isResponseError(output)) throw new TerrosApiError(output)
     return output as Success
   }
 

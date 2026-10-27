@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import type { EndpointGroups, OpenAPISchema } from '@terros-inc/mcp-core'
 import { getTokens } from '@terros-inc/connect-common/auth'
+import { TerrosApiError } from '@terros-inc/connect-common'
 import { StdioServerTransport, serveStdio } from '@modelcontextprotocol/server/stdio'
 import type { McpServer, JSONRPCMessage } from '@modelcontextprotocol/server'
 import { createMcpServer, startMcpServer } from './mcp'
@@ -158,6 +159,22 @@ describe('MCP stdio tools', () => {
     expect(response.result).toMatchObject({
       isError: true,
       content: [{ type: 'text', text: 'Account not found' }],
+    })
+  })
+
+  it('returns the impersonation error code in MCP tool errors', async () => {
+    const request = await connect()
+    call.mockRejectedValue(
+      new TerrosApiError({
+        type: 'error',
+        error: 'impersonation_not_allowed',
+        message: 'Impersonation is not allowed',
+      })
+    )
+    const response = await request('tools/call', { name: 'account_get', arguments: { id: 'A.1' } })
+    expect(response.result).toMatchObject({
+      isError: true,
+      content: [{ type: 'text', text: 'impersonation_not_allowed: Impersonation is not allowed' }],
     })
   })
 
