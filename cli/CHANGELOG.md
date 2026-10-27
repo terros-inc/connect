@@ -2,7 +2,9 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
-## Unreleased
+## 2.1.0
+
+This release also carries the changes listed under 2.0.1, which was not published.
 
 ### New: API commands follow the live API document
 
