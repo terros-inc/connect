@@ -26,7 +26,12 @@
         {
           "name": "defaultStatus",
           "type": "string",
-          "description": "Fallback JobNimbus status_name used when no statusFields/statusValues mapping matches"
+          "description": "Fallback JobNimbus status_name used when no statusFields/statusValues mapping matches. Without it, accounts whose stage doesn't map are skipped"
+        },
+        {
+          "name": "requiredFields",
+          "type": "string",
+          "description": "Comma-separated resident fields that must be filled in before a record is created, e.g. firstName,lastName,phone,email"
         },
         {
           "name": "statusFields",
