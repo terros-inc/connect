@@ -5,7 +5,7 @@ import { sameRequest, stableJson } from './normalize.ts'
 // fixtures and goldens, so A4 does not show up as a body diff.
 const TENANT_ID = '1000'
 
-export type AllowId = 'A1' | 'A2' | 'A5' | 'A8' | 'A9' | 'A10' | 'A11' | 'A13' | 'A14' | 'A15'
+export type AllowId = 'A1' | 'A2' | 'A5' | 'A8' | 'A9' | 'A10' | 'A11' | 'A13' | 'A14' | 'A15' | 'A18'
 
 export type AllowlistEntry = {
   id: AllowId
@@ -15,8 +15,8 @@ export type AllowlistEntry = {
 }
 
 /**
- * Differences the replay is allowed to ignore. Each entry is one item from the parity plan's A1–A17
- * list, the scenarios where that difference shows up, and a check that accepts only that shape.
+ * Differences the replay is allowed to ignore. Each entry names the scenarios it covers and a check
+ * that accepts only that shape. A1–A17 are the parity plan. A18 was accepted later for scenario 21.
  *
  * An entry that does not match every scenario it names fails the suite, so a fixed difference cannot
  * stay on the list. A diff this list does not accept fails the scenario.
@@ -27,8 +27,8 @@ export type AllowlistEntry = {
  * - A6 customer search error. The fixture fails the search once with HTTP 500. Connect retries the read,
  *   the next attempt succeeds, and the create matches legacy. The difference is the retry count (A14),
  *   not a thrown search.
- * - A7 technician search error. The same single HTTP 500 is retried and then Connect creates, which is
- *   not "Connect throws" and not a retry count on the same requests. Scenario 21 is a known failure.
+ * - A7 technician search error. That item is Connect throwing when the error persists. A single HTTP 500
+ *   does not persist: Connect retries the read and then creates. That shape is A18, not A7.
  * - A12 undefined outcome on create. Scenario 15 is a linked no-op; neither side sends an outcome field.
  * - A16 response validation. This fake returns the fields Connect validates.
  * - A17 token cache key. Token calls are dropped before the diff.
@@ -102,6 +102,15 @@ export const ALLOWLIST: AllowlistEntry[] = [
       'A customer create failure throws PermanentError from sync. Legacy returns, and the golden records that as skipped. The ServiceTitan calls match.',
     scenarios: [29],
     apply: applyFailureSurfacing,
+  },
+  {
+    id: 'A18',
+    // A single 500 on technician search. Connect retries that read, which cannot create a duplicate, and
+    // then creates the job. Legacy does not retry, skips, and drops the booking.
+    difference:
+      'When the technician search returns a 500 once, Connect retries the read, which cannot create a duplicate, and then creates the job. Legacy skips and drops the booking.',
+    scenarios: [21],
+    apply: applyTechnicianSearchRetry,
   },
 ]
 
@@ -294,6 +303,26 @@ function applyRetryCount(actual: ReplayResult, golden: ReplayResult): boolean {
     matched = true
   }
   return matched
+}
+
+function applyTechnicianSearchRetry(actual: ReplayResult, golden: ReplayResult): boolean {
+  if (actual.outcome !== 'processed' || golden.outcome !== 'skipped') return false
+  if (golden.terrosWrites.length !== 0 || golden.stRequests.length !== 1) return false
+  const search = actual.stRequests[0]
+  const goldenSearch = golden.stRequests[0]
+  if (!search || !goldenSearch) return false
+  if (goldenSearch.method !== 'GET' || !goldenSearch.path.endsWith('/technicians') || (goldenSearch.retries ?? 0) !== 0)
+    return false
+  if (!sameRequest(search, goldenSearch) || search.retries !== 1) return false
+  const ops = actual.terrosWrites.map((write) => write.op).sort()
+  if (ops.join(',') !== 'updateAccountCustomField,writeEventSourceId') return false
+  if (!actual.terrosWrites.every(isLinkWrite)) return false
+  const tail = actual.stRequests.slice(1).map((request) => `${request.method} ${request.path.split('/').at(-1)}`)
+  if (tail.join(',') !== 'GET customers,POST customers,GET locations,POST jobs') return false
+  actual.stRequests = structuredClone(golden.stRequests)
+  actual.terrosWrites = []
+  actual.outcome = golden.outcome
+  return true
 }
 
 function applyFailureSurfacing(actual: ReplayResult, golden: ReplayResult): boolean {

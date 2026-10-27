@@ -87,7 +87,7 @@ This port does not add a distributed create lock or transaction (TECH-6972). Con
 
 `src/parity.test.ts` replays the 30 scenarios captured from the legacy ServiceTitan webhook (terros-inc/sales#16522). Fixtures and goldens are in `test/parity/`. Each golden's `legacySha` is the sales commit that produced it. The test runs `sync` with a recording fake ServiceTitan server and fake ports, then diffs the normalized result against the golden. Normalization drops the token call and auth headers, rewrites ids created during the run to `$customer1` / `$location1` / `$job1` / `$appt1`, sorts query params, collapses consecutive identical calls into a `retries` count, and leaves metrics out.
 
-`src/parity/allowlist.ts` maps each accepted difference to one of A1–A17 and to the scenarios it covers. A diff that is not on that list fails the scenario. An allowlist entry that no longer matches its scenarios fails too. The legacy cancel reason is the placeholder `9001` in these files.
+`src/parity/allowlist.ts` maps each accepted difference to one of A1–A18 and to the scenarios it covers. A18 is the single HTTP 500 on technician search: Connect retries that read and then creates the job, and legacy skips. A diff that is not on that list fails the scenario. An allowlist entry that no longer matches its scenarios fails too. The legacy cancel reason is the placeholder `9001` in these files.
 
 ### Refreshing the goldens
 
@@ -95,4 +95,4 @@ This port does not add a distributed create lock or transaction (TECH-6972). Con
 2. Copy `fixtures/` and `goldens/` over `integrations/servicetitan/test/parity/fixtures` and `test/parity/goldens`.
 3. Replace the legacy hard-coded cancel reason with `9001` in `connectConfig.cancelReasonId` and in every expected `reasonId`. Keep placeholders only: no customer names, emails, phones, addresses, tenant ids, Terros ids, or real ServiceTitan ids.
 4. Run `node scripts/check-public-data.mjs` on the branch, then `pnpm --filter @terros-inc/connect-servicetitan exec tsc --noEmit` and `pnpm --filter @terros-inc/connect-servicetitan test`.
-5. Update the allowlist only when a diff is already described by A1–A17. A new shape should stay a failing scenario with a TODO, not a wider entry.
+5. Update the allowlist only when a diff is already described by an entry, including A18 for the single technician-search 500. A new shape should stay a failing scenario with a TODO, not a wider entry.
