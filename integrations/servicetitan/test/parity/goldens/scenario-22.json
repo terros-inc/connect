@@ -1,0 +1,141 @@
+{
+  "legacySha": "89b9b586b67f1a567bb1124ec3061757e9227117",
+  "scenario": 22,
+  "stRequests": [
+    {
+      "method": "GET",
+      "path": "/settings/v2/tenant/1000/technicians",
+      "query": {
+        "ids": "4242"
+      },
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/crm/v2/tenant/1000/customers",
+      "query": {
+        "city": "Example City",
+        "name": "Example Resident",
+        "state": "CA",
+        "street": "100 Example St",
+        "zip": "90210"
+      },
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/crm/v2/tenant/1000/customers",
+      "query": {},
+      "body": {
+        "name": "Example Resident",
+        "type": "Residential",
+        "address": {
+          "street": "100 Example St",
+          "city": "Example City",
+          "state": "CA",
+          "zip": "90210",
+          "country": "USA",
+          "latitude": 34.05,
+          "longitude": -118.25
+        },
+        "contacts": [
+          {
+            "type": "Email",
+            "value": "resident@example.test",
+            "memo": "email"
+          },
+          {
+            "type": "Phone",
+            "value": "5550100000",
+            "memo": "phone"
+          }
+        ],
+        "customFields": [
+          {
+            "typeId": 100,
+            "value": "Account.example"
+          }
+        ],
+        "locations": [
+          {
+            "name": "Example Resident",
+            "address": {
+              "street": "100 Example St",
+              "city": "Example City",
+              "state": "CA",
+              "zip": "90210",
+              "country": "USA",
+              "latitude": 34.05,
+              "longitude": -118.25
+            },
+            "contacts": [
+              {
+                "type": "Email",
+                "value": "resident@example.test",
+                "memo": "email"
+              },
+              {
+                "type": "Phone",
+                "value": "5550100000",
+                "memo": "phone"
+              }
+            ],
+            "customFields": [
+              {
+                "typeId": 101,
+                "value": "Account.example"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/crm/v2/tenant/1000/locations",
+      "query": {
+        "customerId": "$customer1"
+      },
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/jpm/v2/tenant/1000/jobs",
+      "query": {},
+      "body": {
+        "customerId": "$customer1",
+        "locationId": "$location1",
+        "jobTypeId": 456,
+        "priority": "Normal",
+        "businessUnitId": 88,
+        "campaignId": 22,
+        "customFields": [
+          {
+            "typeId": 102,
+            "value": "Example Owner"
+          },
+          {
+            "typeId": 103,
+            "value": "Scheduled"
+          }
+        ],
+        "appointments": [
+          {
+            "start": "2024-01-15T10:00:00.000Z",
+            "end": "2024-01-15T11:00:00.000Z",
+            "technicianIds": [4242]
+          }
+        ]
+      }
+    }
+  ],
+  "terrosWrites": [
+    {
+      "op": "updateAccountCustomField",
+      "accountId": "Account.example",
+      "fieldId": "CF.exampleJob",
+      "value": "$job1"
+    }
+  ],
+  "outcome": "processed"
+}

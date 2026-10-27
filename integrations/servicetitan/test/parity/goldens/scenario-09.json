@@ -1,0 +1,28 @@
+{
+  "legacySha": "89b9b586b67f1a567bb1124ec3061757e9227117",
+  "scenario": 9,
+  "stRequests": [
+    {
+      "method": "GET",
+      "path": "/settings/v2/tenant/1000/technicians",
+      "query": {
+        "name": "Example Tech"
+      },
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/crm/v2/tenant/1000/customers",
+      "query": {
+        "city": "Example City",
+        "name": "Example Resident",
+        "state": "CA",
+        "street": "100 Example St",
+        "zip": "90210"
+      },
+      "body": null
+    }
+  ],
+  "terrosWrites": [],
+  "outcome": "threw"
+}

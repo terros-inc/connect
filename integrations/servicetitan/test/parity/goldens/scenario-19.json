@@ -1,0 +1,76 @@
+{
+  "legacySha": "89b9b586b67f1a567bb1124ec3061757e9227117",
+  "scenario": 19,
+  "stRequests": [
+    {
+      "method": "GET",
+      "path": "/settings/v2/tenant/1000/technicians",
+      "query": {
+        "name": "Example Tech"
+      },
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/jpm/v2/tenant/1000/jobs/555",
+      "query": {},
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/dispatch/v2/tenant/1000/appointment-assignments",
+      "query": {
+        "appointmentIds": "777"
+      },
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/jpm/v2/tenant/1000/jobs",
+      "query": {},
+      "body": {
+        "customerId": 789,
+        "locationId": 890,
+        "jobTypeId": 456,
+        "priority": "Normal",
+        "businessUnitId": 88,
+        "campaignId": 22,
+        "customFields": [
+          {
+            "typeId": 102,
+            "value": "Example Owner"
+          },
+          {
+            "typeId": 103,
+            "value": "Scheduled"
+          }
+        ],
+        "appointments": [
+          {
+            "start": "2024-01-15T10:00:00.000Z",
+            "end": "2024-01-15T11:00:00.000Z",
+            "technicianIds": [501]
+          }
+        ]
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/jpm/v2/tenant/1000/jobs/555/cancel",
+      "query": {},
+      "body": {
+        "reasonId": 9001,
+        "memo": "Closer reassigned via automation"
+      }
+    }
+  ],
+  "terrosWrites": [
+    {
+      "op": "updateAccountCustomField",
+      "accountId": "Account.example",
+      "fieldId": "CF.exampleJob",
+      "value": "$job1"
+    }
+  ],
+  "outcome": "processed"
+}

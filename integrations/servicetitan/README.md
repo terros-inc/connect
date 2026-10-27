@@ -82,3 +82,17 @@ Legacy logged and skipped customer failures and logged and ignored update and ca
 Incoming webhooks, two-way sync, sales changes, production cutover execution and publishing workflow changes are out of scope. Event deletion still does not cancel a job. No pagination is added: first search page, first technician, first location and first active assignment retain legacy behavior.
 
 This port does not add a distributed create lock or transaction (TECH-6972). Concurrent unlinked runs, an engine timeout redelivery, or a failure between job creation and saving its links can create duplicates; the run budget makes the timeout case unlikely, and the created job ID is logged before linking. A failed cancel after a reassignment leaves the old job active and is only logged (`SERVICETITAN_ABANDONED_CANCEL`); it is not stored for a later run, because a later run happens only when the event changes again and a pending-cancel note would change the link field format. A cancel that timed out but succeeded and is then retried can be reported as failed. Search the logs for that marker and review partial failures operationally. The sequential no-write guarantee depends on receiving the current sourceId payload and reading current account fields.
+
+## Legacy parity goldens
+
+`src/parity.test.ts` replays the 30 scenarios captured from the legacy ServiceTitan webhook (terros-inc/sales#16522). Fixtures and goldens are in `test/parity/`. Each golden's `legacySha` is the sales commit that produced it. The test runs `sync` with a recording fake ServiceTitan server and fake ports, then diffs the normalized result against the golden. Normalization drops the token call and auth headers, rewrites ids created during the run to `$customer1` / `$location1` / `$job1` / `$appt1`, sorts query params, collapses consecutive identical calls into a `retries` count, and leaves metrics out.
+
+`src/parity/allowlist.ts` maps each accepted difference to one of A1–A17 and to the scenarios it covers. A diff that is not on that list fails the scenario. An allowlist entry that no longer matches its scenarios fails too. The legacy cancel reason is the placeholder `9001` in these files.
+
+### Refreshing the goldens
+
+1. In terros-inc/sales, regenerate the fixtures and goldens from the ServiceTitan parity harness under `packages/back-common/src/webhook/serviceTitan` (the capture test is `parity.golden.test.ts`).
+2. Copy `fixtures/` and `goldens/` over `integrations/servicetitan/test/parity/fixtures` and `test/parity/goldens`.
+3. Replace the legacy hard-coded cancel reason with `9001` in `connectConfig.cancelReasonId` and in every expected `reasonId`. Keep placeholders only: no customer names, emails, phones, addresses, tenant ids, Terros ids, or real ServiceTitan ids.
+4. Run `node scripts/check-public-data.mjs` on the branch, then `pnpm --filter @terros-inc/connect-servicetitan exec tsc --noEmit` and `pnpm --filter @terros-inc/connect-servicetitan test`.
+5. Update the allowlist only when a diff is already described by A1–A17. A new shape should stay a failing scenario with a TODO, not a wider entry.
