@@ -42,6 +42,19 @@ publish, not a copy committed to the repository. The CLI only falls back to that
 live spec, so a new endpoint does not need a release; see
 [New API endpoints](cli/README.md#new-api-endpoints).
 
+Before it rebuilds, `prepack` runs `pnpm check-schema` (`cli/src/releaseSchema.ts`) on that download and fails the
+publish when:
+
+- the spec does not build a valid command tree: an endpoint path lands on a built-in command (`/connect/publish`),
+  two paths map to one command, or a path uses `help`. The CLI would fail such a schema's commands at runtime,
+  `terros auth login` included.
+- a built-in command is missing from the spec's `x-terros-cli-builtins` list. The API's OpenAPI lint only rejects
+  paths that land on the built-ins in that list, so a new built-in is added to it, and the docs deployed, before the
+  release that adds it.
+
+Run `pnpm check-schema` in `cli` (after `pnpm fetch-openapi` and `pnpm -r build`) to check the live spec before you
+start the workflow.
+
 ### 3. Approve the staged version
 
 When the run succeeds, the version is only **staged**. The end of the publish step's log looks like this:
