@@ -10,9 +10,9 @@ beforeEach(() => {
   vi.resetAllMocks()
 })
 
-it('reports a successful refresh only when the internal schema was fetched', async () => {
+it('reports a successful refresh only when the schema was fetched', async () => {
   const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({ endpoints: {}, internalSchemaStatus: 'available' })
+  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({ endpoints: {}, schemaStatus: 'available' })
 
   await apiCommands.refresh.run()
 
@@ -23,19 +23,16 @@ it('reports a successful refresh only when the internal schema was fetched', asy
   log.mockRestore()
 })
 
-it.each(['unavailable', 'failed'] as const)(
-  'does not report success when the internal schema is %s',
-  async (status) => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({ endpoints: {}, internalSchemaStatus: status })
+it('does not report success when the schema could not be refreshed', async () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({ endpoints: {}, schemaStatus: 'failed' })
 
-    await apiCommands.refresh.run()
+  await apiCommands.refresh.run()
 
-    expect(error).toHaveBeenCalledOnce()
-    expect(log).not.toHaveBeenCalled()
-    expect(process.exitCode).toBe(1)
-    error.mockRestore()
-    log.mockRestore()
-  }
-)
+  expect(error).toHaveBeenCalledOnce()
+  expect(log).not.toHaveBeenCalled()
+  expect(process.exitCode).toBe(1)
+  error.mockRestore()
+  log.mockRestore()
+})

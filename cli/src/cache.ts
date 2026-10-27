@@ -4,17 +4,20 @@ import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 
 const CACHE_TTL = 24 * 60 * 60 * 1000
-type CacheName = 'profile' | 'openapi'
+type CacheName = 'profile' | 'openapi' | 'public-openapi'
 
 function cacheDirectory(): string {
   return join(homedir(), '.config', 'terros')
 }
 
-export async function readCache(name: CacheName, key: string): Promise<unknown> {
+/** `expires: false` is for a cache whose caller tracks freshness itself, so no clock change can discard it. */
+export async function readCache(name: CacheName, key: string, { expires = true } = {}): Promise<unknown> {
   try {
     const cache = JSON.parse(await readFile(join(cacheDirectory(), `${name}.json`), 'utf8'))
+    if (cache.key !== key) return undefined
+    if (!expires) return cache.data
     const age = Date.now() - cache.updatedAt
-    if (cache.key === key && Number.isFinite(age) && age >= 0 && age < CACHE_TTL) return cache.data
+    if (Number.isFinite(age) && age >= 0 && age < CACHE_TTL) return cache.data
   } catch {
     // Missing or corrupt caches are refreshed on demand.
   }

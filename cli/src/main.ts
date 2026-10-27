@@ -17,9 +17,8 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
-import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh, type SchemaStatus } from './loadEndpoints'
 import { readInputFile } from './inputFile'
-import type { InternalSchemaResult } from './crud/internal'
 import {
   buildCliCommandTree,
   checkBuiltinCollisions,
@@ -113,7 +112,7 @@ export async function main(argv: string[]): Promise<void> {
 
     await clearOpenApiCache()
     const refreshed = await loadEndpointsAfterRefresh()
-    refreshStatus = refreshed.internalSchemaStatus
+    refreshStatus = refreshed.schemaStatus
     level = await loadCommandLevel(words, Promise.resolve(refreshed.endpoints))
     if (level.unmatched.length > 0 || !level.node.endpoint) {
       console.error(unknownCommandMessage(words, level, refreshStatus))
@@ -160,7 +159,7 @@ async function loadCommandLevel(
 
 async function loadCommandLevelWithRefresh(words: string[]): Promise<{
   level: CommandLevel
-  refreshStatus?: InternalSchemaResult['status']
+  refreshStatus?: SchemaStatus
 }> {
   const level = await loadCommandLevel(words)
   if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words, level)) return { level }
@@ -169,7 +168,7 @@ async function loadCommandLevelWithRefresh(words: string[]): Promise<{
   const refreshed = await loadEndpointsAfterRefresh()
   return {
     level: await loadCommandLevel(words, Promise.resolve(refreshed.endpoints)),
-    refreshStatus: refreshed.internalSchemaStatus,
+    refreshStatus: refreshed.schemaStatus,
   }
 }
 
@@ -215,32 +214,22 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   console.log(formatLevelHelp(level))
 }
 
-function unknownCommandMessage(
-  words: string[],
-  level: CommandLevel,
-  refreshStatus?: InternalSchemaResult['status']
-): string {
+function unknownCommandMessage(words: string[], level: CommandLevel, refreshStatus?: SchemaStatus): string {
   if (isLikelyBuiltinTypo(words, level)) {
     return `Unknown built-in command: terros ${words.join(' ')}. Check the built-in command names above.`
   }
   if (refreshStatus === 'available') {
     return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`.`
   }
-  if (refreshStatus === 'failed') {
-    return `Unknown command: terros ${words.join(' ')}. Internal schema loading failed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
-  }
-  return `Unknown command: terros ${words.join(' ')}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
+  return `Unknown command: terros ${words.join(' ')}. The API schema could not be refreshed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
 }
 
-function unknownParameterMessage(error: unknown, refreshStatus?: InternalSchemaResult['status']): string {
+function unknownParameterMessage(error: unknown, refreshStatus?: SchemaStatus): string {
   const message = error instanceof Error ? error.message : String(error)
   if (refreshStatus === 'available') {
     return `${message}. The refreshed API schema still does not include this parameter; check whether it is supported for your account. For a manual schema retry, run \`terros api refresh\`.`
   }
-  if (refreshStatus === 'failed') {
-    return `${message}. Internal schema loading failed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
-  }
-  return `${message}. Update the CLI with \`npm install -g @terros-inc/cli\` and retry.`
+  return `${message}. The API schema could not be refreshed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
 }
 
 function isLikelyBuiltinTypo(words: string[], level: CommandLevel): boolean {

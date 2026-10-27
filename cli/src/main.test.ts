@@ -35,7 +35,7 @@ const schema = (...paths: string[]) =>
 const refreshedSchema = (...paths: string[]) =>
   vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
     endpoints: parseEndpoints(spec(...paths)),
-    internalSchemaStatus: 'available',
+    schemaStatus: 'available',
   })
 const schemaWithParameter = (path: string, parameter: string) => {
   const document = JSON.parse(spec(path))
@@ -197,7 +197,7 @@ it('refreshes and retries when an endpoint gains a parameter', async () => {
   schema('/garden/bed/list')
   vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
     endpoints: parseEndpoints(schemaWithParameter('/garden/bed/list', 'newFilter')),
-    internalSchemaStatus: 'available',
+    schemaStatus: 'available',
   })
 
   await main(['garden', 'bed', 'list', '--newFilter', 'active'])
@@ -219,11 +219,11 @@ it('reports an unsupported parameter after discovering an endpoint without refre
   expect(process.exitCode).toBe(1)
 })
 
-it('does not execute an unknown command when the internal schema is unavailable', async () => {
+it('does not execute an unknown command when the schema could not be refreshed', async () => {
   schema('/company/list')
   vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
     endpoints: parseEndpoints(spec('/company/list')),
-    internalSchemaStatus: 'unavailable',
+    schemaStatus: 'failed',
   })
   await main(['company', 'missing'])
 
