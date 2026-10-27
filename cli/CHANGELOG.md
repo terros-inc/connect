@@ -7,9 +7,10 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 ### New: API commands follow the live API document
 
 Endpoints added to the public API after a CLI version was released now appear in that version. The CLI revalidates
-`https://docs.terros.com/openapi/terros.yml` with its `ETag` at most every five minutes, and right away when a command
-or parameter is missing or on `terros api refresh`, with a two-second timeout. When the document cannot be fetched, it
-uses the last downloaded copy, then the bundled one. The staff internal schema is unchanged.
+`https://docs.terros.com/openapi/terros.yml` with its `ETag` at most every five minutes, giving up after 300 ms so a slow
+or offline network does not hold a command up, and right away when a command or parameter is missing or on
+`terros api refresh`, with a two-second timeout. When the document cannot be fetched or is not a usable OpenAPI
+document, it uses the last downloaded copy, then the bundled one. The staff internal schema is unchanged.
 
 ### Bug fix: refresh and retry when API commands or parameters are missing
 

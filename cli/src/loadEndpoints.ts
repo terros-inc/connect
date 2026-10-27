@@ -1,13 +1,16 @@
 import { readFileSync } from 'node:fs'
+import { parse } from 'yaml'
 import { loadEndpoints as loadCoreEndpoints, parseEndpoints, type EndpointGroups } from '@terros-inc/mcp-core'
 import { loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
 import { readCache, writeCache } from './cache'
 
 const PUBLIC_SCHEMA_URL = 'https://docs.terros.com/openapi/terros.yml'
-// A 304 takes a fraction of a second, so a command waits on the network at most once per interval, and never for
-// longer than the timeout. A missing command or `terros api refresh` revalidates immediately instead.
+// A 304 takes about 130 ms, so a normal command checks at most once per interval and gives up after CHECK_TIMEOUT,
+// keeping the copy it has: an offline or slow network never holds a command up noticeably. A missing command or
+// `terros api refresh` revalidates immediately and waits up to REFRESH_TIMEOUT, since the command fails without it.
 const REVALIDATE_INTERVAL = 5 * 60 * 1000
-const FETCH_TIMEOUT = 2000
+const CHECK_TIMEOUT = 300
+const REFRESH_TIMEOUT = 2000
 
 /** Whether the refreshed schema came from the network, so a still-missing command is not just a stale copy. */
 export type SchemaStatus = 'available' | 'failed'
@@ -25,6 +28,20 @@ function isPublicSchemaCache(value: unknown): value is PublicSchemaCache {
     typeof cache.checkedAt === 'number' &&
     (cache.etag === undefined || typeof cache.etag === 'string') &&
     (cache.schema === undefined || typeof cache.schema === 'string')
+  )
+}
+
+/** A captive portal or misrouted response can parse as YAML; caching it would erase every command. */
+function isOpenApiDocument(text: string): boolean {
+  const document: unknown = parse(text)
+  if (document === null || typeof document !== 'object') return false
+  const { openapi, paths } = document as Record<string, unknown>
+  return (
+    typeof openapi === 'string' &&
+    paths !== null &&
+    typeof paths === 'object' &&
+    !Array.isArray(paths) &&
+    Object.keys(paths).length > 0
   )
 }
 
@@ -46,12 +63,13 @@ async function loadPublicSchema({ revalidate = false } = {}): Promise<{ schema: 
   try {
     const response = await fetch(PUBLIC_SCHEMA_URL, {
       headers: cached?.schema && cached.etag ? { 'If-None-Match': cached.etag } : {},
-      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+      signal: AbortSignal.timeout(revalidate ? REFRESH_TIMEOUT : CHECK_TIMEOUT),
     })
     if (response.status === 304 && cached?.schema) {
       status = 'available'
     } else if (response.ok) {
       const schema = await response.text()
+      if (!isOpenApiDocument(schema)) throw new Error('Not an OpenAPI document')
       parseEndpoints(schema)
       next = { checkedAt: next.checkedAt, etag: response.headers.get('etag') ?? undefined, schema }
       status = 'available'

@@ -257,8 +257,9 @@ The CLI reads its API commands from the live API document at
 `https://docs.terros.com/openapi/terros.yml`, so endpoints added after your CLI
 version was released appear without updating it. It checks for a changed
 document at most every five minutes, with a request that downloads nothing when
-the document is unchanged and gives up after two seconds. When it cannot reach
-the document, it uses the last copy it downloaded, or the copy bundled with
+the document is unchanged and gives up after 300 ms, so a slow or offline
+network does not hold a command up. When it cannot reach the document, it uses
+the last copy it downloaded, or the copy bundled with
 the CLI. Internal users signed in without impersonation get the internal
 schema instead, cached for 24 hours.
 

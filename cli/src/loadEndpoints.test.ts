@@ -90,6 +90,14 @@ it.each([
   ['offline', () => fetch.mockRejectedValue(new TypeError('fetch failed'))],
   ['an error response', () => fetch.mockResolvedValue(new Response('Bad gateway', { status: 502 }))],
   ['not an API document', () => fetch.mockResolvedValue(new Response('<html>Sign in to Wi-Fi</html>'))],
+  [
+    'a document without an openapi version',
+    () => fetch.mockResolvedValue(new Response(JSON.stringify({ paths: JSON.parse(livePublicSchema('/x/y')).paths }))),
+  ],
+  [
+    'an OpenAPI document with no paths',
+    () => fetch.mockResolvedValue(new Response(JSON.stringify({ openapi: '3.1.1', paths: {} }))),
+  ],
 ])('keeps the last good public schema when the check is %s', async (_, failure) => {
   fetch.mockResolvedValueOnce(new Response(livePublicSchema('/game/list'), { headers: { etag: '"v2"' } }))
   await loadEndpoints()
@@ -108,12 +116,29 @@ it('does not wait on an unreachable network again until the next check is due', 
   expect(fetch).toHaveBeenCalledOnce()
 })
 
-it('gives up on a hung public schema request instead of hanging the command', async () => {
+const hungFetch = (): typeof fetch =>
   fetch.mockImplementation(
     (_, init) => new Promise((_, reject) => init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason)))
   )
+
+it('serves the cached public schema without noticeable delay when a due check hangs', async () => {
+  fetch.mockResolvedValueOnce(new Response(livePublicSchema('/game/list'), { headers: { etag: '"v2"' } }))
+  await loadEndpoints()
+  vi.mocked(Date.now).mockReturnValue(Date.now() + 5 * minute)
+  hungFetch()
+
+  // The real timeout runs, so this catches a check that holds every command up for the refresh path's two seconds.
+  const started = performance.now()
+  expect(commands(await loadEndpoints())).toEqual(['game list'])
+  expect(performance.now() - started).toBeLessThan(1000)
+})
+
+it('gives up on a hung refresh instead of hanging the missing command', async () => {
+  hungFetch()
   // The real two-second timeout runs, so this fails by hanging if the request is not bounded.
-  expect(await loadEndpoints()).toHaveProperty('company.get.path', '/company/get')
+  const refreshed = await loadEndpointsAfterRefresh()
+  expect(refreshed.endpoints).toHaveProperty('company.get.path', '/company/get')
+  expect(refreshed.schemaStatus).toBe('failed')
 })
 
 it('revalidates a missing command against the live public schema right away', async () => {
