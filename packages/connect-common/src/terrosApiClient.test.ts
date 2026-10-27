@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerrosApiClient } from './terrosApiClient.ts'
 import { getTokens } from './oauth/tokens.ts'
+import type { TerrosApiError } from './models.ts'
 
 vi.mock('./oauth/tokens.ts', () => ({ getTokens: vi.fn() }))
 
@@ -110,11 +111,16 @@ describe('TerrosApiClient', () => {
     await expect(caller.call('user/get', {})).rejects.toThrow('Bad Request')
   })
 
-  it('throws with the error message on a ResponseError body', async () => {
-    mockFetch({ type: 'error', error: 'not_found', message: 'User not found' })
+  it('preserves the typed API error for CLI and MCP callers', async () => {
+    mockFetch({ type: 'error', error: 'impersonation_not_allowed', message: 'Impersonation is not allowed' })
     const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
 
-    await expect(caller.call('user/get', {})).rejects.toThrow('User not found')
+    await expect(caller.call('user/get', {})).rejects.toMatchObject({
+      name: 'TerrosApiError',
+      code: 'impersonation_not_allowed',
+      message: 'impersonation_not_allowed: Impersonation is not allowed',
+      response: { type: 'error', error: 'impersonation_not_allowed' },
+    } satisfies Partial<TerrosApiError>)
   })
 
   describe('resolveBaseUrl precedence', () => {

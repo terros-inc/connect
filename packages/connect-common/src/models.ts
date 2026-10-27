@@ -8,6 +8,18 @@ export type ResponseError = {
   retry?: boolean
 }
 
+/** An API failure that preserves its machine-readable error code for CLI and MCP callers. */
+export class TerrosApiError extends Error {
+  readonly code: string
+  readonly response: ResponseError
+
+  constructor(response: ResponseError) {
+    super(response.message ? `${response.error}: ${response.message}` : response.error)
+    this.name = 'TerrosApiError'
+    this.code = response.error
+    this.response = response
+  }
+}
 
 export function isResponseError(response: unknown): response is ResponseError {
   return (
