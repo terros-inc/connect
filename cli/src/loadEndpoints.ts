@@ -51,7 +51,8 @@ function isOpenApiDocument(text: string): boolean {
  * decides which commands are listed; the API still authorizes every request.
  */
 async function loadPublicSchema({ revalidate = false } = {}): Promise<{ schema: string; status: SchemaStatus }> {
-  const read = await readCache('public-openapi', PUBLIC_SCHEMA_URL, Infinity)
+  // checkedAt decides when to revalidate; the last good copy is kept until a valid replacement arrives.
+  const read = await readCache('public-openapi', PUBLIC_SCHEMA_URL, { expires: false })
   const cached = isPublicSchemaCache(read) ? read : undefined
   const age = Date.now() - (cached?.checkedAt ?? 0)
   if (!revalidate && age >= 0 && age < REVALIDATE_INTERVAL) {

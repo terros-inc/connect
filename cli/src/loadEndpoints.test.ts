@@ -109,6 +109,15 @@ it.each([
   expect(cache.data).toMatchObject({ etag: '"v2"', schema: livePublicSchema('/game/list') })
 })
 
+it('keeps the last good public schema offline after the clock moves back', async () => {
+  fetch.mockResolvedValueOnce(new Response(livePublicSchema('/game/list'), { headers: { etag: '"v2"' } }))
+  await loadEndpoints()
+  vi.mocked(Date.now).mockReturnValue(Date.now() - 60 * minute)
+
+  expect(commands(await loadEndpoints())).toEqual(['game list'])
+  expect(fetch).toHaveBeenCalledTimes(2)
+})
+
 it('does not wait on an unreachable network again until the next check is due', async () => {
   await loadEndpoints()
   vi.mocked(Date.now).mockReturnValue(Date.now() + 5 * minute - 1)
