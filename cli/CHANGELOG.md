@@ -2,6 +2,14 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## 2.1.1
+
+### Area list v2
+
+`terros area list --version 2` now selects the paginated area-list API once its public API document is deployed. Use
+`--size` to limit a page and pass the returned `sortTimestamp` to the next request. `terros area list help` documents
+the version parameter. A JSON body supplied with `--inputFile` can select version 2 as well.
+
 ## 2.1.0
 
 This release also carries the changes listed under 2.0.1, which was not published.
