@@ -32,6 +32,13 @@ when several `terros` commands ran at the same time. The sign-in service treats 
 session, so `terros auth login` was needed again, sometimes several times a day. The CLI now renews a session once,
 other commands wait for that renewal and use it, and the renewed sign-in is saved safely before it is used.
 
+### Changed: type the sign-in code yourself
+
+`terros auth login` now opens the Terros sign-in page without the code filled in, prints the code in the terminal, and
+asks you to type it on that page. Before, it opened a link with the code already filled in, so a sign-in could be
+approved with one click, including one started by someone else who sent you their link. Only approve a sign-in you
+started yourself. A denied sign-in still prints the reason, but no longer says to turn on developer mode.
+
 ## 3.0.0
 
 ### BREAKING: `terros mcp` removed; use the hosted MCP server
