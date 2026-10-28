@@ -15,7 +15,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "catalog:",
     "yaml": "catalog:"
   },
   "devDependencies": {

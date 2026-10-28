@@ -58,33 +58,59 @@ impersonating: no
 
 In scripts: `terros whoami | awk '$1 == "user:" { print $2 }'` prints the user ID.
 
-## MCP Server
+## AI Clients
 
-After signing in with `terros auth login`, start the MCP server with:
+Connect an AI client (Claude, ChatGPT, Cursor, VS Code and other MCP clients) to
+the hosted Terros MCP server rather than the CLI. Add it as a remote
+(Streamable HTTP) MCP server with this address, keeping the `/mcp` path, and
+sign in with your Terros account when the client asks:
 
-```sh
-terros mcp
+```text
+https://mcp.terros.com/mcp
 ```
 
-The server communicates over stdio and exposes the Terros API endpoints as
-tools, using names such as `account_get` and `search`. Tool arguments follow the
-API's JSON schemas. The server exits with an error if no saved login is available
-or the login cannot be refreshed. Sign in separately before starting it.
-
-For an MCP client that accepts `mcpServers` configuration:
+For a client that accepts `mcpServers` configuration:
 
 ```json
 {
   "mcpServers": {
     "terros": {
-      "command": "terros",
-      "args": ["mcp"]
+      "url": "https://mcp.terros.com/mcp"
     }
   }
 }
 ```
 
-Standard output is reserved for MCP messages; errors are written to standard error.
+Calls run with your Terros permissions and are read-only unless the address
+asks for writes (`https://mcp.terros.com/mcp?writes=enabled`). An AI agent
+that can run shell commands can also use the CLI itself, as in
+[Run a Command](#run-a-command).
+
+### Migrating from `terros mcp`
+
+CLI 3.0.0 removed `terros mcp`, the local stdio MCP server. A client still
+configured with `"command": "terros", "args": ["mcp"]` now fails to start the
+server, with a message on standard error pointing to the hosted address.
+Replace that entry with the `url` entry above.
+
+The hosted server names its per-endpoint tools as `terros mcp` did
+(`account_get`), but by default it lists three tools that search, describe
+and call them; add `?tools=endpoints` to the address for one tool per
+endpoint. Terros staff tools and impersonation are not available on the hosted
+production server yet. Until they are, staff who need them through MCP, or
+anyone who needs the local server while migrating, can run it from CLI 2,
+which stays on npm:
+
+```json
+{
+  "mcpServers": {
+    "terros": {
+      "command": "npx",
+      "args": ["-y", "@terros-inc/cli@2", "mcp"]
+    }
+  }
+}
+```
 
 ## API Request Log
 
