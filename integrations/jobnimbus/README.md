@@ -7,19 +7,19 @@ Connects a Terros company to JobNimbus through the [JobNimbus API](https://docum
 | JobNimbus Send    | `jobnimbus-send`    | Terros → JobNimbus | Creates a JobNimbus job (or contact, `jobNimbusRecord: contact`) when an account reaches a mapped stage with its required fields, saves the jnid as the account's `externalLeadId`, and updates the record after that. |
 | JobNimbus Webhook | `jobnimbus-webhook` | JobNimbus → Terros | Receives a JobNimbus Automation webhook for a job, reads the job back from JobNimbus, and sets the Terros account's stage (`workflowTarget`) to the job's current status.                                              |
 
-## Upgrading from 1.x: add the Webhook's API key
+## Upgrading from 1.x
 
-From 2.0.0 the Webhook script needs its own `apiKey` secret. Before publishing 2.0.0, add the install's JobNimbus API key as the `apiKey` secret on the JobNimbus Webhook script of every existing install. Until then every webhook delivery fails with `No JobNimbus apiKey`. Nothing else in an install changes.
+From 2.0.0 the Webhook script also reads the `apiKey` secret. Secrets belong to the install, not to a script, so an install whose Send script already has its key needs nothing. An install that ran only the Webhook must add the key before upgrading, or every delivery fails with `No JobNimbus apiKey`.
 
 ## API keys and Access Profiles
 
 A JobNimbus admin creates the key under Settings > API. A key acts with the Access Profile chosen for it, so give it one that can read and edit the jobs (or contacts) the install syncs and list the account's users. Records the profile can't see are invisible to both scripts: Send can't find them again, and the Webhook ignores them.
 
-Use the same key as the `apiKey` secret on both scripts.
+Both scripts read the install's one `apiKey` secret.
 
 ### Key expiry
 
-JobNimbus keys expire one year after they are created, and keys created before Sep 18, 2026 ("legacy" keys) expire too ([JobNimbus help](https://support.jobnimbus.com/how-do-i-create-an-api-key)). When JobNimbus answers `401` or `403`, both scripts fail the delivery with `JobNimbus rejected this install's API key (…): the key is invalid, expired or lacks access`. Create a new key and replace the `apiKey` secret on both scripts.
+JobNimbus keys expire one year after they are created, and keys created before Sep 18, 2026 ("legacy" keys) expire too ([JobNimbus help](https://support.jobnimbus.com/how-do-i-create-an-api-key)). When JobNimbus answers `401` or `403`, both scripts fail the delivery with `JobNimbus rejected this install's API key (…): the key is invalid, expired or lacks access`. Create a new key and replace the install's `apiKey` secret.
 
 ## Webhook setup
 
@@ -54,5 +54,5 @@ JobNimbus publishes no rate limits, so there is no client-side limiter. A `429` 
 - Contacts created before 2.0.0 carry no `external_id`, so a retry for one of those can't find it.
 - An account that loses its `externalLeadId` and is in an unmapped stage is skipped rather than looked up, so its job isn't updated until it reaches a mapped stage again.
 - The Webhook reads jobs only; an Automation on contacts is ignored.
-- Linking a contact through the job's `primary` field was not tried against a live JobNimbus account.
+- Linking a contact through the job's `primary` field follows the Create a Job and Update a Job examples in the JobNimbus API docs, but was not tried against a live account.
 - Webhook payloads carry no custom fields, and none are synced either way.
