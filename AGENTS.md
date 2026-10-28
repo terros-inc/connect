@@ -12,8 +12,8 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - Node 24 (`.nvmrc`). The pnpm version is pinned in `package.json`.
 - Install `pnpm install --frozen-lockfile`; lint `pnpm lint`; format `pnpm format` (oxfmt, config in `.oxfmtrc.json`).
 - Build and test everything: `pnpm -r build`, `pnpm -r test` (CI runs lint, test, then build).
-- One package: `pnpm --filter <package name> test`, or run the script from its directory. `cli`'s `pretest` downloads the OpenAPI document (`pnpm fetch-openapi`, with `curl`) into the git-ignored `cli/terros.yml` when it is missing; rerun `pnpm fetch-openapi` there to refresh it. Only `integrations/gohighlevel`, `integrations/acculynx` and `integrations/servicetitan` have a `pretest` that builds the SDK; build it first (`pnpm --filter @terros-inc/sdk... build`) before testing another integration that needs it.
-- Type-check an integration with `pnpm exec tsc --noEmit` in its directory (its `build` script is `tsc`). There is no root type-check script.
+- One package: `pnpm --filter <package name> test`, or run the script from its directory. `cli`'s `pretest` downloads the OpenAPI document (`pnpm fetch-openapi`, with `curl`) into the git-ignored `cli/terros.yml` when it is missing; rerun `pnpm fetch-openapi` there to refresh it.
+- There is no root type-check script.
 
 ## Engineering approach
 
@@ -21,13 +21,14 @@ Think ambitiously, build economically. Before settling on a design, picture what
 
 ## Integrations
 
-Each `integrations/<name>` has `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/` and `terros.json`. Use `integrations/gohighlevel` as the reference layout.
-
-`terros.json` holds the `appId` and a `scripts` array. Each script declares `name`, `entrypoint`, `type`, `configSchema`, `authSchema`, `permissions` and optionally `slug`. Script types: `incoming` (webhook), `outgoing` (needs `dataType`), `scheduled` (needs `cron`). The schema is `cli/src/connect/configSchema.ts`.
-
-Handlers are wrapped with `wrapConnectHandler` from `@terros-inc/sdk`, which supplies the Terros client.
-
-Tests are vitest (globals on) in `src/*.test.ts` beside the code and cover pure helpers, not live API calls. Only `gohighlevel`, `acculynx` and `servicetitan` have tests so far.
+- [AccuLynx](integrations/acculynx/AGENTS.md) — bidirectional CRM sync
+- [Airtable](integrations/airtable/AGENTS.md) — scheduled Airtable sync
+- [DocuSign](integrations/docusign/AGENTS.md) — webhook account updates
+- [GoHighLevel](integrations/gohighlevel/AGENTS.md) — bidirectional CRM sync
+- [JobNimbus](integrations/jobnimbus/AGENTS.md) — bidirectional CRM sync
+- [Salesforce](integrations/salesforce/AGENTS.md) — scheduled status sync
+- [ServiceTitan](integrations/servicetitan/AGENTS.md) — scheduled appointment sync
+- [Zoho](integrations/zoho/AGENTS.md) — bidirectional lead sync
 
 ## Testing
 
@@ -37,9 +38,6 @@ Each nontrivial test should name the realistic bug it prevents. Extend an existi
 
 ## Publishing
 
-- An integration's version is its `package.json` `version`. Bump it before publishing; a version already deployed cannot be republished (the CLI errors). A version still in `draft` can be re-uploaded.
-- Integrations are published by the `publish-integrations.yml` workflow (`pnpm run publish` in the integration directory, i.e. `terros connect publish`), not from a developer machine. It bundles with rolldown and does not type-check, so run `tsc --noEmit` before merging.
-- Merging to main does not publish. The workflow is manual (`workflow_dispatch`) and its integration list is hardcoded, so a new integration must be added to it.
 - `sdk` and `cli` publish to npm through the manual `publish.yml` workflow. It only stages the version; a `terros-inc` npm org member must approve it on npmjs.com before it is live. See `RELEASING.md`.
 
 ## Customer data and confidentiality

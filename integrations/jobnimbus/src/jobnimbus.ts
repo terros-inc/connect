@@ -1,8 +1,6 @@
 import type { AccountWebhookData, LatLng } from '@terros-inc/sdk'
 import { findFirstMappedValue, maskEmail, normalizeEmail, removeUndefinedValues } from './util.ts'
 
-export type JobNimbusUser = { id: string; email?: string }
-export type JobNimbusRecordResponse = { jnid?: string; [key: string]: unknown }
 export type JobNimbusScriptConfig = {
   defaultCompanyName?: string
   defaultStatus?: string
@@ -11,23 +9,6 @@ export type JobNimbusScriptConfig = {
   statusFields?: Record<string, string>
   statusValues?: Record<string, string>
   workflowType?: string
-}
-
-const baseUrl: string = 'https://app.jobnimbus.com/api1'
-
-export async function getSalesRepId(owner: AccountWebhookData['owner'], apiKey: string): Promise<string | undefined> {
-  if (!owner?.email) return undefined
-
-  const users = await listJobNimbusUsers(apiKey)
-  const salesRep = users?.find((user) => normalizeEmail(user.email) === normalizeEmail(owner.email))
-
-  if (!salesRep) {
-    console.log(`No JobNimbus user matched owner email ${maskEmail(owner.email)}`)
-    return undefined
-  }
-
-  console.log(`Matched JobNimbus sales rep ${salesRep.id} by owner email ${maskEmail(owner.email)}`)
-  return salesRep.id
 }
 
 export function toJobNimbusRecord(
@@ -55,6 +36,7 @@ function toJobNimbusContact(
     last_name: lastName,
     display_name: `${firstName} ${lastName}`.trim(),
     company: resident.businessName || scriptConfig.defaultCompanyName || '',
+    external_id: account.id,
     email: resident.email,
     home_phone: resident.phone,
     address_line1: address?.line1,
@@ -139,66 +121,135 @@ function toJobNimbusGeo(latlng: LatLng | undefined): { lat: number; lon: number 
   }
 }
 
-export async function createJobNimbusRecord(
-  apiKey: string,
-  jobNimbusPath: string,
-  record: Record<string, unknown>
-): Promise<JobNimbusRecordResponse | undefined> {
-  const response = await fetch(`${baseUrl}/${jobNimbusPath}`, {
-    method: 'POST',
-    headers: getJobNimbusHeaders(apiKey),
-    body: JSON.stringify(record),
-  })
+// The documented JobNimbus API, https://documenter.getpostman.com/view/3919598/S11PpG4x. Every call
+// authenticates with the install's own API key.
+const baseUrl: string = 'https://app.jobnimbus.com/api1'
 
-  if (!response.ok) {
-    const text = await response.text()
-    console.log(`JobNimbus create failed: ${response.status} ${response.statusText} ${text}`)
-    return undefined
+// JobNimbus publishes no rate limits, so there is no client-side limiter: a 429 is retried a bounded number of
+// times, after Retry-After when JobNimbus sends it and otherwise after a doubling wait.
+const maxAttempts = 3
+const firstRetryWaitMs = 1000
+const maxRetryWaitMs = 5000
+
+export type JobNimbusRecord = {
+  jnid?: string
+  external_id?: string
+  name?: string
+  status_name?: string
+  date_status_change?: number
+  address_line1?: string
+  city?: string
+  state_text?: string
+  zip?: string
+  owners?: { id?: string }[]
+  sales_rep?: string
+}
+export type JobNimbusUser = { id: string; email?: string }
+
+export class JobNimbusError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message)
   }
-
-  return response.json() as Promise<JobNimbusRecordResponse>
 }
 
-export async function updateJobNimbusRecord(
-  apiKey: string,
-  jobNimbusPath: string,
-  recordId: string,
-  record: Record<string, unknown>
-): Promise<JobNimbusRecordResponse | undefined> {
-  const response = await fetch(`${baseUrl}/${jobNimbusPath}/${recordId}`, {
-    method: 'PUT',
-    headers: getJobNimbusHeaders(apiKey),
-    body: JSON.stringify(record),
-  })
-
-  if (!response.ok) {
-    const text = await response.text()
-    console.log(`JobNimbus update failed: ${response.status} ${response.statusText} ${text}`)
-    return undefined
-  }
-
-  return response.json() as Promise<JobNimbusRecordResponse>
+type ClientOptions = {
+  fetch?: typeof fetch
+  sleep?: (ms: number) => Promise<void>
 }
 
-async function listJobNimbusUsers(apiKey: string): Promise<JobNimbusUser[] | undefined> {
-  const response = await fetch(`${baseUrl}/account/users`, {
-    method: 'GET',
-    headers: getJobNimbusHeaders(apiKey),
-  })
+export class JobNimbusClient {
+  private readonly fetch: typeof fetch
+  private readonly sleep: (ms: number) => Promise<void>
 
-  if (!response.ok) {
-    const text = await response.text()
-    console.log(`JobNimbus user list failed: ${response.status} ${response.statusText} ${text}`)
-    return undefined
+  constructor(
+    private readonly apiKey: string,
+    options: ClientOptions = {}
+  ) {
+    this.fetch = options.fetch ?? fetch
+    this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
   }
 
-  const data = (await response.json()) as { users?: JobNimbusUser[] }
-  return data.users || []
+  // Undefined when this key cannot read the job: a made-up jnid, a deleted job, or another JobNimbus account's job.
+  async getJob(jnid: string): Promise<JobNimbusRecord | undefined> {
+    try {
+      return (await this.request('GET', `/jobs/${encodeURIComponent(jnid)}`)) as JobNimbusRecord
+    } catch (error) {
+      if (error instanceof JobNimbusError && error.status === 404) return undefined
+      throw error
+    }
+  }
+
+  // The record Send created for a Terros account earlier, found by the account ID it writes into external_id.
+  async findByExternalId(path: 'jobs' | 'contacts', externalId: string): Promise<JobNimbusRecord | undefined> {
+    const filter = JSON.stringify({ must: [{ term: { external_id: externalId } }] })
+    const result = (await this.request('GET', `/${path}?${new URLSearchParams({ filter, size: '10' })}`)) as {
+      results?: JobNimbusRecord[]
+    }
+    return result?.results?.find((record) => record.jnid && record.external_id === externalId)
+  }
+
+  create(path: 'jobs' | 'contacts', record: Record<string, unknown>): Promise<JobNimbusRecord> {
+    return this.request('POST', `/${path}`, record) as Promise<JobNimbusRecord>
+  }
+
+  update(path: 'jobs' | 'contacts', jnid: string, record: Record<string, unknown>): Promise<JobNimbusRecord> {
+    return this.request('PUT', `/${path}/${encodeURIComponent(jnid)}`, record) as Promise<JobNimbusRecord>
+  }
+
+  async findUser(match: { id?: string; email?: string }): Promise<JobNimbusUser | undefined> {
+    if (!match.id && !match.email) return undefined
+    const result = (await this.request('GET', '/account/users')) as { users?: JobNimbusUser[] }
+    const user = (result?.users ?? []).find((user) =>
+      match.id ? user.id === match.id : normalizeEmail(user.email) === normalizeEmail(match.email)
+    )
+    if (!user) console.log(`No JobNimbus user matched ${match.id ?? maskEmail(match.email)}`)
+    return user
+  }
+
+  private async request(method: string, path: string, body?: unknown): Promise<unknown> {
+    for (let attempt = 1; ; attempt++) {
+      const response = await this.fetch(`${baseUrl}${path}`, {
+        method,
+        headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+
+      if (response.status === 429 && attempt < maxAttempts) {
+        const waitMs = getRetryWaitMs(response.headers, attempt)
+        console.log(`JobNimbus ${method} ${path} was rate limited; retrying in ${waitMs}ms`)
+        await this.sleep(waitMs)
+        continue
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        // JobNimbus keys expire one year after they are created, and keys created before Sep 18, 2026 ("legacy"
+        // keys) expire too, so a key that worked for months starts failing here. Say so instead of a bare status.
+        throw new JobNimbusError(
+          `JobNimbus rejected this install's API key (${response.status}) on ${method} ${path}: the key is invalid, ` +
+            `expired or lacks access. Create a new key in JobNimbus (Settings > API) and update the apiKey secret.`,
+          response.status
+        )
+      }
+
+      if (!response.ok) {
+        const text = await response.text()
+        throw new JobNimbusError(
+          `JobNimbus ${method} ${path} failed: ${response.status} ${response.statusText} ${text}`,
+          response.status
+        )
+      }
+
+      const text = await response.text()
+      return text ? JSON.parse(text) : undefined
+    }
+  }
 }
 
-function getJobNimbusHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  }
+function getRetryWaitMs(headers: Headers, attempt: number): number {
+  const seconds = Number(headers.get('Retry-After'))
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, maxRetryWaitMs)
+  return Math.min(firstRetryWaitMs * 2 ** (attempt - 1), maxRetryWaitMs)
 }
