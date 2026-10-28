@@ -17,7 +17,6 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "pretest": "pnpm --filter @terros-inc/sdk... build",
     "test": "vitest run",
     "publish": "terros connect publish"
   },

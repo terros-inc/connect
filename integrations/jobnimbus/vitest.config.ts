@@ -1,8 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { defineProject } from 'vitest/config'
 
-// Tests load the SDK from source rather than sdk/dist, which other packages' pretests rebuild (and clean) while
-// `pnpm -r test` runs this package's tests.
 const source = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
 export default defineProject({

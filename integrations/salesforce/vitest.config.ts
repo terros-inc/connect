@@ -1,7 +1,16 @@
+import { fileURLToPath } from 'node:url'
 import { defineProject } from 'vitest/config'
 
+const source = (path: string) => fileURLToPath(new URL(path, import.meta.url))
+
 export default defineProject({
-  resolve: { tsconfigPaths: true },
+  resolve: {
+    tsconfigPaths: true,
+    alias: {
+      '@terros-inc/sdk': source('../../sdk/src/index.ts'),
+      '@terros-inc/connect-common': source('../../packages/connect-common/src/index.ts'),
+    },
+  },
   test: {
     globals: true,
     include: ['src/**/*.test.ts'],
