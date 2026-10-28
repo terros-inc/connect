@@ -69,7 +69,10 @@ sign in with your Terros account when the client asks:
 https://mcp.terros.com/mcp
 ```
 
-For a client that accepts `mcpServers` configuration:
+Setup steps for each client (Claude Code, Claude, ChatGPT, Cursor and VS Code)
+are in [Use Terros with AI](https://docs.terros.com/docs/info/mcp). For a
+client that accepts `mcpServers` configuration, such as Cursor (not yet tested
+with Terros):
 
 ```json
 {
