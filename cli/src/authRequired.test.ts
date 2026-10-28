@@ -95,7 +95,6 @@ it('keeps a sign-in outage generic and to one line', async () => {
   expect(stderr.at(-1)).toBe('Unable to refresh the Terros session: sign-in answered 500 server_error')
   expect(stderr.join('\n')).not.toMatch(/session has expired|\n\s+at /)
   expect(process.exitCode).toBe(1)
-  expect(auth0Calls()).toHaveLength(1)
 })
 
 it('lists commands without a schema warning when the saved session has expired', async () => {

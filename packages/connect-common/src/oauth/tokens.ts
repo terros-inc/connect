@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { mkdir, writeFile, readFile, chmod } from 'node:fs/promises'
 import type { SavedTokens, TokenResponse } from './types.ts'
-import { refreshTokens } from './auth0.ts'
+import { AuthRequiredError, refreshTokens } from './auth0.ts'
 
 const AUTH_DIR_MODE = 0o700
 const AUTH_FILE_MODE = 0o600
@@ -10,6 +10,7 @@ const SECOND = 1000
 const MINUTE = 60 * SECOND
 
 let pendingRefresh: Promise<SavedTokens> | undefined
+let deadRefreshToken: string | undefined
 
 export async function getTokens(): Promise<SavedTokens | null> {
   const tokens = await readTokens()
@@ -17,15 +18,19 @@ export async function getTokens(): Promise<SavedTokens | null> {
     return null
   }
   if (areTokensValid(tokens)) return tokens
+  // A refresh token Auth0 rejected stays rejected, so a later caller in the same process (the command's own request
+  // after the schema load) fails without sending it again. Other failures may be transient and are retried.
+  if (tokens.refresh_token === deadRefreshToken) throw new AuthRequiredError('expired')
   // Refresh tokens rotate: concurrent calls in one process share a single refresh, so a second refresh can't
-  // spend the already-replaced token and overwrite auth.json with a login that no longer works. A failed refresh
-  // stays shared for the rest of the process, so a later caller in the same command fails the same way instead of
-  // sending the dead token to Auth0 again.
+  // spend the already-replaced token and overwrite auth.json with a login that no longer works.
   pendingRefresh ??= refreshTokens(tokens.refresh_token)
     .then(saveTokens)
-    .then((saved) => {
+    .catch((error: unknown) => {
+      if (error instanceof AuthRequiredError) deadRefreshToken = tokens.refresh_token
+      throw error
+    })
+    .finally(() => {
       pendingRefresh = undefined
-      return saved
     })
   return await pendingRefresh
 }
