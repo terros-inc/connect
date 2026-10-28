@@ -33,6 +33,10 @@ Set `workflowId`, and `requestType`: `update` moves only accounts already linked
 
 JobNimbus Automation webhooks are not signed, and Connect gives the script only the request body, so the URL is the only thing a sender needs. The Webhook therefore treats an event as a hint: it takes only `jnid` from the body and reads the job back with the install's key, then uses JobNimbus's current status, name, address, owner and linked account (`external_id`), never the body's. A forged event can at most re-apply a real job's current status, which a genuine event would do anyway; in `upsert` mode it can create the Terros account for a real, unlinked job early. A `jnid` the key can't read is logged and ignored.
 
+## Primary contact
+
+A job has no phone or email fields. When an install sets `contactType`, Send also keeps a contact for the resident (name, address, `email`, `home_phone`), created with `contactType` and `contactStatus` and linked as the job's `primary`. A contact is made only for a resident with a name, once the install's `requiredFields` are filled in. It carries the account ID in `external_id` and is found again by it, like jobs, so later changes update the same contact. Installs that don't set `contactType` get no contacts.
+
 ## Retries and duplicates
 
 Every record Send creates carries the Terros account ID in `external_id`. Before creating, Send looks for a record with this account's ID (`GET /jobs?filter={"must":[{"term":{"external_id":…}}]}`) and, if it finds one, updates and links that record instead. So a delivery retried after the `externalLeadId` save failed, or a later change on an account whose `externalLeadId` never reached Terros, updates the job it already has rather than creating a second one.
@@ -41,7 +45,7 @@ Only a new record gets `status_name` and `record_type_name`; after that JobNimbu
 
 ## Rate limits
 
-JobNimbus publishes no rate limits, so there is no client-side limiter. A `429` is retried up to three attempts in total, after `Retry-After` when JobNimbus sends it and otherwise after 1 then 2 seconds (each wait capped at 5 seconds). A Send run makes at most three calls (users, lookup, create or update), a Webhook run two (job, users).
+JobNimbus publishes no rate limits, so there is no client-side limiter. A `429` is retried up to three attempts in total, after `Retry-After` when JobNimbus sends it and otherwise after 1 then 2 seconds (each wait capped at 5 seconds). A Send run makes at most three calls (users, lookup, create or update), plus two more (lookup, create or update) when it syncs a primary contact; a Webhook run makes two (job, users).
 
 ## Not covered yet
 
@@ -50,4 +54,5 @@ JobNimbus publishes no rate limits, so there is no client-side limiter. A `429` 
 - Contacts created before 2.0.0 carry no `external_id`, so a retry for one of those can't find it.
 - An account that loses its `externalLeadId` and is in an unmapped stage is skipped rather than looked up, so its job isn't updated until it reaches a mapped stage again.
 - The Webhook reads jobs only; an Automation on contacts is ignored.
+- Linking a contact through the job's `primary` field was not tried against a live JobNimbus account.
 - Webhook payloads carry no custom fields, and none are synced either way.

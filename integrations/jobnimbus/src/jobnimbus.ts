@@ -2,6 +2,8 @@ import type { AccountWebhookData, LatLng } from '@terros-inc/sdk'
 import { findFirstMappedValue, maskEmail, normalizeEmail, removeUndefinedValues } from './util.ts'
 
 export type JobNimbusScriptConfig = {
+  contactStatus?: string
+  contactType?: string
   defaultCompanyName?: string
   defaultStatus?: string
   jobNimbusRecord?: string
@@ -103,7 +105,7 @@ export function toNewJobNimbusRecord(
   return { ...record, record_type_name: scriptConfig.workflowType || 'Customer', status_name: statusName }
 }
 
-function findMissingRequiredFields(account: AccountWebhookData, requiredFields: string | undefined): string[] {
+export function findMissingRequiredFields(account: AccountWebhookData, requiredFields: string | undefined): string[] {
   const resident = (account.resident || {}) as Record<string, unknown>
   return (requiredFields || '')
     .split(',')

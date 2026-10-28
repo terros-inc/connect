@@ -24,6 +24,16 @@
           "description": "Fallback company name used for JobNimbus contacts when the account has no business name"
         },
         {
+          "name": "contactType",
+          "type": "string",
+          "description": "JobNimbus contact type (record_type_name). When set, each job gets a primary contact of this type with the resident's name, phone and email"
+        },
+        {
+          "name": "contactStatus",
+          "type": "string",
+          "description": "JobNimbus status_name for new contacts. Left out when blank"
+        },
+        {
           "name": "defaultStatus",
           "type": "string",
           "description": "Fallback JobNimbus status_name used when no statusFields/statusValues mapping matches. Without it, accounts whose stage doesn't map are skipped"
