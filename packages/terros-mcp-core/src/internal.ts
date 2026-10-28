@@ -1,7 +1,7 @@
-import type { ApiClient } from './tools.ts'
 import { parseEndpoints } from './parser.ts'
 
-export type InternalApiClient = ApiClient & {
+export type InternalApiClient = {
+  call<Success>(route: string, input: object): Promise<Success>
   get<Success>(route: string): Promise<Success>
 }
 

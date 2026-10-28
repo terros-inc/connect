@@ -1,5 +1,4 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
-import { startMcpServer } from './mcp'
 import { main, parseArgv } from './main'
 import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
 import { authCommands } from './commands/auth'
@@ -9,7 +8,6 @@ import { buildTerrosClient } from './api/query'
 vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn(), loadEndpointsAfterRefresh: vi.fn() }))
 vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
-vi.mock('./mcp', () => ({ startMcpServer: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
 vi.mock('./commands/connect', () => ({
   connectCommands: { publish: { description: 'Publish an integration', run: vi.fn() } },
@@ -79,7 +77,6 @@ describe('a built-in an endpoint path lands on', () => {
   it('fails when the colliding paths are rejected by the parser before the tree is built', async () => {
     schema('/mcp', '/mcp/')
     await expect(main(['mcp'])).rejects.toThrow('Endpoints /mcp and /mcp/ both map to the command: terros mcp')
-    expect(startMcpServer).not.toHaveBeenCalled()
     await expect(main(['mcp', 'help'])).rejects.toThrow('both map to the command: terros mcp')
     expect(log).not.toHaveBeenCalled()
   })
@@ -121,6 +118,14 @@ describe('a built-in nothing lands on', () => {
     schema('/connect/publish', '/garden/bed/list')
     await main(['auth', 'login'])
     expect(login).toHaveBeenCalledOnce()
+  })
+
+  // An AI client configured with the removed local server still starts `terros mcp` and reads stdout as its protocol
+  // stream, so it must fail with the migration message (stderr, via index.ts) and print nothing to stdout.
+  it('fails `terros mcp` with the hosted MCP address and nothing on stdout', async () => {
+    schema('/garden/bed/list')
+    await expect(main(['mcp'])).rejects.toThrow('https://mcp.terros.com/mcp')
+    expect(log).not.toHaveBeenCalled()
   })
 })
 

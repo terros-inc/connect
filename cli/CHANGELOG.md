@@ -2,6 +2,22 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## 3.0.0
+
+### BREAKING: `terros mcp` removed; use the hosted MCP server
+
+`terros mcp`, the local stdio MCP server, is removed: `terros mcp` → the hosted Terros MCP server at
+`https://mcp.terros.com/mcp` (keep the `/mcp` path), which AI clients add as a remote MCP server and sign in to with a
+Terros account. `terros mcp` now exits with an error on standard error that gives the hosted address, so a client
+configuration that still starts it fails with that message rather than reading help text as protocol messages. Setup
+and migration: [AI Clients](README.md#ai-clients).
+
+The hosted server's tools are read-only unless the connection enables writes, and Terros staff tools and
+impersonation are not on hosted production yet. Until they are, CLI 2 still serves the local server:
+`npx -y @terros-inc/cli@2 mcp`.
+
+Every other command, sign-in and the API commands generated from the OpenAPI document are unchanged.
+
 ## 2.1.0
 
 This release also carries the changes listed under 2.0.1, which was not published.

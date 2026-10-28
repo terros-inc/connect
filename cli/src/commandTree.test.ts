@@ -102,7 +102,7 @@ describe('findBuiltin', () => {
 
   it('leaves other words to the endpoint tree', () => {
     expect(findBuiltin(registry, ['connect'])).toBeUndefined()
-    // `terros mcp extra` must be an unknown command, not start the server and drop `extra`.
+    // `terros mcp extra` must be an unknown command, not run the built-in and drop `extra`.
     expect(findBuiltin(registry, ['mcp', 'extra'])).toBeUndefined()
     expect(findBuiltin(registry, ['connect', 'greenhouse', 'get'])).toBeUndefined()
     expect(findBuiltin(registry, ['garden', 'bed', 'list'])).toBeUndefined()

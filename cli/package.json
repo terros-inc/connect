@@ -7,7 +7,6 @@
     "url": "https://github.com/terros-inc/connect/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "catalog:",
     "luxon": "catalog:",
     "minimist": "catalog:",
     "open": "catalog:",
@@ -62,7 +61,7 @@
     "start": "node src/index.ts"
   },
   "type": "module",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "exports": {
     ".": "./dist/index.mjs",
     "./package.json": "./package.json"
