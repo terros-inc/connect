@@ -94,6 +94,11 @@ export type AccountAddSuccess = ApiSuccess<{
 }>
 
 export type AccountPartialUpdateInput = Partial<Omit<AccountData, 'accountId' | 'contacts' | 'notes'>> & {
+  /**
+   * Custom field values to change. Unlike `customFields`, which replaces the whole map, fields left out keep their
+   * stored values, including fields the caller cannot view, and `null` clears one field. Send one or the other.
+   */
+  customFieldsPatch?: CustomFieldMap
   actorId?: UserIdentifier
   checkpoints?: WorkflowStageId[]
   hooks?: AccountHooksInput

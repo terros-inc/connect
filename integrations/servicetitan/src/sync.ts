@@ -1,4 +1,4 @@
-import type { AccountId, CalendarEventId, CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
+import type { AccountId, CalendarEventId, CustomFieldId, CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
 import {
   CREATE_RESERVE_MS,
   type Contact,
@@ -42,7 +42,7 @@ export type Account = {
 }
 export type Ports = {
   readAccount: (id: AccountId) => Promise<Account>
-  writeAccountCustomField: (id: AccountId, fields: CustomFieldMap) => Promise<void>
+  writeAccountCustomField: (id: AccountId, fieldId: CustomFieldId, value: string) => Promise<void>
   writeEventSourceId: (id: CalendarEventId, sourceId: string) => Promise<void>
   log: (level: 'info' | 'warn' | 'error', message: string) => void
 }
@@ -277,16 +277,8 @@ export async function sync(
   const changes: string[] = []
   const link = async (jobId: number) => {
     const value = formatJobLink(tenantId, jobId)
-    // TODO(TECH-6973): switch to a sales partial custom-field update once one exists. account.update replaces the
-    // whole map, and account.get hides view-restricted fields from a ConnectKey token, so this write drops those
-    // fields even though it re-reads right before writing and changes only the job link key. (GoHighLevel's
-    // saveOpportunityId sends a single-key account.upsert, which merges custom fields, so it doesn't hit this.)
-    const fresh = await ports.readAccount(account.accountId)
-    if (fresh.customFields?.[config.serviceTitanJobId] !== value) {
-      await ports.writeAccountCustomField(account.accountId, {
-        ...fresh.customFields,
-        [config.serviceTitanJobId]: value,
-      })
+    if (account.customFields?.[config.serviceTitanJobId] !== value) {
+      await ports.writeAccountCustomField(account.accountId, config.serviceTitanJobId, value)
       changes.push('account custom field')
     }
     if (event.sourceId !== value) {

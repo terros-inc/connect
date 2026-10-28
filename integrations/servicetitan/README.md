@@ -61,7 +61,7 @@ Legacy logged and skipped customer failures and logged and ignored update and ca
 
 ## Account updates and run logs
 
-**Account customFields replaces the map.** Verified in the read-only sales reference: `packages/api-canvass/src/account/update.ts:87,127,189,285` saves the validated map; `src/utils/account/customField.ts:16-36` passes existingValues only to validation. `packages/back-common/src/business/report/customField.ts:139-160` constructs a calculator from submitted values, not a merged map. Therefore the script re-reads the account right before writing and sends that fresh map with only the job link key changed, preserving unrelated fields. Caveat: account.get returns only the custom fields the script's token may view (`packages/api-canvass/src/utils/account/filterCustomFields.ts`, `back-common/src/customField.ts:51-55`), so a role-restricted field the token cannot view would be dropped by that write. A sales-side partial custom-field update would remove this risk (TECH-6973, TODO in `src/sync.ts`). GoHighLevel sends a single-key `account.upsert`, which merges, so it does not have this problem.
+**The job link is written as a one-key patch.** The script sends `account.update` with `customFieldsPatch: { <serviceTitanJobId>: <link> }`, so sales merges it into the stored map: other fields, including ones the script's token cannot view, are kept, and there is no read-merge-write race in the script. The link is compared with the account read at the start of the run and written only when it differs.
 
 `sdk/src/connect/handler.ts` passes through the handler result and offers no skipped-run status API. The platform's `packages/api-connect/src/execution.ts:317-318` reports a successful invocation as success, including normal early returns. Legacy wrote a `success` WebhookHistory row whenever the handler returned, including its early returns (no credentials, no technician, customer failure, remove, non-Consultation), and no row for `skipWebhook` skips (`packages/back-common/src/webhook/fetch.ts:33-35` vs `:37-38`). The entrypoint logs explicit “skipped”, “no-op”, or “wrote changes” outcomes; it emits the latter only after writes succeed. A customer may have been created before a later failure ends the run; with customFieldCustomerId configured, the next run finds it by search instead of creating another.
 
@@ -72,7 +72,7 @@ Legacy logged and skipped customer failures and logged and ignored update and ca
 - event.sourceId is written after create/reassign and backfilled for existing jobs.
 - Compare before every link write, job PATCH and reschedule; a sequential re-run after creation with current account/payload makes zero writes.
 - Rescheduling compares both start and end as instants, fixing duration-only changes and handling timezone offsets.
-- SDK account updates re-read and preserve the custom field map and use public API field validation; legacy wrote directly to storage.
+- SDK account updates patch only the job link key and use public API field validation; legacy wrote directly to storage.
 - ServiceTitan failures fail the run (logged as permanent, or thrown) instead of being logged and skipped; transient read and update failures are retried within the run budget. Assignment lookup failures still only skip the reassignment check, as in legacy.
 - Links carry the tenant ID, and a link from another tenant is skipped.
 - Missing coordinates are omitted. Skip/no-op/write outcomes use Connect logs in place of legacy metrics/history.
