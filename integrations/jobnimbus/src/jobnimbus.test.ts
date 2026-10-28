@@ -1,5 +1,6 @@
 import { type AccountWebhookData } from '@terros-inc/sdk'
-import { getCreateSkipReason, toJobNimbusRecord, toNewJobNimbusRecord } from './jobnimbus.ts'
+import { toJobNimbusRecord } from './jobnimbus.ts'
+import { fakeJobNimbus } from './fakeJobNimbus.ts'
 
 // Shaped like the Account webhook Terros sends: the homeowner is `resident` and the address is `address`.
 // Reading the wrong fields named every job "Terros Account <id>" with no address.
@@ -45,42 +46,29 @@ describe('JobNimbus records', () => {
   })
 })
 
-describe('JobNimbus create rules', () => {
-  const stageConfig = {
-    statusFields: { 'workflowState.stageName': '' },
-    statusValues: { 'Damage Found': 'Lead' },
-  }
-  const inStage = (stageName: string, overrides: Partial<AccountWebhookData> = {}): AccountWebhookData => ({
-    ...account,
-    workflowState: { workflowId: 'WF.example', stageId: 'S.example', stageName },
-    ...overrides,
-  })
+describe('JobNimbus API replies', () => {
+  // Prevents a burst of account changes from failing deliveries on JobNimbus's unpublished rate limit, and a
+  // persistent 429 from retrying forever.
+  test('retries a 429 with a bounded backoff, then gives up', async () => {
+    const limited = { status: 429 }
+    const once = fakeJobNimbus({ jobs: [{ jnid: 'jn-job' }], fail: { 'GET /jobs/jn-job': [limited] } })
+    expect(await once.client.getJob('jn-job')).toEqual({ jnid: 'jn-job' })
+    expect(once.slept).toEqual([1000])
 
-  // Without a mapped status every early door knock created a nameless job.
-  test('skips an account whose stage has no mapped status', () => {
-    expect(getCreateSkipReason(inStage('Knock'), stageConfig)).toBe('no JobNimbus status mapped for its stage')
-    expect(getCreateSkipReason(inStage('Damage Found'), stageConfig)).toBeUndefined()
-  })
-
-  test('skips until the required resident fields are filled in', () => {
-    const config = { ...stageConfig, requiredFields: 'firstName, lastName, phone, email' }
-    const noPhone = inStage('Damage Found', {
-      resident: { firstName: 'Quinn', lastName: 'Example', email: 'q@example.test' },
+    const always = fakeJobNimbus({
+      jobs: [{ jnid: 'jn-job' }],
+      fail: { 'GET /jobs/jn-job': [{ status: 429, headers: { 'Retry-After': '2' } }, limited, limited] },
     })
-
-    expect(getCreateSkipReason(noPhone, config)).toBe('missing required phone')
-    expect(getCreateSkipReason(inStage('Damage Found'), config)).toBeUndefined()
+    await expect(always.client.getJob('jn-job')).rejects.toThrow(/429/)
+    expect(always.calls).toHaveLength(3)
+    expect(always.slept).toEqual([2000, 2000])
   })
 
-  // Sending the status on every update reset jobs back to the starting status in JobNimbus.
-  test('only a new record carries the status and type', () => {
-    const record = toJobNimbusRecord(account, 'rep-1', stageConfig, 'job')
-
-    expect(record).not.toHaveProperty('status_name')
-    expect(record).not.toHaveProperty('record_type_name')
-    expect(toNewJobNimbusRecord(record, 'Lead', { workflowType: 'Insurance' })).toMatchObject({
-      status_name: 'Lead',
-      record_type_name: 'Insurance',
-    })
+  // Prevents an expired key (JobNimbus keys expire after a year) from surfacing as an unexplained failure.
+  test('names the API key when JobNimbus answers 401 or 403', async () => {
+    for (const status of [401, 403]) {
+      const { client } = fakeJobNimbus({ fail: { 'GET /account/users': [{ status }] } })
+      await expect(client.findUser({ email: 'rep@example.test' })).rejects.toThrow(/API key .* expired/)
+    }
   })
 })

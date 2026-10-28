@@ -16,9 +16,10 @@
   "private": true,
   "scripts": {
     "build": "tsc",
+    "pretest": "pnpm --filter @terros-inc/sdk... build",
     "test": "vitest run",
     "publish": "terros connect publish"
   },
   "type": "module",
-  "version": "1.0.16"
+  "version": "2.0.0"
 }

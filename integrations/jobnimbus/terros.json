@@ -73,7 +73,9 @@
           "description": "Terros account/upsert request type: 'create', 'update', or 'upsert' (defaults to 'upsert')"
         }
       ],
-      "authSchema": {},
+      "authSchema": {
+        "apiKey": "JobNimbus API key, used to read each job back from JobNimbus"
+      },
       "permissions": [],
       "slug": "jobnimbus-webhook"
     }
