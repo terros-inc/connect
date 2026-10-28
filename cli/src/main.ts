@@ -58,6 +58,19 @@ export function parseArgv(argv: string[]): minimist.ParsedArgs {
   return minimist(joined)
 }
 
+/**
+ * Run the CLI, printing a failure as its one-line message on standard error and exiting 1. Causes and stack traces are
+ * for debugging, so only `TERROS_DEBUG=1` prints the whole error.
+ */
+export async function runCli(argv: string[]): Promise<void> {
+  try {
+    await main(argv)
+  } catch (error) {
+    console.error(process.env.TERROS_DEBUG === '1' || !(error instanceof Error) ? error : error.message)
+    process.exitCode = 1
+  }
+}
+
 export async function main(argv: string[]): Promise<void> {
   const params = parseArgv(argv)
   const words = params._.map(String)

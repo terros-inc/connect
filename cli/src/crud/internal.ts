@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { loadInternalSpec } from '@terros-inc/mcp-core'
-import { getTokens } from '@terros-inc/connect-common/auth'
+import { AuthRequiredError, getTokens } from '@terros-inc/connect-common/auth'
 import { readCache, writeCache } from '../cache'
 import { buildTerrosClient } from '../api/query'
 
@@ -46,6 +46,8 @@ export async function loadInternalSchemaWithStatus(): Promise<InternalSchemaResu
     })
     return schema === undefined ? { status: 'unavailable' } : { schema, status: 'available' }
   } catch (error) {
+    // Signed out or expired is not a schema problem: stay quiet so the command itself reports it once.
+    if (error instanceof AuthRequiredError) return { status: 'unavailable' }
     console.error(
       `Unable to load internal API commands; using bundled schema: ${error instanceof Error ? error.message : error}`
     )

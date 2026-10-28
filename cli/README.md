@@ -279,14 +279,15 @@ so run `pnpm build` after changing TypeScript files.
 
 ## Troubleshooting
 
-If a command says the CLI is not authorized, sign in again:
+If a command says your Terros session has expired or you're not signed in, sign
+in again:
 
 ```sh
 terros auth login
 ```
 
-If a token cannot be refreshed, the saved login may have expired. Run
-`terros auth login` to create a new session.
+Errors print as one line. To see the full error with its cause and stack trace,
+run the command with `TERROS_DEBUG=1`.
 
 ### New API endpoints
 

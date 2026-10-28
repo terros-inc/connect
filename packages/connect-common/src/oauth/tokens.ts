@@ -18,11 +18,14 @@ export async function getTokens(): Promise<SavedTokens | null> {
   }
   if (areTokensValid(tokens)) return tokens
   // Refresh tokens rotate: concurrent calls in one process share a single refresh, so a second refresh can't
-  // spend the already-replaced token and overwrite auth.json with a login that no longer works.
+  // spend the already-replaced token and overwrite auth.json with a login that no longer works. A failed refresh
+  // stays shared for the rest of the process, so a later caller in the same command fails the same way instead of
+  // sending the dead token to Auth0 again.
   pendingRefresh ??= refreshTokens(tokens.refresh_token)
     .then(saveTokens)
-    .finally(() => {
+    .then((saved) => {
       pendingRefresh = undefined
+      return saved
     })
   return await pendingRefresh
 }

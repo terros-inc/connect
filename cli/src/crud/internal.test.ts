@@ -12,7 +12,10 @@ vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:os')>()),
   homedir: () => home.path,
 }))
-vi.mock('@terros-inc/connect-common/auth', () => ({ getTokens: vi.fn() }))
+vi.mock('@terros-inc/connect-common/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@terros-inc/connect-common/auth')>()),
+  getTokens: vi.fn(),
+}))
 vi.mock('../api/query', () => ({ buildTerrosClient: vi.fn() }))
 
 const call = vi.fn()
