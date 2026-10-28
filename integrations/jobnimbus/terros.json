@@ -26,12 +26,12 @@
         {
           "name": "contactType",
           "type": "string",
-          "description": "JobNimbus contact type (record_type_name). When set, each job gets a primary contact of this type with the resident's name, phone and email"
+          "description": "JobNimbus contact type (record_type_name). When set with contactStatus, each job gets a primary contact of this type with the resident's name, phone and email"
         },
         {
           "name": "contactStatus",
           "type": "string",
-          "description": "JobNimbus status_name for new contacts. Left out when blank"
+          "description": "JobNimbus status_name for new contacts, from the contact type's workflow. Required for primary contacts"
         },
         {
           "name": "defaultStatus",

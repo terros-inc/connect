@@ -1,8 +1,8 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
-import { removeUndefinedValues } from './util.ts'
 import {
   findMissingRequiredFields,
   type JobNimbusClient,
+  JobNimbusError,
   type JobNimbusScriptConfig,
   toJobNimbusRecord,
 } from './jobnimbus.ts'
@@ -14,7 +14,7 @@ type PrimaryContactInput = {
 }
 
 export function shouldSyncContact(account: AccountWebhookData, scriptConfig: JobNimbusScriptConfig): boolean {
-  if (!scriptConfig.contactType) return false
+  if (!scriptConfig.contactType || !scriptConfig.contactStatus) return false
 
   const resident = account.resident
   const hasName = Boolean(String(resident?.firstName ?? '').trim() || String(resident?.lastName ?? '').trim())
@@ -25,11 +25,7 @@ export function toNewJobNimbusContact(
   contact: Record<string, unknown>,
   scriptConfig: JobNimbusScriptConfig
 ): Record<string, unknown> {
-  return removeUndefinedValues({
-    ...contact,
-    record_type_name: scriptConfig.contactType,
-    status_name: scriptConfig.contactStatus || undefined,
-  })
+  return { ...contact, record_type_name: scriptConfig.contactType, status_name: scriptConfig.contactStatus }
 }
 
 export function linkPrimaryContact(
@@ -41,13 +37,27 @@ export function linkPrimaryContact(
 }
 
 // A job has no phone or email, so they go on the job's primary contact. Like jobs, the contact is found again by
-// the account ID in its external_id, so a retry or a later change updates it instead of creating another.
+// the account ID in its external_id, so a retry or a later change updates it instead of creating another. A contact
+// JobNimbus rejects is logged and the job still syncs without it; the next send tries the contact again.
 export async function syncPrimaryContact(
+  jobNimbus: JobNimbusClient,
+  input: PrimaryContactInput
+): Promise<string | undefined> {
+  if (!shouldSyncContact(input.account, input.scriptConfig)) return undefined
+
+  try {
+    return await upsertContact(jobNimbus, input)
+  } catch (error) {
+    if (!(error instanceof JobNimbusError)) throw error
+    console.log(`Skipping JobNimbus contact for account ${input.account.id}: ${error.message}`)
+    return undefined
+  }
+}
+
+async function upsertContact(
   jobNimbus: JobNimbusClient,
   { account, salesRepId, scriptConfig }: PrimaryContactInput
 ): Promise<string | undefined> {
-  if (!shouldSyncContact(account, scriptConfig)) return undefined
-
   const contact = toJobNimbusRecord(account, salesRepId, scriptConfig, 'contact')
   const existing = await jobNimbus.findByExternalId('contacts', account.id)
   if (existing?.jnid) {

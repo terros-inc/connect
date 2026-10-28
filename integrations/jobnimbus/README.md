@@ -35,7 +35,7 @@ JobNimbus Automation webhooks are not signed, and Connect gives the script only 
 
 ## Primary contact
 
-A job has no phone or email fields. When an install sets `contactType`, Send also keeps a contact for the resident (name, address, `email`, `home_phone`), created with `contactType` and `contactStatus` and linked as the job's `primary`. A contact is made only for a resident with a name, once the install's `requiredFields` are filled in. It carries the account ID in `external_id` and is found again by it, like jobs, so later changes update the same contact. Installs that don't set `contactType` get no contacts.
+A job has no phone or email fields. When an install sets `contactType` and `contactStatus` (JobNimbus requires both on a new contact), Send also keeps a contact for the resident (name, address, `email`, `home_phone`), created with `contactType` and `contactStatus` and linked as the job's `primary`. A contact is made only for a resident with a name, once the install's `requiredFields` are filled in. It carries the account ID in `external_id` and is found again by it, like jobs, so later changes update the same contact. If JobNimbus rejects the contact, the job still syncs without it and the next send tries the contact again. Installs that don't set both get no contacts.
 
 ## Retries and duplicates
 
