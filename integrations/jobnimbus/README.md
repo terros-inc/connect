@@ -46,6 +46,7 @@ JobNimbus publishes no rate limits, so there is no client-side limiter. A `429` 
 ## Not covered yet
 
 - The `external_id` lookup and the `401`/`403` replies for an expired key were not tried against a live JobNimbus account. If the lookup misses, a retry creates a second record as before.
+- The lookup and the create are separate calls and JobNimbus documents no idempotency key, so two deliveries for the same unlinked account that run at the same moment can still both create a record. Retries run one after another and are covered.
 - Contacts created before 2.0.0 carry no `external_id`, so a retry for one of those can't find it.
 - An account that loses its `externalLeadId` and is in an unmapped stage is skipped rather than looked up, so its job isn't updated until it reaches a mapped stage again.
 - The Webhook reads jobs only; an Automation on contacts is ignored.
