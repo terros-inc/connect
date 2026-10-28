@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import type { TokenResponse } from './types.ts'
 import { refreshTokens } from './auth0.ts'
 import { getTokens, saveTokens } from './index.ts'
@@ -17,6 +17,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...fs, readFile: vi.fn(fs.readFile) }
 })
 vi.mock('./auth0.ts', () => ({ refreshTokens: vi.fn() }))
+const realReadFile = (await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')).readFile
 
 const rotated: TokenResponse = {
   access_token: 'new-token',
@@ -38,6 +39,7 @@ const readAuth = async () => JSON.parse(await readFile(authFile(), 'utf-8'))
 
 beforeEach(async () => {
   vi.mocked(refreshTokens).mockReset()
+  vi.mocked(readFile).mockReset().mockImplementation(realReadFile)
   home.dir = await mkdtemp(join(tmpdir(), 'terros-tokens-'))
 })
 
@@ -101,7 +103,7 @@ describe('getTokens', () => {
 
   it('waits for another process holding the refresh lock and uses the tokens it saved', async () => {
     await writeAuth(expired)
-    await writeFile(lockFile(), String(process.pid))
+    await writeFile(lockFile(), `${process.pid}:other-process`)
     const tokens = getTokens()
     await sleep(200)
     expect(refreshTokens).not.toHaveBeenCalled()
@@ -113,10 +115,12 @@ describe('getTokens', () => {
     expect(refreshTokens).not.toHaveBeenCalled()
   })
 
-  // Taking over a live process's lock could send the token it is refreshing with a second time.
+  // Taking over a live process's lock, however old, could send the token it is refreshing with a second time.
   it('gives up instead of refreshing while another running process holds the lock', async () => {
     await writeAuth(expired)
     await writeFile(lockFile(), `${process.pid}:other-process`)
+    const anHourAgo = new Date(Date.now() - 3600000)
+    await utimes(lockFile(), anHourAgo, anHourAgo)
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
       const tokens = getTokens()
@@ -131,12 +135,44 @@ describe('getTokens', () => {
   })
 
   // A process killed mid-refresh must not leave every later command waiting on its lock.
+  // A process killed mid-takeover leaves its guard file behind too.
   it('takes over a lock left by a process that is no longer running', async () => {
     await writeAuth(expired)
-    await writeFile(lockFile(), '999999999')
+    await writeFile(lockFile(), '999999999:dead-owner')
+    await writeFile(`${lockFile()}.dead-owner`, '999999998:dead-taker')
     vi.mocked(refreshTokens).mockResolvedValue(rotated)
     expect((await getTokens())?.access_token).toBe('new-token')
-    await expect(stat(lockFile())).rejects.toThrow()
+    expect(await readdir(configDir())).toEqual(['auth.json'])
+  })
+
+  // Two processes taking over the same dead lock at once: the second must not delete the lock the first has just
+  // taken, or both would refresh with the same token.
+  it('does not delete a lock another process took while this one was taking over a dead lock', async () => {
+    await writeAuth(expired)
+    await writeFile(lockFile(), '999999999:dead-owner')
+    let otherHoldsLock = false
+    let lockReads = 0
+    // Runs the other process's takeover, with the same guard file, between this one's ownership check and its remove.
+    vi.mocked(readFile).mockImplementation(async (path, options) => {
+      const content = await realReadFile(path, options)
+      if (path === lockFile() && ++lockReads === 2) {
+        try {
+          await writeFile(`${lockFile()}.dead-owner`, `${process.pid}:other-taker`, { flag: 'wx' })
+          await rm(lockFile())
+          await writeFile(lockFile(), `${process.pid}:other-process`, { flag: 'wx' })
+          otherHoldsLock = true
+        } catch {
+          // This process holds the guard, so the other one waits.
+        }
+      }
+      return content
+    })
+    vi.mocked(refreshTokens).mockImplementation(async () => {
+      expect(otherHoldsLock).toBe(false)
+      return rotated
+    })
+    expect((await getTokens())?.access_token).toBe('new-token')
+    expect(refreshTokens).toHaveBeenCalledOnce()
   })
 
   it('keeps the saved refresh token when the refresh response has none', async () => {

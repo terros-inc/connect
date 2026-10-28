@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { mkdir, writeFile, readFile, chmod, rename, rm, stat } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, chmod, rename, rm } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { SavedTokens, TokenResponse } from './types.ts'
 import { refreshTokens } from './auth0.ts'
@@ -13,8 +13,6 @@ const MINUTE = 60 * SECOND
 const LOCK_RETRY_MS = 50
 // Sending the token while another process may still be refreshing could revoke the login, so a waiter gives up instead.
 const LOCK_TIMEOUT_MS = MINUTE
-// Node's fetch abandons a stalled request after 5 minutes, so a lock this old names a pid that a new process reused.
-const STALE_LOCK_MS = 10 * MINUTE
 
 let pendingRefresh: Promise<SavedTokens | null> | undefined
 
@@ -46,22 +44,45 @@ async function withAuthLock<T>(run: () => Promise<T>): Promise<T> {
   const lockFile = `${await getAuthFilePath()}.lock`
   const owner = `${process.pid}:${randomUUID()}`
   const deadline = Date.now() + LOCK_TIMEOUT_MS
-  for (;;) {
-    try {
-      await writeFile(lockFile, owner, { flag: 'wx', mode: AUTH_FILE_MODE })
-      break
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
+  while (!(await tryLock(lockFile, owner))) {
+    // A dead holder whose pid was reused looks alive; the path lets the user clear that lock by hand.
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for another terros command to renew the sign-in (lock file: ${lockFile})`)
     }
-    const staleOwner = await readStaleLockOwner(lockFile)
-    if (staleOwner !== null) await removeLock(lockFile, staleOwner)
-    else if (Date.now() > deadline) throw new Error('Timed out waiting for another terros command to renew the sign-in')
-    else await sleep(LOCK_RETRY_MS)
+    await sleep(LOCK_RETRY_MS)
   }
   try {
     return await run()
   } finally {
     await removeLock(lockFile, owner)
+  }
+}
+
+// A lock is never taken from a running process, whatever its age: its refresh may still be in flight.
+async function tryLock(lockFile: string, owner: string): Promise<boolean> {
+  try {
+    await writeFile(lockFile, owner, { flag: 'wx', mode: AUTH_FILE_MODE })
+    return true
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
+  }
+  const holder = await readFile(lockFile, 'utf-8').catch(() => null)
+  if (holder !== null && isDeadOwner(holder)) await removeDeadLock(lockFile, holder)
+  return false
+}
+
+// Checking that the lock still names the dead holder and removing it are two steps, so they run under a guard file
+// that only one process can create for that holder. Otherwise two processes could both pass the check, and the second
+// would delete the lock the first had just taken. Owners are unique, so once removed that lock never comes back and a
+// later guard holder finds nothing to remove. The guard is itself a lock, so one left by a killed process is taken
+// over the same way.
+async function removeDeadLock(lockFile: string, holder: string): Promise<void> {
+  const guard = `${lockFile}.${holder.split(':')[1]}`
+  if (!(await tryLock(guard, `${process.pid}:${randomUUID()}`))) return
+  try {
+    await removeLock(lockFile, holder)
+  } finally {
+    await rm(guard, { force: true })
   }
 }
 
@@ -71,24 +92,15 @@ async function removeLock(lockFile: string, owner: string): Promise<void> {
   if (current === owner) await rm(lockFile, { force: true })
 }
 
-async function readStaleLockOwner(lockFile: string): Promise<string | null> {
+function isDeadOwner(owner: string): boolean {
+  // A lock just created is empty until its owner is written.
+  const pid = /^(\d+):[\w-]+$/.exec(owner)?.[1]
+  if (pid === undefined) return false
   try {
-    const [owner, info] = await Promise.all([readFile(lockFile, 'utf-8'), stat(lockFile)])
-    const pid = Number(owner.split(':')[0])
-    return Date.now() - info.mtimeMs > STALE_LOCK_MS || !isProcessRunning(pid) ? owner : null
-  } catch {
-    return null
-  }
-}
-
-function isProcessRunning(pid: number): boolean {
-  // An empty lock was just created and its pid is not written yet; only its age can make it stale.
-  if (!Number.isInteger(pid) || pid <= 0) return true
-  try {
-    process.kill(pid, 0)
-    return true
+    process.kill(Number(pid), 0)
+    return false
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'EPERM'
+    return (e as NodeJS.ErrnoException).code !== 'EPERM'
   }
 }
 
