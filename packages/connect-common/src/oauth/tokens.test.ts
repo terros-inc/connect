@@ -113,6 +113,23 @@ describe('getTokens', () => {
     expect(refreshTokens).not.toHaveBeenCalled()
   })
 
+  // Taking over a live process's lock could send the token it is refreshing with a second time.
+  it('gives up instead of refreshing while another running process holds the lock', async () => {
+    await writeAuth(expired)
+    await writeFile(lockFile(), `${process.pid}:other-process`)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const tokens = getTokens()
+      await sleep(200)
+      vi.setSystemTime(Date.now() + 2 * 60000)
+      await expect(tokens).rejects.toThrow('Timed out waiting')
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(refreshTokens).not.toHaveBeenCalled()
+    expect(await readFile(lockFile(), 'utf-8')).toBe(`${process.pid}:other-process`)
+  })
+
   // A process killed mid-refresh must not leave every later command waiting on its lock.
   it('takes over a lock left by a process that is no longer running', async () => {
     await writeAuth(expired)
