@@ -104,4 +104,75 @@ describe('sendAccount', () => {
     expect(jobs.size).toBe(1)
     expect(slept).toEqual([1000])
   })
+
+  describe('primary contact', () => {
+    const contactConfig = { ...config, contactType: 'Homeowner', contactStatus: 'Active' }
+
+    // A job has no phone or email, so without a linked contact they never reached JobNimbus.
+    test('creates a contact with the resident details and links it as the job primary', async () => {
+      const { client, jobs, contacts } = fakeJobNimbus({ users })
+      const { terros } = fakeTerros()
+
+      await sendAccount(account('Damage Found'), contactConfig, client, terros)
+
+      expect([...contacts.values()]).toEqual([
+        expect.objectContaining({
+          jnid: 'jn-1',
+          external_id: 'Account.example',
+          email: 'quinn@example.test',
+          home_phone: '5550100',
+          record_type_name: 'Homeowner',
+          status_name: 'Active',
+        }),
+      ])
+      expect(jobs.get('jn-2')).toMatchObject({ primary: { id: 'jn-1' }, record_type_name: 'Insurance' })
+    })
+
+    // A retry or a later change must update the contact it made, not add another.
+    test('later sends update the same contact', async () => {
+      const { client, contacts, calls } = fakeJobNimbus({ users })
+      const { terros } = fakeTerros()
+
+      await sendAccount(account('Damage Found'), contactConfig, client, terros)
+      const newPhone = { ...account('Damage Found').resident, phone: '5550199' }
+      await sendAccount(
+        account('Damage Found', { externalLeadId: 'jn-2', resident: newPhone }),
+        contactConfig,
+        client,
+        terros
+      )
+
+      expect(contacts.size).toBe(1)
+      expect(contacts.get('jn-1')).toMatchObject({ home_phone: '5550199', status_name: 'Active' })
+      expect(calls.find((call) => call.method === 'PUT' && call.path === '/contacts/jn-1')?.body).not.toHaveProperty(
+        'status_name'
+      )
+    })
+
+    // Upgrading an install that never set up contacts must not start creating them, and JobNimbus rejects a new
+    // contact without a status, which would have blocked the job.
+    test('creates no contact unless the install sets a contact type and status', async () => {
+      const { client, jobs, calls } = fakeJobNimbus({ users })
+      const { terros } = fakeTerros()
+
+      await sendAccount(account('Damage Found'), config, client, terros)
+      await sendAccount(account('Damage Found'), { ...config, contactType: 'Homeowner' }, client, terros)
+
+      expect(calls.some((call) => call.path.startsWith('/contacts'))).toBe(false)
+      expect(jobs.size).toBe(1)
+    })
+
+    // A rejected contact (e.g. a contact type JobNimbus doesn't know) must not keep the job out of JobNimbus.
+    test('a rejected contact still sends the job, and the next send links one', async () => {
+      const { client, jobs, contacts } = fakeJobNimbus({ users, fail: { 'POST /contacts': [{ status: 400 }] } })
+      const { terros } = fakeTerros()
+
+      await sendAccount(account('Damage Found'), contactConfig, client, terros)
+      expect(jobs.get('jn-1')).not.toHaveProperty('primary')
+
+      await sendAccount(account('Damage Found', { externalLeadId: 'jn-1' }), contactConfig, client, terros)
+      expect(contacts.size).toBe(1)
+      expect(jobs.get('jn-1')).toMatchObject({ primary: { id: 'jn-2' } })
+    })
+  })
 })

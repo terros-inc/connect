@@ -8,6 +8,7 @@ import {
   toJobNimbusRecord,
   toNewJobNimbusRecord,
 } from './jobnimbus.ts'
+import { linkPrimaryContact, syncPrimaryContact } from './contact.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptConfig>(async (input, client) => {
   const payload = input.context.payload
@@ -58,7 +59,11 @@ export async function sendAccount(
     recordType = 'job'
   }
   const path = recordType === 'contact' ? 'contacts' : 'jobs'
-  const record = toJobNimbusRecord(account, salesRep.id, scriptConfig, recordType)
+  const contactId =
+    recordType === 'job'
+      ? await syncPrimaryContact(jobNimbus, { account, salesRepId: salesRep.id, scriptConfig })
+      : undefined
+  const record = linkPrimaryContact(toJobNimbusRecord(account, salesRep.id, scriptConfig, recordType), contactId)
 
   const linkedId = account.externalLeadId || (await jobNimbus.findByExternalId(path, account.id))?.jnid
   if (linkedId) {

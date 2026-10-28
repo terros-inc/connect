@@ -46,6 +46,8 @@ export function fakeJobNimbus(
     }
     if (method === 'GET') return records.has(jnid!) ? reply(200, records.get(jnid!)) : reply(404)
     if (method === 'POST') {
+      // JobNimbus requires a new contact's type and a status from that type's workflow.
+      if (collection === 'contacts' && (!body?.record_type_name || !body?.status_name)) return reply(400)
       const record = { ...body, jnid: `jn-${nextId++}` }
       records.set(record.jnid, record)
       return reply(200, record)
