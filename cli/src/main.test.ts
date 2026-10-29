@@ -101,6 +101,15 @@ describe('a built-in an endpoint path lands on', () => {
 })
 
 describe('a built-in nothing lands on', () => {
+  it('explains API-history traffic coverage and delay in api log help', async () => {
+    schema('/company/list')
+
+    await main(['api', 'log', 'help'])
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('app sessions, API keys, Connect keys, and CLI sessions'))
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('within 60 seconds'))
+  })
+
   it('runs when the schema cannot be loaded at all', async () => {
     vi.mocked(loadEndpoints).mockRejectedValue(new Error('ENOENT: terros.yml'))
     await main(['auth', 'login'])

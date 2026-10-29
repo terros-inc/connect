@@ -1,5 +1,11 @@
 type ApiCaller = { call(path: string, input: object): Promise<unknown> }
-type StartResponse = { type: 'success'; queryId: string; effectiveSince?: string; sinceClipped?: boolean }
+type StartResponse = {
+  type: 'success'
+  queryId: string
+  effectiveSince?: string
+  sinceClipped?: boolean
+  ingestionDelaySeconds?: number
+}
 type StatusResponse = {
   type: 'success'
   state: 'running' | 'succeeded' | 'failed'
@@ -7,6 +13,7 @@ type StatusResponse = {
   requests?: unknown[]
   effectiveSince?: string
   sinceClipped?: boolean
+  ingestionDelaySeconds?: number
 }
 
 const POLL_INTERVAL_MS = 2_000
@@ -26,6 +33,7 @@ export async function runApiHistoryQuery(client: ApiCaller, input: object): Prom
         ...status,
         effectiveSince: status.effectiveSince ?? started.effectiveSince,
         sinceClipped: status.sinceClipped ?? started.sinceClipped,
+        ingestionDelaySeconds: status.ingestionDelaySeconds ?? started.ingestionDelaySeconds,
       }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
   }

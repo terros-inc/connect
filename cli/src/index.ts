@@ -1,6 +1,3 @@
-import { main } from './main'
+import { runCli } from './run'
 
-main(process.argv.slice(2)).catch((error: unknown) => {
-  console.error(error instanceof Error ? (error.cause ?? error.message) : error)
-  process.exitCode = 1
-})
+void runCli(process.argv.slice(2))

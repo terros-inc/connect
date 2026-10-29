@@ -49,10 +49,12 @@ it('surfaces a clipped time window from the start response', async () => {
       queryId: 'query-1',
       effectiveSince: '2026-10-03T00:00:00.000Z',
       sinceClipped: true,
+      ingestionDelaySeconds: 60,
     })
     .mockResolvedValueOnce({ type: 'success', state: 'succeeded', requests: [] })
   await expect(runApiHistoryQuery({ call }, { companyId: 'C:example' })).resolves.toMatchObject({
     effectiveSince: '2026-10-03T00:00:00.000Z',
     sinceClipped: true,
+    ingestionDelaySeconds: 60,
   })
 })
