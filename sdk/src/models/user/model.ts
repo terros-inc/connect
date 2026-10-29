@@ -26,9 +26,6 @@ export type RoleData = AuditProps & {
   roleType?: 'admin' | 'manager' | 'recruit' | null
   description?: string
   assignment?: 'user' | 'team'
-  avatarBlurhash?: string
-  avatarUrl?: string
-  uploadAvatarUrl?: string
   canAssign?: boolean
   isDeleted?: boolean
 }
