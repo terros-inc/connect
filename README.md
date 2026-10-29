@@ -2,7 +2,7 @@
 
 TypeScript SDK, CLI and integrations for the Terros Sales platform.
 
-- [`sdk`](sdk/README.md): `@terros-inc/sdk`, the API client and `wrapConnectHandler` for integration handlers
+- [`sdk`](sdk/README.md): `@terros-inc/sdk`, the API client, `wrapConnectHandler`, and `PermanentError` for terminal script failures
 - [`cli`](cli/README.md): `@terros-inc/cli`, the `terros` command
 - `packages/*`: private shared packages
 - `integrations/*`: one Connect app each
