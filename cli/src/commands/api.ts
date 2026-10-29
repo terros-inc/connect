@@ -25,7 +25,7 @@ export const apiCommands = {
   },
   log: {
     description:
-      "Show a company's completed production requests from app sessions, API keys, Connect keys, and CLI sessions in the last seven days, newest first; sign-in, password, user email, token and API-history endpoints are not recorded. Records are normally queryable within 60 seconds; delivery retries can take longer. Requires internal access.",
+      "Show a company's completed production requests from app sessions, API keys, Connect keys, and CLI sessions in the last seven days, newest first; endpoints configured not to store logs (for example sign-in, password, token and API history itself) are not recorded. Records are normally queryable within 60 seconds; delivery retries can take longer. Requires internal access.",
     parameters: apiLogParameters,
     async run({ params }: { params: ParsedArgs }): Promise<void> {
       const result = await runApiHistoryQuery(buildTerrosClient(), parseApiLogParams(params))
