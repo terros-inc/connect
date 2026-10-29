@@ -1,3 +1,4 @@
+import { TerrosApiError } from '@terros-inc/connect-common'
 import { runApiHistoryQuery } from './apiHistory'
 
 it('polls until the query succeeds', async () => {
@@ -20,6 +21,16 @@ it('reports Athena failure', async () => {
     .mockResolvedValueOnce({ queryId: 'query-1' })
     .mockResolvedValueOnce({ state: 'failed', error: 'scan failed' })
   await expect(runApiHistoryQuery({ call }, { companyId: 'C:example' })).rejects.toThrow('scan failed')
+})
+
+it('rejects with the typed API error when the status poll fails', async () => {
+  const failure = new TerrosApiError({
+    type: 'error',
+    error: 'Server',
+    message: 'API history query failed: HIVE_S3_THROTTLING',
+  })
+  const call = vi.fn().mockResolvedValueOnce({ type: 'success', queryId: 'query-1' }).mockRejectedValueOnce(failure)
+  await expect(runApiHistoryQuery({ call }, { companyId: 'C:example' })).rejects.toBe(failure)
 })
 
 it('includes the query ID when polling times out', async () => {
@@ -49,12 +60,10 @@ it('surfaces a clipped time window from the start response', async () => {
       queryId: 'query-1',
       effectiveSince: '2026-10-03T00:00:00.000Z',
       sinceClipped: true,
-      ingestionDelaySeconds: 60,
     })
     .mockResolvedValueOnce({ type: 'success', state: 'succeeded', requests: [] })
   await expect(runApiHistoryQuery({ call }, { companyId: 'C:example' })).resolves.toMatchObject({
     effectiveSince: '2026-10-03T00:00:00.000Z',
     sinceClipped: true,
-    ingestionDelaySeconds: 60,
   })
 })

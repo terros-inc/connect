@@ -25,15 +25,12 @@ export const apiCommands = {
   },
   log: {
     description:
-      "Show a company's completed production requests from app sessions, API keys, Connect keys, and CLI sessions, newest first. Records are normally queryable within 60 seconds; delivery retries can take longer. Requires internal access.",
+      "Show a company's completed production requests from app sessions, API keys, Connect keys, and CLI sessions in the last seven days, newest first; sign-in, password, user email, token and API-history endpoints are not recorded. Records are normally queryable within 60 seconds; delivery retries can take longer. Requires internal access.",
     parameters: apiLogParameters,
     async run({ params }: { params: ParsedArgs }): Promise<void> {
       const result = await runApiHistoryQuery(buildTerrosClient(), parseApiLogParams(params))
       if (result.sinceClipped)
         console.error(`Requested --since was clipped to the seven-day limit (${result.effectiveSince ?? 'unknown'})`)
-      console.error(
-        `API history is normally up to ${result.ingestionDelaySeconds ?? 60} seconds behind; delivery retries can take longer.`
-      )
       console.log(JSON.stringify(result.requests ?? [], null, 2))
     },
   },
