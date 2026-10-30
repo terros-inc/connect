@@ -18,6 +18,7 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 ## Engineering approach
 
 Think ambitiously, build economically. Before settling on a design, picture what solving the problem properly would look like, then build the nearest step in that direction that fully solves today's problem. Prefer the design with the fewest concepts over the smallest patch, and don't add abstractions, configuration or infrastructure for a need that doesn't exist yet.
+Comments explain why, not what.
 
 ## Integrations
 
@@ -32,9 +33,10 @@ Think ambitiously, build economically. Before settling on a design, picture what
 
 ## Testing
 
-Test in proportion to risk, as the Terros-wide [testing policy](https://github.com/terros-inc/terros-wiki/blob/main/engineering/testing.md) says: logic, mapping and parsing of external payloads, auth, idempotency and retries, and a regression test with each bug fix.
+Test in proportion to risk: logic, mapping and parsing of external payloads, auth, idempotency and retries, and a regression test with each bug fix.
 Don't test simple data objects, pass-throughs, routine wiring, help or message wording, or a new schema field, and there is no coverage target.
 Each nontrivial test should name the realistic bug it prevents. Extend an existing test, or add one behavioral test, rather than a new file of mocks.
+Hide the ugly: a test of simple code only repeats it, so isolate unavoidable complexity and test only that part.
 
 ## Publishing
 
