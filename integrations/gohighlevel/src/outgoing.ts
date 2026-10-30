@@ -258,9 +258,9 @@ async function saveOpportunityId(
   }
   if (account.customFieldMap?.[fieldId as CustomFieldId] === opportunityId) return
 
-  await client.account.upsert({
-    requestType: 'update',
-    account: { accountId: account.id, customFields: { [fieldId as CustomFieldId]: opportunityId } },
+  // A patch on the known account changes only this key; upsert would also re-match the account and resend its team.
+  await client.account.update({
+    account: { accountId: account.id, customFieldsPatch: { [fieldId as CustomFieldId]: opportunityId } },
   })
   console.log(`Saved opportunity ${opportunityId} to ${account.id}`)
 }

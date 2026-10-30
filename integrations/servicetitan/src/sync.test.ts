@@ -54,10 +54,10 @@ function fixture(options: { budgetMs?: number } = {}) {
   const logs: string[] = []
   const ports: Ports = {
     readAccount: async () => structuredClone(account),
-    writeAccountCustomField: async (_id, fields) => {
-      writes.push(fields)
+    writeAccountCustomField: async (_id, fieldId, value) => {
+      writes.push({ [fieldId]: value })
       order.push(`account@${fake.calls.length}`)
-      account.customFields = fields
+      account.customFields = { ...account.customFields, [fieldId]: value }
     },
     writeEventSourceId: async (_id, value) => {
       writes.push(value)
@@ -347,23 +347,6 @@ it('does not write a blank outcome when the event has no status', async () => {
   expect(f.jobs()[0]!.customFields).toEqual([{ typeId: 1007, value: 'Example Setter' }])
   f.fake.calls.length = 0
   expect(await f.run()).toEqual({ kind: 'unchanged' })
-})
-
-// account.update replaces the whole map, so a stale copy would drop a field another writer added mid-run.
-it('re-reads the account before writing the link and changes only the job link key', async () => {
-  const f = fixture()
-  let reads = 0
-  f.ports.readAccount = async () => {
-    reads++
-    if (reads === 2) f.account.customFields = { ...f.account.customFields, 'CF.added': 'new' }
-    return structuredClone(f.account)
-  }
-  await f.run()
-  expect(f.writes[0]).toEqual({
-    'CF.example': 'keep',
-    'CF.added': 'new',
-    'CF.servicetitanjob': f.link(f.jobs()[0]!.id),
-  })
 })
 
 it('follows a tenant-prefixed event sourceId when the account field is empty', async () => {
