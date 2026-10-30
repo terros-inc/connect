@@ -2,6 +2,7 @@ import {
   type AccountWebhook,
   type AccountWebhookData,
   type AccountUpsertInput,
+  PermanentError,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
 import { MIRROR_SOURCE, targetClient } from './target.ts'
@@ -13,7 +14,10 @@ export const handler = wrapConnectHandler<AccountWebhook>(async (input) => {
   if (payload.action !== 'add') return
 
   const { account } = await targetClient(config.secrets).account.upsert(toTargetAccount(payload.data))
-  console.log(`Copied account ${payload.data.id} to target account ${account?.accountId}`)
+  // With no sourceId match, upsert falls back to an address match. When the target company denies duplicate
+  // accounts and one already sits at this address, it succeeds without saving anything; a retry would do the same.
+  if (!account) throw new PermanentError(`The target company did not save account ${payload.data.id}`)
+  console.log(`Copied account ${payload.data.id} to target account ${account.accountId}`)
 })
 
 /**

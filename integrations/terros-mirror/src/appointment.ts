@@ -37,7 +37,8 @@ export const handler = wrapConnectHandler<EventWebhook>(async (input) => {
       accountId: account.accountId,
       title: event.title,
       eventType: event.eventType,
-      eventDate: Number(event.eventDate),
+      // The webhook sends an ISO 8601 timestamp with an offset, which calendar/event/upsert accepts as is.
+      eventDate: event.eventDate,
       duration: event.duration,
       notes: event.note,
     },

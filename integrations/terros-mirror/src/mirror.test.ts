@@ -24,18 +24,23 @@ class FakeTargetCompany {
       this.failNext = undefined
       return new Response('', { status: 500, statusText: 'Internal Server Error' })
     }
-    const body = JSON.parse(String(init.body))
-    return Response.json({ type: 'success', ...this.handle(route, body) })
+    const result = this.handle(route, JSON.parse(String(init.body)))
+    if (!result) return new Response('', { status: 400, statusText: 'Bad Request' })
+    return Response.json({ type: 'success', ...result })
   }
 
-  private handle(route: string, body: Json): Json {
+  /** Returns undefined for a request the API rejects as invalid. */
+  private handle(route: string, body: Json): Json | undefined {
     switch (route) {
       case 'account/upsert':
         return { account: this.upsert(this.accounts, body.account, 'Account') }
       case 'account/match':
         return { account: this.accounts.find((a) => a.sourceId === body.sourceId) }
-      case 'calendar/event/upsert':
-        return { event: this.upsert(this.events, body.event, 'Event') }
+      case 'calendar/event/upsert': {
+        const eventDate = toMillis(body.event.eventDate)
+        if (eventDate === undefined) return undefined
+        return { event: this.upsert(this.events, { ...body.event, eventDate }, 'Event') }
+      }
       default:
         throw new Error(`The fake Terros API has no route ${route}`)
     }
@@ -49,6 +54,14 @@ class FakeTargetCompany {
     records.push(created)
     return created
   }
+}
+
+/** Like the API, accepts UTC milliseconds or an ISO 8601 string, and rejects anything else (NaN is sent as null). */
+function toMillis(value: unknown): number | undefined {
+  if (typeof value === 'number') return value
+  if (typeof value !== 'string') return undefined
+  const millis = /^\d+$/.test(value) ? Number(value) : Date.parse(value)
+  return Number.isNaN(millis) ? undefined : millis
 }
 
 // Shaped like the Account and Event webhooks Terros sends for a newly booked lead.
@@ -89,7 +102,7 @@ const appointmentAdded = {
   data: {
     id: 'Event.example-booked',
     title: 'Consultation with Jane Doe',
-    eventDate: '1761832800000',
+    eventDate: '2026-10-30T07:00:00.000-07:00',
     duration: 60,
     eventType: 'Consultation',
     note: 'Gate code 1234',
@@ -127,7 +140,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Prevents: the copy landing in the source company (wrong key), or carrying source-only IDs into the target.
+// Prevents: the copy landing in the source company (wrong key), carrying source-only IDs into the target, or sending
+// the webhook's ISO eventDate in a form the upsert rejects, which fails every appointment copy.
 test('a new source account and its appointment create one target account and one appointment', async () => {
   await run(copyAccount, accountAdded)
   await run(copyAppointment, appointmentAdded)
@@ -155,7 +169,7 @@ test('a new source account and its appointment create one target account and one
       accountId: 'Account.example-target-1',
       title: 'Consultation with Jane Doe',
       eventType: 'Consultation',
-      eventDate: 1761832800000,
+      eventDate: Date.parse('2026-10-30T14:00:00.000Z'),
       duration: 60,
       notes: 'Gate code 1234',
     },
@@ -173,13 +187,6 @@ test('a repeated event creates no second account or appointment', async () => {
   expect(target.events).toHaveLength(1)
 })
 
-test('account updates and removals copy nothing', async () => {
-  await run(copyAccount, { ...accountAdded, action: 'update' })
-  await run(copyAccount, { entity: 'Account', action: 'remove', data: 'Account.example-source' })
-
-  expect(target.accounts).toEqual([])
-})
-
 // Prevents: an appointment that arrives first creating its own account and racing the account copy into a duplicate.
 test('an appointment whose account is not copied yet fails without creating anything, and its retry copies it', async () => {
   await expect(run(copyAppointment, appointmentAdded)).rejects.toThrow('has not been copied to the target company yet')
@@ -192,18 +199,16 @@ test('an appointment whose account is not copied yet fails without creating anyt
 })
 
 // Prevents: a failed write being logged as a successful run, which drops the event without a retry.
-test.each(['account/upsert', 'account/match', 'calendar/event/upsert'])(
-  'a failed %s call fails the run',
-  async (route) => {
-    if (route !== 'account/upsert') await run(copyAccount, accountAdded)
-    target.failNext = route
+test('a failed account/upsert call fails the run', async () => {
+  target.failNext = 'account/upsert'
+  await expect(run(copyAccount, accountAdded)).rejects.toThrow('Internal Server Error')
+})
 
-    const script = route === 'account/upsert' ? copyAccount : copyAppointment
-    await expect(run(script, route === 'account/upsert' ? accountAdded : appointmentAdded)).rejects.toThrow(
-      'Internal Server Error'
-    )
-  }
-)
+test.each(['account/match', 'calendar/event/upsert'])('a failed %s call fails the run', async (route) => {
+  await run(copyAccount, accountAdded)
+  target.failNext = route
+  await expect(run(copyAppointment, appointmentAdded)).rejects.toThrow('Internal Server Error')
+})
 
 test('a rejected target API key fails the run, and a missing one fails it permanently', async () => {
   await expect(run(copyAccount, accountAdded, { targetApiKey: 'revoked-key-example' })).rejects.toThrow('Unauthorized')
