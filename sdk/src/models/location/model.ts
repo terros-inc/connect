@@ -3,6 +3,11 @@ export type LatLng = {
   longitude: number
 }
 
+export type PinPlacement = {
+  source: 'first_american' | 'amazon_location' | 'supplied_coordinates' | 'unknown'
+  precision: 'house' | 'street' | 'zip' | 'custom_coordinates' | 'unknown'
+}
+
 export type Address = {
   country: 'US' | 'CA' | 'PR'
   countrySubd: string

@@ -1,5 +1,5 @@
 import type { RoleId, SmallUser, TeamId, UserId } from '../user'
-import type { LatLng, SmallAddress } from '../location'
+import type { LatLng, PinPlacement, SmallAddress } from '../location'
 import { type CustomFieldId, type CustomFieldMap, type CustomFieldType } from '../customFields'
 
 export type AccountId = `Account:${string}` | `Account.${string}`
@@ -166,6 +166,8 @@ export type AccountData = Omit<UnsavedAccount, 'contacts' | 'notes'> & {
   ownerHistory?: UserHistory
   closerHistory?: UserHistory
   editable?: boolean
+  /** How an imported account pin was placed; older pins return unknown values. */
+  pinPlacement?: PinPlacement
 }
 
 export type AccountSortBy = 'createdDate' | 'lastActionDate' | 'lastUpdatedDate' | `CF.${string}`
