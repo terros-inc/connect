@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
-  "appId": "App.placeholder",
+  "appId": "App.ZvYy5KZ6nHyT0Kb79kDIu",
   "scripts": [
     {
       "name": "ServiceTitan Appointment Sync",
