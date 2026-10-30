@@ -9,3 +9,13 @@ export type AppGetSuccess = ApiSuccess<{
   app: AppData
   versions: AppVersionData[]
 }>
+
+export type AppUpdateInput = {
+  app: AppData & {
+    /** Markdown shown on the app's marketplace Documentation tab. */
+    documentation?: string
+  }
+}
+export type AppUpdateSuccess = ApiSuccess<{
+  app: AppData
+}>
