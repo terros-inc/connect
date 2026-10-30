@@ -108,7 +108,7 @@ not to npm, and there is no staging or approval step.
   left in `draft` (for example after a failed run) can be published again.
 - Each publish also sets the app's help docs (the marketplace Documentation tab) to the integration's `DOCS.md`, or
   `README.md` when there is no `DOCS.md`, next to `terros.json`. Write `DOCS.md` when the README holds developer notes
-  (building, testing, internals) that customers installing the app should not read. With neither file, the app's
-  docs are left as they are. The markdown is sent as is: relative links and images do not resolve in the marketplace,
+  (building, testing, internals) that customers installing the app should not read. An empty or whitespace-only file
+  counts as missing; with neither file, the app's docs are left as they are. The markdown is sent as is: relative links and images do not resolve in the marketplace,
   so use absolute URLs there.
 - The list of integrations is hardcoded in the workflow, so a new integration has to be added to it.

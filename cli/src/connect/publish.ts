@@ -18,7 +18,7 @@ export async function publishConnectScripts(): Promise<void> {
   const appVersion = existingVersion ?? (await createVersion(version, appId, client)).appVersion
   if (!existingVersion) console.log('Created new app version')
   await Promise.all(scripts.map((s) => uploadScript(client, appId, version, s)))
-  const documentation = await readDocumentation()
+  const documentation = await readDocumentation(cwd())
   if (documentation !== undefined) {
     await client.connect.app.update({ app: { appId, documentation } })
     console.log('Updated app documentation')
@@ -36,11 +36,13 @@ export async function publishConnectScripts(): Promise<void> {
 // DOCS.md lets an integration keep developer notes in README.md out of the customer-facing docs.
 const DOCUMENTATION_FILES = ['DOCS.md', 'README.md']
 
-async function readDocumentation(): Promise<string | undefined> {
+// An empty file counts as missing, so it never blanks docs written by hand.
+export async function readDocumentation(dir: string): Promise<string | undefined> {
   for (const name of DOCUMENTATION_FILES) {
     try {
       // oxlint-disable-next-line no-await-in-loop
-      return await readFile(join(cwd(), name), { encoding: 'utf-8' })
+      const content = await readFile(join(dir, name), { encoding: 'utf-8' })
+      if (content.trim()) return content
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }

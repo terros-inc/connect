@@ -34,7 +34,7 @@ pass `--unsaved` or `--customField` pass each field as a flag instead, or the wh
 ### New: `terros connect publish` sets the app's help docs
 
 Publishing now also sets the app's marketplace Documentation tab to the integration's `DOCS.md`, or `README.md` when
-there is no `DOCS.md`, so the docs come from git. With neither file the app's docs are left as they are. See
+there is no `DOCS.md`, so the docs come from git. With neither file, or an empty one, the app's docs are left as they are. See
 [Integrations](../RELEASING.md#integrations-publish-integrationsyml).
 
 ## 2.1.0
