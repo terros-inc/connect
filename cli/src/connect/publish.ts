@@ -2,8 +2,15 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { type AppId, type AppVersionData, TerrosClient, type VersionAddSuccess } from '@terros-inc/sdk'
+import {
+  type AppId,
+  type AppVersionData,
+  TerrosClient,
+  type UnsavedScript as ScriptInput,
+  type VersionAddSuccess,
+} from '@terros-inc/sdk'
 import { packageScripts, type ScriptZip } from './package'
+import type { TiptapDoc, UnsavedScript } from './configSchema'
 
 export async function publishConnectScripts(): Promise<void> {
   const { scripts, config } = await packageScripts()
@@ -58,15 +65,9 @@ async function uploadScript(
 ): Promise<void> {
   const { size: scriptSize } = await stat(zip)
   const data = await readFile(zip)
-  const { entrypoint, ...rest } = script
 
   const res = await client.connect.script.add({
-    script: {
-      ...rest,
-      appId,
-      appVersion,
-      scriptStorage: 'blob',
-    },
+    script: toScriptInput(script, appId, appVersion),
     scriptSize,
   })
 
@@ -83,4 +84,30 @@ async function uploadScript(
 
   if (!uploadRes.ok) throw new Error(`Failed to upload app script, ${await uploadRes.text()}`)
   console.log(`Uploaded '${script.name}' script`)
+}
+
+export function toScriptInput(script: UnsavedScript, appId: AppId, appVersion: string): ScriptInput {
+  const { entrypoint, description, ...rest } = script
+  const doc = typeof description === 'string' ? textToDoc(description) : description
+  return {
+    ...rest,
+    ...(doc && { description: doc }),
+    appId,
+    appVersion,
+    scriptStorage: 'blob',
+  }
+}
+
+// The API only accepts a Tiptap doc, but terros.json authors write plain text: each blank-line-separated block
+// becomes a paragraph, and text with no blocks sends no description rather than an empty doc.
+function textToDoc(text: string): TiptapDoc | undefined {
+  const blocks = text
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+  if (blocks.length === 0) return undefined
+  return {
+    type: 'doc',
+    content: blocks.map((block) => ({ type: 'paragraph', content: [{ type: 'text', text: block }] })),
+  }
 }

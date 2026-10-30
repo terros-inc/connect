@@ -2,6 +2,16 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## 3.0.1
+
+### Bug fix: `terros connect publish` sends script descriptions as rich text
+
+`terros connect publish` failed with `script.description: Invalid input: expected object, received string` for any
+script with a `description` in `terros.json`, because the API stores a description as a Tiptap rich-text document. The
+CLI now converts a plain-text `description` into that document, one paragraph per blank-line-separated block, and
+sends no description when the text is blank. A Tiptap document (`{ "type": "doc", "content": [...] }`) written in
+`terros.json` is accepted and sent unchanged, and `configSchema.json` describes both forms.
+
 ## 3.0.0
 
 ### BREAKING: `terros mcp` removed; use the hosted MCP server

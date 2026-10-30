@@ -32,10 +32,71 @@ export const ScriptAuth = z.record(
   ])
 )
 
+const TiptapText = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+  marks: z
+    .array(
+      z.union([
+        z.object({ type: z.enum(['bold', 'underline', 'strike']) }),
+        z.object({
+          type: z.literal('link'),
+          attrs: z.object({
+            href: z.string(),
+            rel: z.string(),
+            target: z.string().nullable(),
+            class: z.string().nullable(),
+          }),
+        }),
+      ])
+    )
+    .optional(),
+})
+
+const TiptapParagraph = z
+  .object({ type: z.literal('paragraph'), content: z.array(TiptapText) })
+  .meta({ id: 'TiptapParagraph' })
+
+const TiptapHeading = z.object({
+  type: z.literal('heading'),
+  attrs: z.object({ level: z.int().min(1).max(6) }),
+  content: z.array(TiptapText),
+})
+
+const TiptapListItem = z
+  .object({
+    type: z.literal('listItem'),
+    get content() {
+      return z.array(z.union([TiptapBulletList, TiptapOrderedList, TiptapParagraph]))
+    },
+  })
+  .meta({ id: 'TiptapListItem' })
+
+const TiptapBulletList = z
+  .object({ type: z.literal('bulletList'), content: z.array(TiptapListItem) })
+  .meta({ id: 'TiptapBulletList' })
+
+const TiptapOrderedList = z
+  .object({
+    type: z.literal('orderedList'),
+    attrs: z.object({ start: z.int().min(1), type: z.null() }),
+    content: z.array(TiptapListItem),
+  })
+  .meta({ id: 'TiptapOrderedList' })
+
+export const TiptapDoc = z
+  .object({
+    type: z.literal('doc'),
+    content: z.array(z.union([TiptapParagraph, TiptapHeading, TiptapBulletList, TiptapOrderedList])),
+  })
+  .meta({ id: 'TiptapDoc', description: 'Tiptap rich-text document, the shape the Terros API stores' })
+export type TiptapDoc = z.infer<typeof TiptapDoc>
+
 export const UnsavedScriptBase = z.object({
   name: z.string(),
-  description: z.string().optional().meta({
-    description: 'Instructions on how to configure the script',
+  description: z.union([z.string(), TiptapDoc]).optional().meta({
+    description:
+      'Instructions on how to configure the script: plain text, with a blank line between paragraphs, or a Tiptap rich-text document',
   }),
   entrypoint: z.string(),
   configSchema: ConfigSchema,
@@ -71,6 +132,7 @@ export const UnsavedScript = z.discriminatedUnion('type', [
 export type UnsavedScript = z.infer<typeof UnsavedScript>
 
 export const ConnectConfig = z.object({
+  $schema: z.string().optional(),
   appId: z.string(),
   scripts: z.array(UnsavedScript),
 })
