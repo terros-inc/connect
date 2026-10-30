@@ -43,6 +43,8 @@ export type ObjectSchema = SchemaBase & {
   }
   additionalProperties?: Schema
   required?: string[]
+  /** Further constraints on the same object; its own properties count as one more member. */
+  allOf?: Schema[]
 }
 
 export type UnionSchema = SchemaBase & {

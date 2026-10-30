@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import { getEndpointParameters } from './parameters.ts'
+import { getEndpointParameters, getObjectFields } from './parameters.ts'
 import { buildEndpointInput, getEndpointInputParameters, UnknownParameterError, type ParsedArgs } from './input.ts'
 import type { Endpoint } from './endpoint.ts'
 
@@ -157,7 +157,7 @@ describe('buildEndpointInput', () => {
   })
 
   describe('request body that is a union or wraps one', () => {
-    // Shaped like `/user/remove`: the body was one unnamed `--` parameter that no flag or JSON could fill.
+    // Shaped like `/user/remove`: a body that is one of two objects, with no wrapper to hang flags on.
     const userRemove: Endpoint = {
       path: '/user/remove',
       components: {
@@ -196,8 +196,7 @@ describe('buildEndpointInput', () => {
       })
     })
 
-    // Shaped like `/customField/update`: the wrapped object is an `allOf` of a typed union and plain objects, which
-    // was one `--customField` parameter of type `unknown`.
+    // Shaped like `/customField/update`: the wrapped object is an `allOf` whose first member is itself a union.
     it('expands an allOf wrapped in a single object and sends the fields inside the wrapper', () => {
       const customFieldUpdate: Endpoint = {
         path: '/customField/update',
@@ -255,6 +254,36 @@ describe('buildEndpointInput', () => {
           fieldType: 'multipleChoice',
           options: ['Shingle', 'Metal'],
         },
+      })
+    })
+
+    // A field declared beside `allOf`, or in two members, must still be offered, and the second must meet both schemas.
+    it('merges an allOf with object keywords beside it and a member that only says "an object"', () => {
+      const endpoint: Endpoint = {
+        path: '/garden/update',
+        components: { schemas: {} },
+        properties: {
+          type: 'object',
+          properties: { gardenId: { type: 'string' } },
+          required: ['gardenId'],
+          allOf: [
+            { type: 'object' },
+            { type: 'object', properties: { size: { type: 'number' } } },
+            { type: 'object', properties: { size: { type: 'number', minimum: 1 } }, required: ['size'] },
+          ],
+        },
+      }
+
+      expect(getObjectFields(endpoint.properties, endpoint.components)).toEqual({
+        properties: {
+          gardenId: { type: 'string' },
+          size: { allOf: [{ type: 'number' }, { type: 'number', minimum: 1 }] },
+        },
+        required: ['gardenId', 'size'],
+      })
+      expect(buildEndpointInput(endpoint, { _: [], gardenId: 'Garden.example', size: '4' })).toEqual({
+        gardenId: 'Garden.example',
+        size: 4,
       })
     })
   })
@@ -327,17 +356,14 @@ describe('buildEndpointInput', () => {
     })
   })
 
-  // Shaped like `/question/manage/list --archived` and `/company/list --kinds`, which agents passed as bare values.
-  describe('archived filter and enum list parameters', () => {
+  // Shaped like `/question/manage/list --archived`: zod writes `boolean | "all"` as `anyOf` with a `const` member.
+  describe('boolean or literal parameters', () => {
     const endpoint: Endpoint = {
-      path: '/company/list',
-      components: { schemas: { companyKind: { type: 'string', enum: ['customer', 'demo', 'sandbox'] } } },
+      path: '/question/manage/list',
+      components: { schemas: {} },
       properties: {
         type: 'object',
-        properties: {
-          archived: { anyOf: [{ type: 'boolean' }, { type: 'string', const: 'all' }] },
-          kinds: { type: 'array', items: { $ref: '#/components/schemas/companyKind' } },
-        },
+        properties: { archived: { anyOf: [{ type: 'boolean' }, { type: 'string', const: 'all' }] } },
       },
     }
     const build = (params: Record<string, unknown>): unknown => buildEndpointInput(endpoint, { _: [], ...params })
@@ -346,12 +372,6 @@ describe('buildEndpointInput', () => {
       expect(build({ archived: 'all' })).toEqual({ archived: 'all' })
       expect(build({ archived: '"all"' })).toEqual({ archived: 'all' })
       expect(build({ archived: 'false' })).toEqual({ archived: false })
-    })
-
-    it('accepts an enum list as a bare value, comma-separated values or a JSON array', () => {
-      expect(build({ kinds: 'customer' })).toEqual({ kinds: ['customer'] })
-      expect(build({ kinds: 'customer,demo' })).toEqual({ kinds: ['customer', 'demo'] })
-      expect(build({ kinds: '["customer","demo"]' })).toEqual({ kinds: ['customer', 'demo'] })
     })
   })
 

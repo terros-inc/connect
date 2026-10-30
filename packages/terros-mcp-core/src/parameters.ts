@@ -166,28 +166,45 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
 }
 
 /**
- * The fields of an object schema. An `allOf` has every member's fields. A union of objects has every variant's fields,
- * required only when every variant requires them, so a command offers all of them and the API rejects a combination
- * no variant allows. A field whose schema differs between members takes any of those schemas.
+ * The fields of an object schema. An `allOf` has every member's fields, and object keywords beside it count as one
+ * more member. A union of objects has every variant's fields, required only when every variant requires them, so a
+ * command offers all of them and the API rejects a combination no variant allows. A field whose schema differs between
+ * members keeps the members' keyword: it must match all of an `allOf`'s schemas, or any of a union's.
  */
 export function getObjectFields(schema: Schema, components: Components): ObjectFields | undefined {
   const resolved = resolveSchema(schema, components)
-  const isAllOf = 'allOf' in resolved
-  const members = isAllOf ? resolved.allOf : getVariants(resolved)
-  if (!members) {
-    if (!isPlainObject(resolved) || !resolved.properties) return undefined
-    return { properties: resolved.properties, required: resolved.required ?? [] }
-  }
+  const allOf = 'allOf' in resolved ? resolved.allOf : undefined
+  const members = allOf ?? getVariants(resolved)
+  const own =
+    'properties' in resolved && resolved.properties
+      ? { properties: resolved.properties, required: resolved.required ?? [] }
+      : undefined
+  if (!members) return isPlainObject(resolved) ? own : undefined
   if (members.length === 0) return undefined
+
   const memberFields: ObjectFields[] = []
   for (const member of members) {
-    const fields = getObjectFields(member, components)
+    // An `allOf` member that only says "an object" adds no fields; in a union it would allow any object, so it cannot.
+    const fields =
+      getObjectFields(member, components) ?? (allOf && isAnyObject(member, components) ? NO_FIELDS : undefined)
     if (!fields) return undefined
     memberFields.push(fields)
   }
 
+  const fields = mergeFields(memberFields, allOf ? 'allOf' : 'oneOf')
+  return own ? mergeFields([own, fields], 'allOf') : fields
+}
+
+const NO_FIELDS: ObjectFields = { properties: {}, required: [] }
+
+function isAnyObject(schema: Schema, components: Components): boolean {
+  const resolved = resolveSchema(schema, components)
+  return isPlainObject(resolved) && !resolved.properties && !resolved.additionalProperties
+}
+
+function mergeFields(members: ObjectFields[], keyword: 'allOf' | 'oneOf'): ObjectFields {
   const schemasByName = new Map<string, Schema[]>()
-  for (const fields of memberFields) {
+  for (const fields of members) {
     for (const [name, fieldSchema] of Object.entries(fields.properties)) {
       const schemas = schemasByName.get(name) ?? []
       if (!schemas.some((known) => JSON.stringify(known) === JSON.stringify(fieldSchema))) schemas.push(fieldSchema)
@@ -199,10 +216,13 @@ export function getObjectFields(schema: Schema, components: Components): ObjectF
   const isRequired = (name: string) => (fields: ObjectFields) => fields.required.includes(name)
   return {
     properties: Object.fromEntries(
-      [...schemasByName].map(([name, schemas]) => [name, schemas.length === 1 ? schemas[0]! : { oneOf: schemas }])
+      [...schemasByName].map(([name, schemas]) => [
+        name,
+        schemas.length === 1 ? schemas[0]! : keyword === 'allOf' ? { allOf: schemas } : { oneOf: schemas },
+      ])
     ),
     required: names.filter((name) =>
-      isAllOf ? memberFields.some(isRequired(name)) : memberFields.every(isRequired(name))
+      keyword === 'allOf' ? members.some(isRequired(name)) : members.every(isRequired(name))
     ),
   }
 }
