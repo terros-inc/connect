@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
+  "appId": "App.qF9UCV5_u2HWQnmvTYStV",
+  "scripts": [
+    {
+      "name": "Terros Mirror Account Copy",
+      "description": "Copies each new account in this company into the target company.",
+      "entrypoint": "src/account.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "slug": "terros-mirror-account-copy",
+      "permissions": [],
+      "configSchema": [],
+      "authSchema": {
+        "targetApiKey": "Terros API key of the target company. Needs account:save and event:save there."
+      }
+    },
+    {
+      "name": "Terros Mirror Appointment Copy",
+      "description": "Copies each new appointment on a copied account into the target company.",
+      "entrypoint": "src/appointment.ts",
+      "type": "outgoing",
+      "dataType": "Event",
+      "slug": "terros-mirror-appointment-copy",
+      "permissions": [],
+      "configSchema": [],
+      "authSchema": {
+        "targetApiKey": "Terros API key of the target company. Needs account:save and event:save there."
+      }
+    }
+  ]
+}

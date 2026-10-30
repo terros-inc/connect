@@ -21,6 +21,7 @@ on:
           - jobnimbus
           - salesforce
           - servicetitan
+          - terros-mirror
           - zoho
 
 concurrency:
