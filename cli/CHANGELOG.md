@@ -18,6 +18,16 @@ impersonation are not on hosted production yet. Until they are, CLI 2 still serv
 
 Every other command and sign-in are unchanged; the API commands change only as described below.
 
+### Help: role assignment sources and archived roles
+
+`terros user list help` now says that its role data comes from the search index, can be stale, and that
+`terros user get --userId <userId>` is the source of truth for one user's role assignments. Fetching every user's
+source record would add one request per result, so the list command remains efficient and reports where its data
+comes from instead.
+
+`terros role list help` now explains that archived roles can still have holders and continue granting their scopes,
+and shows how to include archived roles and their holder counts with `--showArchived true --includeHolders true`.
+
 ### Bug fix: a request body that is a union, or wraps one, takes named flags
 
 A command whose request body is a union of objects, or a single object wrapping a union or `allOf`, now takes that

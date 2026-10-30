@@ -149,6 +149,18 @@ describe('an endpoint command', () => {
       company: { companyId: 'C.example', name: 'Acme Solar' },
     })
   })
+
+  it.each([
+    ['user', 'list', 'search index', 'user get --userId <userId>'],
+    ['role', 'list', 'Archived roles can still have holders', '--showArchived true --includeHolders true'],
+  ])('adds the data-source caveat to `terros %s %s help`', async (group, command, caveat, sourceOfTruth) => {
+    schema(`/${group}/${command}`)
+
+    await main([group, command, 'help'])
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(caveat))
+    expect(log).toHaveBeenCalledWith(expect.stringContaining(sourceOfTruth))
+  })
 })
 
 // minimist alone reads `--longitude -124.5` as the short flags -1, -2 and -4, so a map query failed as unknown flags.

@@ -35,6 +35,13 @@ import { buildTerrosClient } from './api/query'
 /** A negative number, in the forms minimist itself reads as a number: `-124.5`, `-3`, `-.5`, `-1e-3`. */
 const NEGATIVE_NUMBER = /^-(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i
 
+const ENDPOINT_HELP_NOTES: Partial<Record<string, string>> = {
+  '/user/list':
+    'Role data in this list comes from the search index and can be stale. Use `terros user get --userId <userId>` as the source of truth for one user’s role assignments.',
+  '/role/list':
+    'Archived roles can still have holders and continue granting their scopes. Use `--showArchived true --includeHolders true` to include them with holder counts.',
+}
+
 /**
  * Parse the command line, reading a negative number after a long flag as that flag's value. minimist alone reads
  * `--longitude -124.5` as `--longitude` plus the short flags `-1`, `-2` and `-4`, so it is joined into
@@ -198,12 +205,13 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   if (endpoint) {
     const depth = getHelpDepth(requestedDepth)
     const parameters = getEndpointInputParameters(endpoint, depth)
+    const helpNote = ENDPOINT_HELP_NOTES[endpoint.path]
     console.log(
       formatSubcommandParametersHelp(
         level.words.join(' '),
         undefined,
         parameters,
-        endpoint.description,
+        [endpoint.description, helpNote].filter(Boolean).join('\n\n'),
         true,
         level.subcommands
       )
