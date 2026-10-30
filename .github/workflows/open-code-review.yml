@@ -81,10 +81,13 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
+          # The review agent reads this workspace, so leave no token in .git/config;
+          # the review only diffs local history and posts with the App token.
+          persist-credentials: false
 
       - name: Run OpenCodeReview
         if: github.event_name == 'pull_request_target' || steps.pr-context.outputs.same_repo == 'true'
-        uses: terros-inc/actions/open-code-review@8f2b714ae50b4a83cfd6eb95e5de84c215a3cec6
+        uses: terros-inc/actions/open-code-review@35ae12f8060ad1627fed1c341e73126da5c9e6b7
         with:
           openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token }}
