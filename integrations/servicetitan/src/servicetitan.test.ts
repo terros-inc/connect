@@ -176,6 +176,9 @@ it('rejects responses without a valid ID instead of returning undefined', async 
     ok: false,
     message: expect.stringContaining('invalid response'),
   })
+  // A live response must not accept the negative ids dry-run uses, or a bad create could be linked.
+  fake.replies.set('POST /jpm/v2/tenant/1000/jobs', [{ status: 200, body: { id: -1 } }])
+  expect(await fake.client.createJob(jobInput)).toMatchObject({ ok: false, retryable: false })
 })
 
 it('treats a successful empty update response as success', async () => {

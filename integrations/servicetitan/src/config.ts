@@ -18,9 +18,23 @@ export type Config = Partial<Record<NumericField, number>> & {
   cancelReasonId: number
   serviceTitanJobId: CustomFieldId
   teamToBusinessUnitMap: Record<string, number>
+  dryRun: boolean
 }
-export type RawConfig = Record<string, string | Record<string, string>>
+// dryRun may arrive as a real boolean or as the install form's text. Other fields stay strings or mappings.
+export type RawConfig = Record<string, string | boolean | Record<string, string>>
 export type Secrets = { appKey: string; clientId: string; clientSecret: string; tenantId: string }
+
+// Blank is off. Anything other than true or false fails the run, so a typo cannot turn a dry-run pilot into live writes.
+function parseDryRun(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return false
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'string') {
+    const text = value.trim().toLowerCase()
+    if (text === '' || text === 'false') return false
+    if (text === 'true') return true
+  }
+  throw new PermanentError('dryRun must be true or false')
+}
 
 function positiveId(value: unknown, field: string): number {
   if (
@@ -58,6 +72,7 @@ export function parseConfig(raw: RawConfig): Config {
     teamToBusinessUnitMap: Object.fromEntries(
       Object.entries(mapping ?? {}).map(([team, id]) => [team, positiveId(id, `teamToBusinessUnitMap.${team}`)])
     ),
+    dryRun: parseDryRun(raw.dryRun),
   }
 }
 

@@ -7,11 +7,13 @@ import {
   type EventData,
   type Ports,
 } from './sync.ts'
+import { ServiceTitanClient } from './servicetitan.ts'
 import { fakeServiceTitan } from './fakeServiceTitan.ts'
 import { PermanentError } from './errors.ts'
+import { installDryRun } from './dryRun.ts'
 import { parseConfig } from './config.ts'
 
-function fixture(options: { budgetMs?: number } = {}) {
+function fixture(options: { budgetMs?: number; dryRun?: string | boolean } = {}) {
   const fake = fakeServiceTitan(options)
   const config = parseConfig({
     jobTypeId: '1001',
@@ -25,6 +27,7 @@ function fixture(options: { budgetMs?: number } = {}) {
     customFieldSetter: '1007',
     customFieldAppointmentOutcome: '1008',
     teamToBusinessUnitMap: { 'Example team': '3001' },
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
   })
   const event: EventData = {
     id: 'Event.example',
@@ -52,7 +55,7 @@ function fixture(options: { budgetMs?: number } = {}) {
   // Write order relative to ServiceTitan calls, e.g. 'account@3' means after three fake requests.
   const order: string[] = []
   const logs: string[] = []
-  const ports: Ports = {
+  let ports: Ports = {
     readAccount: async () => structuredClone(account),
     writeAccountCustomField: async (_id, fields) => {
       writes.push(fields)
@@ -64,6 +67,17 @@ function fixture(options: { budgetMs?: number } = {}) {
       event.sourceId = value
     },
     log: (level, message) => logs.push(`${level}: ${message}`),
+  }
+  if (config.dryRun) {
+    const dry = installDryRun({
+      fetcher: fake.fakeFetch,
+      ports,
+      eventId: event.id,
+      accountId: account.accountId,
+      jobFieldId: config.serviceTitanJobId,
+    })
+    fake.client = new ServiceTitanClient(fake.secrets, dry.fetcher, fake.client.budget, { allowSyntheticIds: true })
+    ports = dry.ports
   }
   const run = () => sync({ entity: 'Event', action: 'update', data: event }, config, fake.client, ports)
   const stWrites = () =>
@@ -510,6 +524,158 @@ it('does not start a replacement job create with too little budget left', async 
   f.account.customFields!['CF.servicetitanjob'] = '1000:4000'
   expect(await f.run()).toMatchObject({ kind: 'skipped', reason: expect.stringContaining('run budget too low') })
   expect(f.stWrites()).toEqual([])
+})
+
+const pii = ['Acme Solar', 'user@example.test', 'Example Street', 'Example Setter', 'Example City']
+
+function dryLines(logs: string[]): string[] {
+  return logs.filter((line) => line.includes('SERVICETITAN_DRY_RUN'))
+}
+
+function outsideBody(line: string): string {
+  const at = line.indexOf(' body=')
+  return at === -1 ? line : line.slice(0, at)
+}
+
+function expectNoPiiOutsideBody(logs: string[]): void {
+  const text = logs.join('\n')
+  expect(text).not.toContain('example-secret')
+  expect(text).not.toContain('example-key')
+  for (const line of dryLines(logs)) {
+    expect(line).toContain('event=Event.example')
+    expect(line).toContain('account=Account.example')
+    const prefix = outsideBody(line)
+    for (const value of pii) expect(prefix).not.toContain(value)
+  }
+}
+
+function mutationLines(logs: string[]): string[] {
+  return dryLines(logs).filter((line) => line.includes(' method='))
+}
+
+function seedLinkedJob(f: ReturnType<typeof fixture>): void {
+  f.fake.jobs.set(4000, {
+    id: 4000,
+    customerId: 1,
+    locationId: 1,
+    campaignId: 1002,
+    lastAppointmentId: 4001,
+    customFields: [
+      { typeId: 1007, value: 'Example Setter' },
+      { typeId: 1008, value: 'Scheduled' },
+    ],
+  })
+  f.fake.appointments.set(4001, {
+    id: 4001,
+    start: '2026-10-26T17:00:00.000Z',
+    end: '2026-10-26T18:00:00.000Z',
+  })
+  f.fake.assignments.push({ appointmentId: 4001, technicianId: 2000, active: true })
+  f.account.customFields!['CF.servicetitanjob'] = '1000:4000'
+  f.event.sourceId = '1000:4000'
+}
+
+function syntheticId(logs: string[], kind: 'customer' | 'job'): number {
+  const line = dryLines(logs).find((entry) => entry.includes(`note=synthetic-${kind} `))
+  return Number(/id=(-?\d+)/.exec(line ?? '')?.[1])
+}
+
+// Dry-run must not create a customer, reschedule, or cancel. An empty location page for a synthetic customer would
+// also retry and burn the run budget. The string "false" is what the install form sends and must keep writing.
+it('dry-run makes no ServiceTitan or Terros writes for create, reschedule and reassign', async () => {
+  const created = fixture({ dryRun: 'true' })
+  const again = fixture({ dryRun: true })
+  expect((await created.run()).kind).toBe('created')
+  expect((await again.run()).kind).toBe('created')
+  for (const f of [created, again]) {
+    expect(f.stWrites()).toEqual([])
+    expect(f.writes).toEqual([])
+    expect(f.account.customFields!['CF.servicetitanjob']).toBeUndefined()
+    expect(f.event.sourceId).toBeUndefined()
+    expect(f.fake.calls.filter((call) => call.url.pathname.endsWith('/locations'))).toEqual([])
+    expect(f.fake.customers).toEqual([])
+    expect(f.fake.jobs.size).toBe(0)
+    const mutations = mutationLines(f.logs)
+    expect(mutations.map((line) => /method=([A-Z]+)/.exec(line)?.[1])).toEqual(['POST', 'POST'])
+    expect(mutations[0]).toContain('event=Event.example')
+    expect(mutations[0]).toContain('account=Account.example')
+    expect(mutations[0]).toContain('/customers')
+    expect(mutations[1]).toContain('/jobs')
+    const customerBody = JSON.parse(mutations[0]!.slice(mutations[0]!.indexOf(' body=') + ' body='.length))
+    expect(customerBody.name).toBe('Acme Solar')
+    expect(customerBody.contacts[0].value).toBe('user@example.test')
+    expect(Object.keys(customerBody)).toEqual([...Object.keys(customerBody)].sort())
+    expect(Object.keys(customerBody.address)).toEqual(['city', 'country', 'state', 'street', 'zip'])
+    expect(Object.keys(customerBody.contacts[0])).toEqual(['memo', 'type', 'value'])
+    const customerId = syntheticId(f.logs, 'customer')
+    const jobId = syntheticId(f.logs, 'job')
+    expect(customerId).toBe(-1)
+    expect(jobId).toBeLessThan(0)
+    expect(jobId).not.toBe(customerId)
+    const jobBody = JSON.parse(mutations[1]!.slice(mutations[1]!.indexOf(' body=') + ' body='.length))
+    expect(jobBody.customerId).toBe(customerId)
+    expect(jobBody.locationId).toBeLessThan(0)
+    expect(jobBody.locationId).not.toBe(customerId)
+    expect(dryLines(f.logs).some((line) => line.includes(`terros=accountCustomField value=1000:${jobId}`))).toBe(true)
+    expect(dryLines(f.logs).some((line) => line.includes(`terros=eventSourceId value=1000:${jobId}`))).toBe(true)
+    expectNoPiiOutsideBody(f.logs)
+  }
+
+  const rescheduled = fixture({ dryRun: 'true' })
+  seedLinkedJob(rescheduled)
+  rescheduled.event.duration = 90
+  expect(await rescheduled.run()).toEqual({ kind: 'updated', changes: ['appointment'] })
+  expect(rescheduled.stWrites()).toEqual([])
+  expect(rescheduled.writes).toEqual([])
+  expect(rescheduled.account.customFields!['CF.servicetitanjob']).toBe('1000:4000')
+  const reschedule = mutationLines(rescheduled.logs)
+  expect(reschedule).toHaveLength(1)
+  expect(reschedule[0]).toContain('method=PATCH')
+  expect(reschedule[0]).toContain('/appointments/4001/reschedule')
+  expect(reschedule[0]).toContain('body={"end":"2026-10-26T18:30:00.000Z","start":"2026-10-26T17:00:00.000Z"}')
+  expectNoPiiOutsideBody(rescheduled.logs)
+
+  const reassigned = fixture({ dryRun: 'true' })
+  seedLinkedJob(reassigned)
+  reassigned.fake.technicians.push({ id: 2001, name: 'Example Replacement', businessUnitId: 3002 })
+  reassigned.event.attendee!.clientUserId = '2001'
+  expect(await reassigned.run()).toMatchObject({ kind: 'reassigned', oldJobId: 4000, oldJobCancelled: true })
+  expect(reassigned.stWrites()).toEqual([])
+  expect(reassigned.writes).toEqual([])
+  expect(reassigned.fake.jobs.size).toBe(1)
+  expect(reassigned.account.customFields!['CF.servicetitanjob']).toBe('1000:4000')
+  const reassign = mutationLines(reassigned.logs)
+  expect(reassign.map((line) => /method=([A-Z]+)/.exec(line)?.[1])).toEqual(['POST', 'PUT'])
+  expect(reassign[0]).toContain('/jobs')
+  expect(reassign[1]).toContain('/jobs/4000/cancel')
+  expect(reassign[1]).toContain('body={"memo":"Closer reassigned via automation","reasonId":9001}')
+  expect(dryLines(reassigned.logs).some((line) => line.includes('terros=accountCustomField value=1000:-'))).toBe(true)
+  expectNoPiiOutsideBody(reassigned.logs)
+
+  const matched = fixture({ dryRun: 'true' })
+  matched.fake.customers.push({ id: 5001, customFields: [{ typeId: 1005, value: 'Account.example' }] })
+  matched.fake.locations.push({ id: 6000, customerId: 5001 })
+  expect((await matched.run()).kind).toBe('created')
+  expect(matched.stWrites()).toEqual([])
+  expect(matched.writes).toEqual([])
+  expect(matched.fake.calls.filter((call) => call.url.pathname.endsWith('/locations'))).toHaveLength(1)
+  const matchedMutations = mutationLines(matched.logs)
+  expect(matchedMutations.map((line) => /method=([A-Z]+)/.exec(line)?.[1])).toEqual(['POST'])
+  expect(matchedMutations[0]).toContain('/jobs')
+  const matchedJob = JSON.parse(matchedMutations[0]!.slice(matchedMutations[0]!.indexOf(' body=') + ' body='.length))
+  expect(matchedJob.customerId).toBe(5001)
+  expect(matchedJob.locationId).toBe(6000)
+  expectNoPiiOutsideBody(matched.logs)
+})
+
+// The install form sends the text "false". Treating any non-empty string as on would skip a real sync.
+it('still creates and writes when dryRun is the string false', async () => {
+  const f = fixture({ dryRun: 'false' })
+  expect(f.config.dryRun).toBe(false)
+  expect((await f.run()).kind).toBe('created')
+  expect(f.stWrites().map((call) => call.method)).toEqual(['POST', 'POST'])
+  expect(f.writes).toHaveLength(2)
+  expect(dryLines(f.logs)).toEqual([])
 })
 
 it('logs the created job ID before saving the link', async () => {
