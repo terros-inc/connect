@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
-  "appId": "App.placeholder",
+  "appId": "App.Z1lgaiSrm75DMY_VlJvks",
   "scripts": [
     {
       "name": "AccuLynx Send",

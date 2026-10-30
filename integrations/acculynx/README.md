@@ -72,4 +72,3 @@ With `recordType: job`, Send also adds an AccuLynx job external reference (sourc
 - Contact mailing addresses go without state and country, which AccuLynx takes as numeric IDs.
 - Retry lookups rely on behavior the AccuLynx docs do not state and that was not tried against a live account: that contact search finds a contact created moments earlier and pages by page number, and that a contact's jobs include a new, unassigned job. If a lookup misses, a retry creates a second record as before. A retry also creates a second job when the job it created earlier has no reference and someone added another job to the contact meanwhile.
 - A webhook for a job AccuLynx does not return through the current-milestone endpoint (it may hide unassigned jobs, as `GET /jobs/{id}` does) is ignored.
-- `appId` in `terros.json` is a placeholder until the Connect app record exists.
