@@ -5,7 +5,7 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 - `sdk` - `@terros-inc/sdk`, API client and `wrapConnectHandler` for integration handlers
 - `cli` - `@terros-inc/cli`, the `terros` command, including `terros connect publish`
 - `packages/connect-common` - private shared package, a dependency of `sdk` and `cli`
-- `integrations/*` - one Connect app each (acculynx, airtable, docusign, gohighlevel, jobnimbus, salesforce, servicetitan, zoho)
+- `integrations/*` - one Connect app each (acculynx, airtable, docusign, gohighlevel, jobnimbus, salesforce, servicetitan, terros-mirror, zoho)
 
 ## Setup and commands
 
@@ -28,6 +28,7 @@ Think ambitiously, build economically. Before settling on a design, picture what
 - [JobNimbus](integrations/jobnimbus/AGENTS.md) — bidirectional CRM sync
 - [Salesforce](integrations/salesforce/AGENTS.md) — scheduled status sync
 - [ServiceTitan](integrations/servicetitan/AGENTS.md) — scheduled appointment sync
+- [Terros Mirror](integrations/terros-mirror/README.md) — demo: copies new accounts to a second Terros company
 - [Zoho](integrations/zoho/AGENTS.md) — bidirectional lead sync
 
 ## Testing

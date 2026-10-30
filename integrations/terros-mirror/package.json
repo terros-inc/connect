@@ -1,0 +1,23 @@
+{
+  "dependencies": {
+    "@terros-inc/sdk": "workspace:"
+  },
+  "description": "Copies new accounts and their appointments from one Terros company into another",
+  "devDependencies": {
+    "@terros-inc/cli": "workspace:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "name": "@terros-inc/connect-terros-mirror",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "publish": "terros connect publish"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}
