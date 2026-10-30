@@ -25,7 +25,7 @@ export const apiCommands = {
   },
   log: {
     description:
-      "Show a company's recent API requests from the last seven days, newest first. Requires internal access.",
+      "Recent production API requests (app, API key, Connect key, CLI) from the last 7 days, newest first. Some calls aren't logged, such as sign-in, password, token and history calls. New records appear within about 60 s. Requires internal access.",
     parameters: apiLogParameters,
     async run({ params }: { params: ParsedArgs }): Promise<void> {
       const result = await runApiHistoryQuery(buildTerrosClient(), parseApiLogParams(params))
