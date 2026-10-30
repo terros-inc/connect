@@ -20,9 +20,16 @@ export async function signInToAuth0(): Promise<TokenResponse> {
 
   const deadline = DateTime.now().plus({ seconds: body.expires_in })
 
-  await open(body.verification_uri_complete)
-  console.log(`Confirm that the code in your browser matches: ${body.user_code}`)
-  console.log(`If your browser did not open, visit ${body.verification_uri} and enter the code`)
+  // Open the page without the code: a link with the code pre-filled lets anyone who sends it to a user get their
+  // sign-in approved with one click, so the user must type the code from their own terminal.
+  console.log(`To sign in, enter this code on the Terros sign-in page:\n\n    ${body.user_code}\n`)
+  console.log('Only approve a sign-in you started yourself. Never enter a code someone else sent you.')
+  try {
+    await open(body.verification_uri)
+    console.log(`If your browser did not open, visit ${body.verification_uri}`)
+  } catch {
+    console.log(`Visit ${body.verification_uri} in your browser`)
+  }
 
   return await pollForToken(deadline, body.interval, body.device_code)
 }
@@ -32,9 +39,6 @@ function sleep(seconds: number): Promise<void> {
     setTimeout(resolve, seconds * 1000)
   })
 }
-
-const DEVELOPER_MODE_HINT =
-  "You may need developer mode turned on for your Terros account. Ask your company admin if you can't turn it on."
 
 export async function pollForToken(deadline: DateTime, interval: number, deviceCode: string): Promise<TokenResponse> {
   await sleep(interval)
@@ -57,7 +61,7 @@ export async function pollForToken(deadline: DateTime, interval: number, deviceC
     // RFC 8628: on slow_down, add 5 seconds to the polling interval
     if (body.error === 'slow_down') return pollForToken(deadline, interval + 5, deviceCode)
     const reason = body.error_description || body.error || `HTTP ${res.status}`
-    if (body.error === 'access_denied') throw new Error(`Sign-in denied: ${reason}\n${DEVELOPER_MODE_HINT}`)
+    if (body.error === 'access_denied') throw new Error(`Sign-in denied: ${reason}`)
     throw new Error(`Sign-in failed: ${reason}`)
   }
   return (await res.json()) as TokenResponse
