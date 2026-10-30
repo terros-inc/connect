@@ -20,6 +20,7 @@ on:
           - gohighlevel
           - jobnimbus
           - salesforce
+          - servicetitan
           - zoho
 
 concurrency:
