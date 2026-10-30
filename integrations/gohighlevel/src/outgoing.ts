@@ -24,7 +24,7 @@ import {
 } from './gohighlevel.ts'
 import { checkConfig } from './configFields.ts'
 import { isSwitchOn, toGhlStage, type RunSwitches } from './config.ts'
-import { hasAlertNote, saveAlertNote, sendAlert, splitList } from './alerts.ts'
+import { splitList } from './alerts.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string
@@ -35,32 +35,33 @@ type ScriptConfig = RunSwitches & {
   opportunityStages?: string
   /** Terros custom field ID (CF.…) that receives the GoHighLevel opportunity ID. */
   opportunityIdFieldId?: string
-  alertWebhookUrl?: string
-  alertRecipients?: string
 }
 
 const defaultOpportunityStages = ['Appointment Set']
-const noCloserAlert = 'no closer'
 
 type Secrets = {
   privateIntegrationToken: string
 }
 
+/** A user as the account webhook sends it (SmallUser). */
+type WebhookUser = {
+  userId?: UserId
+  email?: string
+}
+
+/** The account webhook payload: owner and closer are objects; there is no ownerId or closerId. */
 type AccountChangeData = {
   id: AccountId
   workflowState?: {
     stageName?: string
   }
-  closer?: {
-    email?: string
-  }
+  owner?: WebhookUser
+  closer?: WebhookUser
   address?: SmallAddress
   resident?: TinyResidentData
   externalLeadId?: string
   customFieldMap?: CustomFieldMap
   notes?: AccountNote[]
-  closerId?: UserId
-  ownerId?: UserId
 }
 
 type AccountChangeWebhook =
@@ -103,16 +104,10 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   const workflowStageName = account.workflowState?.stageName
   const createsOpportunity = isOpportunityStage(workflowStageName, scriptConfig.opportunityStages)
   const closer = account.closer
+  // An account change with no closer is not an error: a booking assigns the closer in a later save, and a dispatcher
+  // may assign it later still. Terros sends that save its own webhook, and the sync runs then.
   if (!closer) {
     console.log(`Skipping sync for ${account.id}: no closer yet`)
-    if (createsOpportunity && !hasAlertNote(account.notes, noCloserAlert)) {
-      await sendAlert(scriptConfig, {
-        accountId: account.id,
-        stage: workflowStageName!,
-        message: `Terros account ${account.id} is in ${workflowStageName} with no closer, so it was not synced to GoHighLevel.`,
-      })
-      await saveAlertNote(client, account.id, noCloserAlert, account.ownerId)
-    }
     return
   }
 
@@ -164,8 +159,8 @@ export const handler = wrapConnectHandler<AccountChangeWebhook, void, ScriptConf
   const noteChanges = getChanges(
     {
       notes: account.notes,
-      closerId: account.closerId,
-      ownerId: account.ownerId,
+      closerId: closer.userId,
+      ownerId: account.owner?.userId,
     },
     goHighLevelNotes,
     userResponse?.users ?? [],

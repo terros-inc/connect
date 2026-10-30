@@ -81,6 +81,11 @@ export type UnsavedAccountNote = {
   noteId?: NoteId
 }
 
+/** A note sent to account/upsert; the server writes it as the actor, else the authenticated user, when userId is omitted. */
+export type UpsertAccountNote = Omit<UnsavedAccountNote, 'userId'> & {
+  userId?: UserId
+}
+
 export type AccountNote = UnsavedAccountNote & {
   noteId: NoteId
 }

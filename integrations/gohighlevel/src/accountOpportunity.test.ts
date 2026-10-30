@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { handler as accountSync, isOpportunityStage } from './outgoing.ts'
 import { FakeApis, LOCATION_ID, makeInput, PIPELINE_ID } from './fakeApis.ts'
-import { ALERT_NOTE_PREFIX } from './alerts.ts'
 
 const config = { locationId: LOCATION_ID, pipelineId: PIPELINE_ID }
 const ALERT_URL = 'https://alerts.example.com/hook'
@@ -143,61 +142,42 @@ describe('default opportunity stages', () => {
   })
 })
 
-describe('Account Sync alerts on a qualifying account with no closer', () => {
+describe('Account Sync waits for the closer', () => {
   const alertConfig = { ...config, alertWebhookUrl: ALERT_URL, alertRecipients: 'a@example.test, b@example.test' }
 
-  test('logs, posts to the webhook and records a note once', async () => {
+  test('skips an account in an opportunity stage with no closer, without alerting or writing', async () => {
+    fake.addContact('c-1')
     account({ closer: undefined })
     await sync(alertConfig)
 
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('GHL_SYNC_ALERT'))
-    expect(alertPosts).toEqual([
-      expect.objectContaining({ accountId: 'Account.1', recipients: ['a@example.test', 'b@example.test'] }),
-    ])
-    expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([
-      expect.objectContaining({ text: expect.stringContaining(ALERT_NOTE_PREFIX), userId: 'U.owner' }),
-    ])
-    expect(fake.ghl.contacts.size).toBe(0)
-  })
-
-  test('does not repeat on the next save', async () => {
-    account({ closer: undefined })
-    await sync(alertConfig)
-    await sync(alertConfig)
-    expect(alertPosts).toHaveLength(1)
-  })
-
-  test('is a logged alert only when no webhook is configured', async () => {
-    account({ closer: undefined })
-    await sync()
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('GHL_SYNC_ALERT'))
-    expect(alertPosts).toEqual([])
-  })
-
-  test('a failing webhook does not fail the sync', async () => {
-    account({ closer: undefined })
-    const base = fetch
-    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-      if (url === ALERT_URL) throw new Error('down')
-      return base(url, init)
-    })
-    await expect(sync(alertConfig)).resolves.toBeUndefined()
-    expect(error).toHaveBeenCalledWith(expect.stringContaining('delivery failed: down'))
-  })
-
-  test('stays quiet for a stage that does not qualify', async () => {
-    account({ closer: undefined, workflowStageName: 'Sat' })
-    await sync(alertConfig)
     expect(error).not.toHaveBeenCalled()
     expect(alertPosts).toEqual([])
+    expect(fake.terros.accounts.get('Account.1')!.notes).toEqual([])
+    expect(fake.terrosWrites()).toEqual([])
+    expect(fake.ghlWrites()).toEqual([])
   })
 
-  test('the alert note is never copied to GoHighLevel', async () => {
+  test("syncs on the closer's webhook, which follows the closer-less stage change", async () => {
     fake.addContact('c-1')
     account({ closer: undefined })
     await sync(alertConfig)
     fake.terros.accounts.get('Account.1')!.closer = { userId: 'U.closer', email: 'closer@example.test' }
     await sync(alertConfig)
-    expect([...fake.ghl.notes.values()].flat()).toEqual([])
+
+    expect([...fake.ghl.opps.values()]).toEqual([
+      expect.objectContaining({ contactId: 'c-1', pipelineStageId: 'st-appt', assignedTo: 'ghl-closer' }),
+    ])
+    expect(alertPosts).toEqual([])
+  })
+
+  test('reads owner and closer from the webhook payload, where they are objects', async () => {
+    fake.addContact('c-1')
+    account()
+    const webhook = fake.accountWebhook('Account.1')
+    expect(webhook.data).toMatchObject({ owner: { userId: 'U.owner' }, closer: { userId: 'U.closer' } })
+    expect(webhook.data).not.toHaveProperty('ownerId')
+    expect(webhook.data).not.toHaveProperty('closerId')
+    await accountSync(makeInput(webhook, config))
+    expect([...fake.ghl.opps.values()]).toEqual([expect.objectContaining({ assignedTo: 'ghl-closer' })])
   })
 })

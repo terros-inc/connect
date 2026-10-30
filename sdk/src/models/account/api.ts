@@ -23,6 +23,7 @@ import type {
   UnsavedAccount,
   UnsavedAccountContact,
   UnsavedAccountNote,
+  UpsertAccountNote,
   UnsavedAccountStatus,
   UpsertLatLng,
   UpsertTinyResidentData,
@@ -195,7 +196,8 @@ export type AccountUpsertInput = {
     test?: boolean
     teamId?: TeamId
     customFields?: CustomFieldMap
-    notes?: UnsavedAccountNote[]
+    /** A note without `userId` is written as `actorId`, else the authenticated user. */
+    notes?: UpsertAccountNote[]
   }
   opts?: {
     /** Defaults to true. */
