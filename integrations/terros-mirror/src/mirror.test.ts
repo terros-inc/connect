@@ -14,6 +14,8 @@ class FakeTargetCompany {
   events: Json[] = []
   /** Route that answers the next call with an HTTP 500, as the API does on an internal error. */
   failNext: string | undefined
+  /** The company's duplicate preference is Deny: an upsert matching an account only by address saves nothing. */
+  denyDuplicates = false
 
   fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
     const route = new URL(url).pathname.slice(1)
@@ -32,8 +34,14 @@ class FakeTargetCompany {
   /** Returns undefined for a request the API rejects as invalid. */
   private handle(route: string, body: Json): Json | undefined {
     switch (route) {
-      case 'account/upsert':
-        return { account: this.upsert(this.accounts, body.account, 'Account') }
+      case 'account/upsert': {
+        const input = body.account
+        const sameAddress = this.accounts.some(
+          (a) => a.sourceId !== input.sourceId && a.location?.line1 === input.location?.line1
+        )
+        if (this.denyDuplicates && sameAddress) return {}
+        return { account: this.upsert(this.accounts, input, 'Account') }
+      }
       case 'account/match':
         return { account: this.accounts.find((a) => a.sourceId === body.sourceId) }
       case 'calendar/event/upsert': {
@@ -77,20 +85,20 @@ const accountAdded = {
     externalLeadId: 'lead-example',
     owner: {
       userId: 'U.example-setter',
-      firstName: 'Sam',
+      firstName: 'Demo',
       lastName: 'Setter',
       email: 'setter@example.test',
       clientUserId: 'setter-example',
     },
-    resident: { firstName: 'Jane', lastName: 'Doe', email: 'jane@example.test', phone: '5555550100' },
+    resident: { firstName: 'Example', lastName: 'Homeowner', email: 'homeowner@example.test', phone: '5555550100' },
     address: {
       locationId: 'TLoc.example',
-      latlng: { latitude: 33.6846, longitude: -117.8265 },
-      line1: '123 Main St',
-      line2: 'Irvine, CA 92618',
-      countrySubd: 'CA',
-      locality: 'Irvine',
-      postal1: '92618',
+      latlng: { latitude: 0, longitude: 0 },
+      line1: '123 Example St',
+      line2: 'Exampletown, ZZ 00000',
+      countrySubd: 'ZZ',
+      locality: 'Exampletown',
+      postal1: '00000',
     },
     customFieldMap: { 'CF.example': 'source-only value' },
   },
@@ -101,15 +109,15 @@ const appointmentAdded = {
   action: 'add',
   data: {
     id: 'Event.example-booked',
-    title: 'Consultation with Jane Doe',
+    title: 'Consultation with Example Homeowner',
     eventDate: '2026-10-30T07:00:00.000-07:00',
     duration: 60,
     eventType: 'Consultation',
-    note: 'Gate code 1234',
+    note: 'Example note',
     createdAt: '1761800000000',
     updatedAt: '1761800000000',
-    account: { accountId: 'Account.example-source', residents: [{ firstName: 'Jane', lastName: 'Doe' }] },
-    owner: { userId: 'U.example-setter', firstName: 'Sam', lastName: 'Setter' },
+    account: { accountId: 'Account.example-source', residents: [{ firstName: 'Example', lastName: 'Homeowner' }] },
+    owner: { userId: 'U.example-setter', firstName: 'Demo', lastName: 'Setter' },
   },
 } as const
 
@@ -151,14 +159,14 @@ test('a new source account and its appointment create one target account and one
       accountId: 'Account.example-target-1',
       sourceId: 'Account.example-source',
       accountSource: 'Terros Mirror',
-      resident: { firstName: 'Jane', lastName: 'Doe', email: 'jane@example.test', phone: '5555550100' },
+      resident: { firstName: 'Example', lastName: 'Homeowner', email: 'homeowner@example.test', phone: '5555550100' },
       location: {
-        line1: '123 Main St',
-        line2: 'Irvine, CA 92618',
-        locality: 'Irvine',
-        countrySubd: 'CA',
-        postal1: '92618',
-        latlng: { latitude: 33.6846, longitude: -117.8265 },
+        line1: '123 Example St',
+        line2: 'Exampletown, ZZ 00000',
+        locality: 'Exampletown',
+        countrySubd: 'ZZ',
+        postal1: '00000',
+        latlng: { latitude: 0, longitude: 0 },
       },
     },
   ])
@@ -167,11 +175,11 @@ test('a new source account and its appointment create one target account and one
       eventId: 'Event.example-target-1',
       sourceId: 'Event.example-booked',
       accountId: 'Account.example-target-1',
-      title: 'Consultation with Jane Doe',
+      title: 'Consultation with Example Homeowner',
       eventType: 'Consultation',
       eventDate: Date.parse('2026-10-30T14:00:00.000Z'),
       duration: 60,
-      notes: 'Gate code 1234',
+      notes: 'Example note',
     },
   ])
 })
@@ -202,6 +210,15 @@ test('an appointment whose account is not copied yet fails without creating anyt
 test('a failed account/upsert call fails the run', async () => {
   target.failNext = 'account/upsert'
   await expect(run(copyAccount, accountAdded)).rejects.toThrow('Internal Server Error')
+})
+
+// Prevents: a copy the target company refused to save being logged as a successful run.
+test('an account/upsert that saves nothing fails the run permanently', async () => {
+  target.denyDuplicates = true
+  await run(copyAccount, accountAdded)
+  const neighbour = { ...accountAdded, data: { ...accountAdded.data, id: 'Account.example-source-2' } }
+  await expect(run(copyAccount, neighbour)).rejects.toMatchObject({ name: 'PermanentError' })
+  expect(target.accounts).toHaveLength(1)
 })
 
 test.each(['account/match', 'calendar/event/upsert'])('a failed %s call fails the run', async (route) => {
