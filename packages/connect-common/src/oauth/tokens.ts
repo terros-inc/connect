@@ -71,11 +71,9 @@ async function tryLock(lockFile: string, owner: string): Promise<boolean> {
   return false
 }
 
-// Checking that the lock still names the dead holder and removing it are two steps, so they run under a guard file
-// that only one process can create for that holder. Otherwise two processes could both pass the check, and the second
-// would delete the lock the first had just taken. Owners are unique, so once removed that lock never comes back and a
-// later guard holder finds nothing to remove. The guard is itself a lock, so one left by a killed process is taken
-// over the same way.
+// Checking that the lock still names the dead holder and removing it are two steps, so only the process that creates
+// this holder's guard file runs them; otherwise a second taker could delete the lock the first had just taken. A guard
+// left by a killed taker is itself a dead lock and is taken over the same way.
 async function removeDeadLock(lockFile: string, holder: string): Promise<void> {
   const guard = `${lockFile}.${holder.split(':')[1]}`
   if (!(await tryLock(guard, `${process.pid}:${randomUUID()}`))) return

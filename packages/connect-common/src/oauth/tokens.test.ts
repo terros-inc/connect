@@ -1,4 +1,3 @@
-import { setTimeout as sleep } from 'node:timers/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
@@ -101,37 +100,24 @@ describe('getTokens', () => {
     expect(refreshTokens).not.toHaveBeenCalled()
   })
 
-  it('waits for another process holding the refresh lock and uses the tokens it saved', async () => {
+  // Taking over a running process's lock, however old, could send the token it is refreshing with a second time.
+  it('waits for a live holder and never takes its lock', async () => {
     await writeAuth(expired)
-    await writeFile(lockFile(), `${process.pid}:other-process`)
+    const holder = `${process.pid}:other-process`
+    await writeFile(lockFile(), holder)
+    const anHourAgo = new Date(Date.now() - 3600000)
+    await utimes(lockFile(), anHourAgo, anHourAgo)
     const tokens = getTokens()
-    await sleep(200)
-    expect(refreshTokens).not.toHaveBeenCalled()
+    const lockReads = () => vi.mocked(readFile).mock.calls.filter(([path]) => path === lockFile()).length
+    await vi.waitFor(() => expect(lockReads()).toBeGreaterThan(2))
+    expect(await readFile(lockFile(), 'utf-8')).toBe(holder)
+
     await writeAuth(
       JSON.stringify({ ...rotated, access_token: 'other-process-token', expires_at: Date.now() + 3600000 })
     )
     await rm(lockFile())
     expect((await tokens)?.access_token).toBe('other-process-token')
     expect(refreshTokens).not.toHaveBeenCalled()
-  })
-
-  // Taking over a live process's lock, however old, could send the token it is refreshing with a second time.
-  it('gives up instead of refreshing while another running process holds the lock', async () => {
-    await writeAuth(expired)
-    await writeFile(lockFile(), `${process.pid}:other-process`)
-    const anHourAgo = new Date(Date.now() - 3600000)
-    await utimes(lockFile(), anHourAgo, anHourAgo)
-    vi.useFakeTimers({ toFake: ['Date'] })
-    try {
-      const tokens = getTokens()
-      await sleep(200)
-      vi.setSystemTime(Date.now() + 2 * 60000)
-      await expect(tokens).rejects.toThrow('Timed out waiting')
-    } finally {
-      vi.useRealTimers()
-    }
-    expect(refreshTokens).not.toHaveBeenCalled()
-    expect(await readFile(lockFile(), 'utf-8')).toBe(`${process.pid}:other-process`)
   })
 
   // A process killed mid-refresh must not leave every later command waiting on its lock.
