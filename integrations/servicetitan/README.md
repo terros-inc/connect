@@ -4,7 +4,7 @@ One-way port of the legacy ServiceTitan webhook: Terros Consultation events crea
 
 ## Setup
 
-Disable the customer's legacy **SERVICETITAN** webhook in sales in the same step the Connect install is turned on, so the two never sync the same events. Replace the placeholder appId when provisioning the app. This package is not yet included in the manual publishing workflow; adding it there is a separate release task.
+Disable the customer's legacy **SERVICETITAN** webhook in sales in the same step the Connect install is turned on, so the two never sync the same events. This package is not yet included in the manual publishing workflow; adding it there is a separate release task.
 
 Grant exactly `account:list`, `account:save`, `event:read`, and `event:save`. There is no `account:read` type: sales `account/get` checks visibility with `isAccountViewable`, which reads the `account:list` scopes (`packages/api-canvass/src/account/get.ts:42`, `packages/back-common/src/permissions/accountVisible.ts:22-23`).
 
