@@ -64,7 +64,7 @@
       "authSchema": {
         "privateIntegrationToken": "GoHighLevel private integration token"
       },
-      "permissions": ["account:save", "user:list"],
+      "permissions": ["account:list", "account:save", "user:list"],
       "slug": "gohighlevel-account-sync"
     },
     {
