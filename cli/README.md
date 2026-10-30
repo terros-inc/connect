@@ -286,8 +286,8 @@ in again:
 terros auth login
 ```
 
-Errors print as one line. To see the full error with its cause and stack trace,
-run the command with `TERROS_DEBUG=1`.
+Errors print without a stack trace. To see the full error with its cause and
+stack trace, run the command with `TERROS_DEBUG=1`.
 
 ### New API endpoints
 

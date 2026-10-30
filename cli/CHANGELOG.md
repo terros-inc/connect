@@ -22,8 +22,8 @@ an expired session printed an "Unable to load internal API commands" warning and
 trace, and `terros auth token` exited 0 when nobody was signed in. The CLI also no longer tries the expired session a
 second time in the same command, and help and commands that don't need a sign-in no longer print the warning.
 
-Other errors also print as one line, without a stack trace; set `TERROS_DEBUG=1` to see the full error. A sign-in
-service outage or a lost connection now says so instead of telling you to sign in again.
+Other errors also print without a stack trace; set `TERROS_DEBUG=1` to see the full error. A sign-in service outage or a
+lost connection now says so instead of telling you to sign in again.
 
 ## 3.0.0
 

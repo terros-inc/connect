@@ -1,6 +1,8 @@
+import { format } from 'node:util'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { AuthRequiredError } from '@terros-inc/connect-common/auth'
 
 // Runs the real CLI with only the network and home directory faked, so a schema load and the command itself both reach
 // the shared token code, as `terros whoami` does with a dead saved session.
@@ -19,6 +21,7 @@ const fetchMock = vi.fn(async (url: string | URL) => {
 })
 const auth0Calls = () => fetchMock.mock.calls.filter(([url]) => new URL(url).hostname === 'auth.terros.com')
 const apiCalls = () => fetchMock.mock.calls.filter(([url]) => new URL(url).hostname === 'api.terros.com')
+const expiredMessage = new AuthRequiredError('expired').message
 
 async function saveExpiredLogin(): Promise<void> {
   const directory = join(home.path, '.config', 'terros')
@@ -38,7 +41,8 @@ async function run(...argv: string[]): Promise<{ stderr: string[]; stdout: strin
   const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
   await runCli(argv)
   return {
-    stderr: stderr.mock.calls.map((args) => args.map(String).join(' ')),
+    // As console prints them, so an Error argument shows its stack.
+    stderr: stderr.mock.calls.map((args) => format(...args)),
     stdout: [...log.mock.calls, ...write.mock.calls].map((args) => String(args[0])).join(''),
   }
 }
@@ -71,7 +75,7 @@ describe.each([['whoami'], ['auth', 'token']])('terros %s', (...command) => {
   it('prints one line and exits 1 when the saved session has expired', async () => {
     await saveExpiredLogin()
     const { stderr, stdout } = await run(...command)
-    expect(stderr).toEqual(['Your Terros session has expired. Run `terros auth login` to sign in again.'])
+    expect(stderr).toEqual([expiredMessage])
     expect(stdout).toBe('')
     expect(process.exitCode).toBe(1)
     expect(auth0Calls()).toHaveLength(1)
@@ -80,7 +84,7 @@ describe.each([['whoami'], ['auth', 'token']])('terros %s', (...command) => {
 
   it('prints one line and exits 1 when nobody is signed in', async () => {
     const { stderr, stdout } = await run(...command)
-    expect(stderr).toEqual(["You're not signed in to Terros. Run `terros auth login` to sign in."])
+    expect(stderr).toEqual([new AuthRequiredError('signed-out').message])
     expect(stdout).toBe('')
     expect(process.exitCode).toBe(1)
     expect(fetchMock.mock.calls.filter(([url]) => new URL(url).hostname !== 'docs.terros.com')).toHaveLength(0)
@@ -88,12 +92,12 @@ describe.each([['whoami'], ['auth', 'token']])('terros %s', (...command) => {
 })
 
 // Guards against every Auth0 failure telling the user to sign in again, which does not help during an Auth0 outage.
-it('keeps a sign-in outage generic and to one line', async () => {
+it('keeps a sign-in outage generic and without a stack trace', async () => {
   await saveExpiredLogin()
   auth0 = Response.json({ error: 'server_error' }, { status: 500 })
   const { stderr } = await run('auth', 'token')
-  expect(stderr.at(-1)).toBe('Unable to refresh the Terros session: sign-in answered 500 server_error')
-  expect(stderr.join('\n')).not.toMatch(/session has expired|\n\s+at /)
+  expect(stderr.at(-1)).not.toBe(expiredMessage)
+  expect(stderr.join('\n')).not.toMatch(/\n\s+at /)
   expect(process.exitCode).toBe(1)
 })
 

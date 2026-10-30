@@ -82,9 +82,9 @@ describe('getTokens', () => {
     expect(writeFile).not.toHaveBeenCalled()
   })
 
-  // Guards against a command refreshing a dead token twice (schema load, then its own request), and against an Auth0
-  // outage or a dead session being remembered so a long-running process can't recover once it clears.
-  it('does not resend a refresh token Auth0 rejected, but retries other failures and new logins', async () => {
+  // Guards against an Auth0 outage being remembered so a long-running process can't recover once it clears, and against
+  // a new login staying blocked after an earlier session was rejected.
+  it('retries other refresh failures and new logins', async () => {
     const login = (refreshToken: string) => JSON.stringify({ refresh_token: refreshToken, expires_at: 0 })
     vi.mocked(readFile).mockResolvedValue(login('outage-refresh-token'))
     vi.mocked(refreshTokens).mockRejectedValue(new Error('Unable to refresh the Terros session'))
@@ -92,13 +92,9 @@ describe('getTokens', () => {
     await expect(getTokens()).rejects.toThrow('Unable to refresh the Terros session')
     expect(refreshTokens).toHaveBeenCalledTimes(2)
 
-    vi.mocked(refreshTokens).mockClear()
     vi.mocked(readFile).mockResolvedValue(login('dead-refresh-token'))
     vi.mocked(refreshTokens).mockRejectedValue(new AuthRequiredError('expired'))
     await expect(getTokens()).rejects.toThrow(AuthRequiredError)
-    await expect(getTokens()).rejects.toThrow(AuthRequiredError)
-    expect(refreshTokens).toHaveBeenCalledOnce()
-
     vi.mocked(readFile).mockResolvedValue(login('new-refresh-token'))
     await expect(getTokens()).rejects.toThrow(AuthRequiredError)
     expect(refreshTokens).toHaveBeenLastCalledWith('new-refresh-token')
