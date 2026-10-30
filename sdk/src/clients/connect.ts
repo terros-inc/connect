@@ -2,6 +2,8 @@ import { type TerrosApiClient } from '@terros-inc/connect-common'
 import type {
   AppGetInput,
   AppGetSuccess,
+  AppUpdateInput,
+  AppUpdateSuccess,
   ScriptAddInput,
   ScriptAddSuccess,
   VersionAddInput,
@@ -17,6 +19,10 @@ export class ConnectAppClient {
 
   get(input: AppGetInput): Promise<AppGetSuccess> {
     return this.api.call('connect/app/get', input)
+  }
+
+  update(input: AppUpdateInput): Promise<AppUpdateSuccess> {
+    return this.api.call('connect/app/update', input)
   }
 }
 

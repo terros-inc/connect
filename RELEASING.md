@@ -106,4 +106,9 @@ not to npm, and there is no staging or approval step.
 - The version is the integration's `package.json` `version`. A successful run marks that version `deployed`
   straight away. A version that is already deployed cannot be published again, so bump the version first. A version
   left in `draft` (for example after a failed run) can be published again.
+- Each publish also sets the app's help docs (the marketplace Documentation tab) to the integration's `DOCS.md`, or
+  `README.md` when there is no `DOCS.md`, next to `terros.json`. Write `DOCS.md` when the README holds developer notes
+  (building, testing, internals) that customers installing the app should not read. With neither file, the app's
+  docs are left as they are. The markdown is sent as is: relative links and images do not resolve in the marketplace,
+  so use absolute URLs there.
 - The list of integrations is hardcoded in the workflow, so a new integration has to be added to it.
