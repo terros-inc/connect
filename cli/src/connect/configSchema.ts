@@ -40,7 +40,12 @@ export const UnsavedScriptBase = z.object({
   entrypoint: z.string(),
   configSchema: ConfigSchema,
   authSchema: ScriptAuth,
-  permissions: z.array(z.string()),
+  // Terros skips authorizing a script whose list holds anything but colon-style permission types.
+  permissions: z.array(
+    z
+      .string()
+      .regex(/^[a-z][A-Za-z]*(:[a-z][A-Za-z]*)+$/, 'Use a colon-style Terros permission type, such as account:save')
+  ),
   slug: z.string().optional().meta({
     description: 'Stable public key used in incoming webhook URLs. Generated on create when omitted.',
   }),

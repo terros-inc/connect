@@ -85,13 +85,23 @@ export class AccuLynxClient {
     }
     for (let page = 0; page < maxSearchPages; page++) {
       const query = new URLSearchParams({ pageSize: String(searchPageSize), pageStartIndex: String(page) })
-      const result = (await this.request('POST', `/contacts/search?${query}`, body)) as { items?: AccuLynxContact[] }
-      const items = result?.items ?? []
+      const items = await this.searchContactsPage(query, body)
       const match = items.find((contact) => contact.crossReference === crossReference)
       if (match) return match
       if (items.length < searchPageSize) return undefined
     }
     return undefined
+  }
+
+  // AccuLynx answers 416, not an empty list, for a page past the end.
+  private async searchContactsPage(query: URLSearchParams, body: unknown): Promise<AccuLynxContact[]> {
+    try {
+      const result = (await this.request('POST', `/contacts/search?${query}`, body)) as { items?: AccuLynxContact[] }
+      return result?.items ?? []
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 416) return []
+      throw error
+    }
   }
 
   async getContactJobIds(contactId: string): Promise<string[]> {
@@ -111,10 +121,16 @@ export class AccuLynxClient {
     }
   }
 
+  // AccuLynx answers 404, not an empty list, for a job with no reference from this source.
   async getJobExternalReferences(jobId: string): Promise<AccuLynxExternalReference[]> {
     const query = new URLSearchParams({ jobId, source: externalReferenceSource })
-    const references = await this.request('GET', `/jobs/external-references?${query}`)
-    return Array.isArray(references) ? (references as AccuLynxExternalReference[]) : []
+    try {
+      const references = await this.request('GET', `/jobs/external-references?${query}`)
+      return Array.isArray(references) ? (references as AccuLynxExternalReference[]) : []
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 404) return []
+      throw error
+    }
   }
 
   // AccuLynx does not return unassigned jobs (new jobs start unassigned), so a missing job is not an error here.

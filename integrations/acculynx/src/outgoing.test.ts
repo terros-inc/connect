@@ -70,6 +70,25 @@ describe('sendAccount', () => {
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
   })
 
+  // Prevents a failed delivery when a full page of other contacts is the last one: AccuLynx answers the next page
+  // with 416.
+  test('a 416 after a full page ends the contact search', async () => {
+    const others = Array.from({ length: 25 }, (_, index) => ({
+      id: `contact-${index}`,
+      crossReference: 'Account.other',
+    }))
+    const { client, calls } = fakeAccuLynx({
+      ...created,
+      'POST /contacts/search': [{ body: { items: others } }, { status: 416 }],
+    })
+    const { terros, updates } = fakeTerros()
+
+    await sendAccount(account(), { recordType: 'contact' }, client, terros)
+
+    expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts/search', '/contacts'])
+    expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
+  })
+
   // Prevents duplicate AccuLynx records on every account change, sends to the wrong location, and a silent
   // default direction when the install was not configured.
   test('sends nothing for a linked account, an account of another location, or a missing recordType', async () => {
@@ -175,8 +194,8 @@ describe('sendAccount', () => {
       ...created,
       'POST /contacts/search': { body: { items: [{ id: 'contact-1', crossReference: 'Account.example' }] } },
       'GET /contacts/contact-1/jobs': { body: { items: [{ id: 'job-0' }, { id: 'job-1' }, { id: 'job-2' }] } },
-      'GET /jobs/external-references?jobId=job-0&source=Terros': { body: [] },
-      'GET /jobs/external-references?jobId=job-2&source=Terros': { body: [] },
+      'GET /jobs/external-references?jobId=job-0&source=Terros': { status: 404 },
+      'GET /jobs/external-references?jobId=job-2&source=Terros': { status: 404 },
     }
 
     const tagged = fakeAccuLynx({
@@ -220,7 +239,7 @@ describe('sendAccount', () => {
       ...created,
       'POST /contacts/search': { body: { items: [{ id: 'contact-1', crossReference: 'Account.example' }] } },
       'GET /contacts/contact-1/jobs': { body: { items: [{ id: 'job-1' }] } },
-      'GET /jobs/external-references': { body: [] },
+      'GET /jobs/external-references': { status: 404 },
     })
     const { terros, updates } = fakeTerros()
     await sendAccount(account(), { recordType: 'job' }, client, terros)

@@ -7,12 +7,30 @@ Connects a Terros company to AccuLynx through the [AccuLynx API v2](https://apid
 | AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | The first time an account is sent, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it (`recordType: job`), and saves the new ID as the account's `externalLeadId`. Linked accounts are not sent again. |
 | AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives `job.milestone.current_changed` events and sets the Terros account's stage (`workflowTarget`) to the milestone name. Other topics are logged and ignored.                                                                    |
 
+## Install and configure
+
+Install the app once per AccuLynx location ([Locations and API keys](#locations-and-api-keys)), turning on the script(s) for the direction(s) the company needs.
+
+1. **Secret.** Set `apiKey`, the location's AccuLynx API key, in the install's Install Secrets section. Never put it in a script's config.
+2. **AccuLynx Send** config:
+   - `recordType` (required): `contact` or `job`.
+   - `contactTypeId`, `leadSourceId` (optional): AccuLynx IDs for new contacts and jobs.
+   - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location.
+   - `addressCountry`: the location's two-letter country code, such as `US`, so jobs get an address.
+3. **AccuLynx Webhook** config:
+   - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
+   - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)).
+   - `accountSource` (optional): defaults to `AccuLynx`.
+   - `subscriptionId`: from step 5.
+4. **Webhook URL.** `https://<terros-api>/connect/incoming/<installId>/acculynx-webhook?apiKey=<dedicated low-privilege Terros key>`. The Webhook's Terros calls run as that key, so use a key owned by a user of the install's company, made for this webhook alone and limited to `account:list` and `account:save`; it travels in the URL, so it must grant nothing else.
+5. **Subscription.** Create the location's AccuLynx subscription to that URL for topic `job.milestone.current_changed` (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key), and copy the returned subscription ID into `subscriptionId`.
+
 ## Locations and API keys
 
 AccuLynx API keys are created per location by an AccuLynx admin (Account Settings > API Keys). Install the app once per location, with that location's key as the `apiKey` secret on both scripts.
 
 - **Send:** with more than one location, set `accountFilterField` (a dotted Terros account field such as `workflowState.workflowId`) and `accountFilterValues` (comma-separated) so each install sends only its own accounts. Without a filter an install sends every account.
-- **Webhook:** create one AccuLynx subscription per location (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key) pointing at that install's webhook URL, and set `subscriptionId` so the install refuses other subscriptions' events.
+- **Webhook:** each install has its own AccuLynx subscription ([Install and configure](#install-and-configure), step 5), and `subscriptionId` makes it refuse other subscriptions' events.
 
 Job addresses: AccuLynx needs a country with every job address and Terros addresses have none. Set `addressCountry` (such as `US` or `CA`) on each Send install to the country of that location's jobs. Without it, jobs are created with no address rather than a guessed country.
 
@@ -54,4 +72,3 @@ With `recordType: job`, Send also adds an AccuLynx job external reference (sourc
 - Contact mailing addresses go without state and country, which AccuLynx takes as numeric IDs.
 - Retry lookups rely on behavior the AccuLynx docs do not state and that was not tried against a live account: that contact search finds a contact created moments earlier and pages by page number, and that a contact's jobs include a new, unassigned job. If a lookup misses, a retry creates a second record as before. A retry also creates a second job when the job it created earlier has no reference and someone added another job to the contact meanwhile.
 - A webhook for a job AccuLynx does not return through the current-milestone endpoint (it may hide unassigned jobs, as `GET /jobs/{id}` does) is ignored.
-- `appId` in `terros.json` is a placeholder until the Connect app record exists, and the app is not yet in the `publish-integrations.yml` list.

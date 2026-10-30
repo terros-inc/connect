@@ -26,7 +26,8 @@ const linked = {
   ...current,
   'GET /jobs/external-references': { body: [{ jobId: 'job-1', source: 'Terros', projectId: 'Account.example' }] },
 }
-const unlinked = { ...current, 'GET /jobs/external-references': { body: [] } }
+// AccuLynx answers 404, not an empty list, for a job with no Terros reference.
+const unlinked = { ...current, 'GET /jobs/external-references': { status: 404 } }
 
 describe('receiveWebhook', () => {
   // Prevents a milestone change from landing on the wrong account, or with the webhook arrival time.
