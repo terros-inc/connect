@@ -43,7 +43,7 @@
       "authSchema": {
         "apiKey": "AccuLynx API key for one location (Account Settings > API Keys)"
       },
-      "permissions": ["account/update"],
+      "permissions": ["account:save"],
       "slug": "acculynx-send"
     },
     {
@@ -76,7 +76,7 @@
       "authSchema": {
         "apiKey": "AccuLynx API key for the same location (Account Settings > API Keys)"
       },
-      "permissions": ["account/upsert"],
+      "permissions": ["account:list", "account:save"],
       "slug": "acculynx-webhook"
     }
   ]
