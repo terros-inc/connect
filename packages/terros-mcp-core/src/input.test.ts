@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import { getEndpointParameters } from './parameters.ts'
+import { getEndpointParameters, getObjectFields } from './parameters.ts'
 import { buildEndpointInput, getEndpointInputParameters, UnknownParameterError, type ParsedArgs } from './input.ts'
 import type { Endpoint } from './endpoint.ts'
 
@@ -156,6 +156,154 @@ describe('buildEndpointInput', () => {
     })
   })
 
+  describe('request body that is a union or wraps one', () => {
+    // Shaped like `/user/remove`: a body that is one of two objects, with no wrapper to hang flags on.
+    const userRemove: Endpoint = {
+      path: '/user/remove',
+      components: {
+        schemas: {
+          Input: { anyOf: [{ $ref: '#/components/schemas/Single' }, { $ref: '#/components/schemas/Bulk' }] },
+          Single: {
+            type: 'object',
+            properties: { archive: { type: 'boolean' }, userId: { type: 'string' } },
+            required: ['userId'],
+          },
+          Bulk: {
+            type: 'object',
+            properties: { archive: { type: 'boolean' }, userIds: { type: 'array', items: { type: 'string' } } },
+            required: ['userIds'],
+          },
+        },
+      },
+      properties: { $ref: '#/components/schemas/Input' },
+    }
+
+    it('offers every variant field, required only when every variant requires it', () => {
+      expect(getEndpointInputParameters(userRemove)).toEqual([
+        { name: 'archive', type: 'boolean', required: false },
+        { name: 'userId', type: 'string', required: false },
+        { name: 'userIds', type: 'string[]', required: false },
+      ])
+    })
+
+    it('sends a single or bulk user remove body', () => {
+      expect(buildEndpointInput(userRemove, { _: [], userId: '<userId>', archive: 'false' })).toEqual({
+        userId: '<userId>',
+        archive: false,
+      })
+      expect(buildEndpointInput(userRemove, { _: [], userIds: '["<userId1>","<userId2>"]' })).toEqual({
+        userIds: ['<userId1>', '<userId2>'],
+      })
+    })
+
+    // Shaped like `/customField/update`: the wrapped object is an `allOf` whose first member is itself a union.
+    it('expands an allOf wrapped in a single object and sends the fields inside the wrapper', () => {
+      const customFieldUpdate: Endpoint = {
+        path: '/customField/update',
+        components: { schemas: {} },
+        properties: {
+          type: 'object',
+          properties: {
+            customField: {
+              allOf: [
+                {
+                  type: 'object',
+                  oneOf: [
+                    {
+                      type: 'object',
+                      properties: { label: { type: 'string' }, fieldType: { type: 'string', enum: ['number'] } },
+                      required: ['label', 'fieldType'],
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        label: { type: 'string' },
+                        fieldType: { type: 'string', enum: ['multipleChoice'] },
+                        options: { type: 'array', items: { type: 'string' } },
+                      },
+                      required: ['label', 'fieldType'],
+                    },
+                  ],
+                },
+                { type: 'object', properties: { fieldId: { type: 'string' } }, required: ['fieldId'] },
+              ],
+            },
+          },
+          required: ['customField'],
+        },
+      }
+
+      expect(getEndpointInputParameters(customFieldUpdate)).toEqual([
+        { name: 'label', type: 'string', required: true },
+        { name: 'fieldType', type: '"number" | "multipleChoice"', required: true },
+        { name: 'options', type: 'string[]', required: false },
+        { name: 'fieldId', type: 'string', required: true },
+      ])
+      expect(
+        buildEndpointInput(customFieldUpdate, {
+          _: [],
+          fieldId: 'CF.example',
+          label: 'Roof type',
+          fieldType: 'multipleChoice',
+          options: 'Shingle,Metal',
+        })
+      ).toEqual({
+        customField: {
+          fieldId: 'CF.example',
+          label: 'Roof type',
+          fieldType: 'multipleChoice',
+          options: ['Shingle', 'Metal'],
+        },
+      })
+    })
+
+    // A field declared beside `allOf`, or in two members, must still be offered, and the second must meet both schemas.
+    it('merges an allOf with object keywords beside it and a member that only says "an object"', () => {
+      const endpoint: Endpoint = {
+        path: '/garden/update',
+        components: { schemas: {} },
+        properties: {
+          type: 'object',
+          properties: { gardenId: { type: 'string' } },
+          required: ['gardenId'],
+          allOf: [
+            { type: 'object' },
+            {
+              type: 'object',
+              properties: { size: { type: 'number' }, name: { type: 'string' }, kind: { type: 'string' } },
+            },
+            {
+              type: 'object',
+              properties: {
+                size: { type: 'number', minimum: 1 },
+                name: { type: 'string', pattern: '\\S' },
+                kind: { type: 'string', enum: ['raised', 'sunken'] },
+              },
+              required: ['size'],
+            },
+          ],
+        },
+      }
+
+      expect(getObjectFields(endpoint.properties, endpoint.components)).toEqual({
+        properties: {
+          gardenId: { type: 'string' },
+          size: { allOf: [{ type: 'number' }, { type: 'number', minimum: 1 }] },
+          name: { allOf: [{ type: 'string' }, { type: 'string', pattern: '\\S' }] },
+          kind: { allOf: [{ type: 'string' }, { type: 'string', enum: ['raised', 'sunken'] }] },
+        },
+        required: ['gardenId', 'size'],
+      })
+      // Bare values, as for any scalar flag: the field takes the narrowest type every member accepts.
+      expect(
+        buildEndpointInput(endpoint, { _: [], gardenId: 'Garden.example', size: '4', name: 'Rose bed', kind: 'raised' })
+      ).toEqual({ gardenId: 'Garden.example', size: 4, name: 'Rose bed', kind: 'raised' })
+      expect(() =>
+        buildEndpointInput(endpoint, { _: [], gardenId: 'Garden.example', size: '4', kind: 'flat' })
+      ).toThrow('must be one of')
+    })
+  })
+
   describe('enum parameters', () => {
     const endpoint: Endpoint = {
       path: '/entitlement/add',
@@ -221,6 +369,25 @@ describe('buildEndpointInput', () => {
       expect(() => buildEndpointInput(endpoint, { _: [], mode: 'append' })).toThrow(
         'Parameter --mode must be replace, got append'
       )
+    })
+  })
+
+  // Shaped like `/question/manage/list --archived`: zod writes `boolean | "all"` as `anyOf` with a `const` member.
+  describe('boolean or literal parameters', () => {
+    const endpoint: Endpoint = {
+      path: '/question/manage/list',
+      components: { schemas: {} },
+      properties: {
+        type: 'object',
+        properties: { archived: { anyOf: [{ type: 'boolean' }, { type: 'string', const: 'all' }] } },
+      },
+    }
+    const build = (params: Record<string, unknown>): unknown => buildEndpointInput(endpoint, { _: [], ...params })
+
+    it('accepts a bare literal or boolean in a boolean | literal union', () => {
+      expect(build({ archived: 'all' })).toEqual({ archived: 'all' })
+      expect(build({ archived: '"all"' })).toEqual({ archived: 'all' })
+      expect(build({ archived: 'false' })).toEqual({ archived: false })
     })
   })
 

@@ -16,7 +16,20 @@ The hosted server's tools are read-only unless the connection enables writes, an
 impersonation are not on hosted production yet. Until they are, CLI 2 still serves the local server:
 `npx -y @terros-inc/cli@2 mcp`.
 
-Every other command, sign-in and the API commands generated from the OpenAPI document are unchanged.
+Every other command and sign-in are unchanged; the API commands change only as described below.
+
+### Bug fix: a request body that is a union, or wraps one, takes named flags
+
+A command whose request body is a union of objects, or a single object wrapping a union or `allOf`, now takes that
+body's fields as named flags instead of one unnamed `--` parameter or a JSON parameter. For a union it offers every
+variant's fields, required only when every variant requires them, and the API rejects a combination it does not allow.
+`terros user remove --userId <userId>` and `terros user remove --userIds '["<userId1>","<userId2>"]'`, each with an
+optional `--archive false`, now send that body, where before no form of the command could be sent. Other unions among
+a body's fields still take JSON (`--grouping '{"type":"user"}'`).
+
+In the public API document this changes three commands: `terros user remove`, `terros customField add` (its fields
+were one `--unsaved` JSON parameter) and `terros customField update` (one `--customField` JSON parameter). Scripts that
+pass `--unsaved` or `--customField` pass each field as a flag instead, or the whole body with `--inputFile`.
 
 ## 2.1.0
 

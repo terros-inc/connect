@@ -1,5 +1,5 @@
 import { splitTopLevelUnion } from './util.ts'
-import { getEndpointParameters, resolveSchema } from './parameters.ts'
+import { getEndpointParameters, getObjectFields } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
 
 export class UnknownParameterError extends Error {
@@ -99,27 +99,12 @@ function flattenValue(flattened: Record<string, unknown>, prefix: string, value:
 }
 
 function getHiddenWrapperPrefix(endpoint: Endpoint): string[] {
-  const schema = resolveSchema(endpoint.properties, endpoint.components)
-  if (!('type' in schema) || schema.type !== 'object' || !schema.properties) return []
+  const body = getObjectFields(endpoint.properties, endpoint.components)
+  const [wrapperName, ...others] = Object.keys(body?.properties ?? {})
+  if (!body || !wrapperName || others.length > 0) return []
 
-  const propertyNames = Object.keys(schema.properties)
-  if (propertyNames.length !== 1) return []
-
-  const wrapperName = propertyNames[0]
-  if (!wrapperName) return []
-
-  const wrapperSchema = schema.properties[wrapperName]
-  if (!wrapperSchema) return []
-
-  const resolvedWrapperSchema = resolveSchema(wrapperSchema, endpoint.components)
-  if (
-    !('type' in resolvedWrapperSchema) ||
-    resolvedWrapperSchema.type !== 'object' ||
-    !resolvedWrapperSchema.properties
-  )
-    return []
-
-  return [wrapperName]
+  const wrapperSchema = body.properties[wrapperName]
+  return wrapperSchema && getObjectFields(wrapperSchema, endpoint.components) ? [wrapperName] : []
 }
 
 function setNestedValue(input: Record<string, unknown>, path: string[], value: unknown): void {
