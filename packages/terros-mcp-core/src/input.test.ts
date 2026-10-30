@@ -156,6 +156,109 @@ describe('buildEndpointInput', () => {
     })
   })
 
+  describe('request body that is a union or wraps one', () => {
+    // Shaped like `/user/remove`: the body was one unnamed `--` parameter that no flag or JSON could fill.
+    const userRemove: Endpoint = {
+      path: '/user/remove',
+      components: {
+        schemas: {
+          Input: { anyOf: [{ $ref: '#/components/schemas/Single' }, { $ref: '#/components/schemas/Bulk' }] },
+          Single: {
+            type: 'object',
+            properties: { archive: { type: 'boolean' }, userId: { type: 'string' } },
+            required: ['userId'],
+          },
+          Bulk: {
+            type: 'object',
+            properties: { archive: { type: 'boolean' }, userIds: { type: 'array', items: { type: 'string' } } },
+            required: ['userIds'],
+          },
+        },
+      },
+      properties: { $ref: '#/components/schemas/Input' },
+    }
+
+    it('offers every variant field, required only when every variant requires it', () => {
+      expect(getEndpointInputParameters(userRemove)).toEqual([
+        { name: 'archive', type: 'boolean', required: false },
+        { name: 'userId', type: 'string', required: false },
+        { name: 'userIds', type: 'string[]', required: false },
+      ])
+    })
+
+    it('sends a single or bulk user remove body', () => {
+      expect(buildEndpointInput(userRemove, { _: [], userId: '<userId>', archive: 'false' })).toEqual({
+        userId: '<userId>',
+        archive: false,
+      })
+      expect(buildEndpointInput(userRemove, { _: [], userIds: '["<userId1>","<userId2>"]' })).toEqual({
+        userIds: ['<userId1>', '<userId2>'],
+      })
+    })
+
+    // Shaped like `/customField/update`: the wrapped object is an `allOf` of a typed union and plain objects, which
+    // was one `--customField` parameter of type `unknown`.
+    it('expands an allOf wrapped in a single object and sends the fields inside the wrapper', () => {
+      const customFieldUpdate: Endpoint = {
+        path: '/customField/update',
+        components: { schemas: {} },
+        properties: {
+          type: 'object',
+          properties: {
+            customField: {
+              allOf: [
+                {
+                  type: 'object',
+                  oneOf: [
+                    {
+                      type: 'object',
+                      properties: { label: { type: 'string' }, fieldType: { type: 'string', enum: ['number'] } },
+                      required: ['label', 'fieldType'],
+                    },
+                    {
+                      type: 'object',
+                      properties: {
+                        label: { type: 'string' },
+                        fieldType: { type: 'string', enum: ['multipleChoice'] },
+                        options: { type: 'array', items: { type: 'string' } },
+                      },
+                      required: ['label', 'fieldType'],
+                    },
+                  ],
+                },
+                { type: 'object', properties: { fieldId: { type: 'string' } }, required: ['fieldId'] },
+              ],
+            },
+          },
+          required: ['customField'],
+        },
+      }
+
+      expect(getEndpointInputParameters(customFieldUpdate)).toEqual([
+        { name: 'label', type: 'string', required: true },
+        { name: 'fieldType', type: '"number" | "multipleChoice"', required: true },
+        { name: 'options', type: 'string[]', required: false },
+        { name: 'fieldId', type: 'string', required: true },
+      ])
+      expect(
+        buildEndpointInput(customFieldUpdate, {
+          _: [],
+          fieldId: 'CF.example',
+          label: 'Roof type',
+          fieldType: 'multipleChoice',
+          options: 'Shingle,Metal',
+        })
+      ).toEqual({
+        customField: {
+          fieldId: 'CF.example',
+          label: 'Roof type',
+          fieldType: 'multipleChoice',
+          options: ['Shingle', 'Metal'],
+        },
+      })
+    })
+  })
+
   describe('enum parameters', () => {
     const endpoint: Endpoint = {
       path: '/entitlement/add',
@@ -221,6 +324,34 @@ describe('buildEndpointInput', () => {
       expect(() => buildEndpointInput(endpoint, { _: [], mode: 'append' })).toThrow(
         'Parameter --mode must be replace, got append'
       )
+    })
+  })
+
+  // Shaped like `/question/manage/list --archived` and `/company/list --kinds`, which agents passed as bare values.
+  describe('archived filter and enum list parameters', () => {
+    const endpoint: Endpoint = {
+      path: '/company/list',
+      components: { schemas: { companyKind: { type: 'string', enum: ['customer', 'demo', 'sandbox'] } } },
+      properties: {
+        type: 'object',
+        properties: {
+          archived: { anyOf: [{ type: 'boolean' }, { type: 'string', const: 'all' }] },
+          kinds: { type: 'array', items: { $ref: '#/components/schemas/companyKind' } },
+        },
+      },
+    }
+    const build = (params: Record<string, unknown>): unknown => buildEndpointInput(endpoint, { _: [], ...params })
+
+    it('accepts a bare literal or boolean in a boolean | literal union', () => {
+      expect(build({ archived: 'all' })).toEqual({ archived: 'all' })
+      expect(build({ archived: '"all"' })).toEqual({ archived: 'all' })
+      expect(build({ archived: 'false' })).toEqual({ archived: false })
+    })
+
+    it('accepts an enum list as a bare value, comma-separated values or a JSON array', () => {
+      expect(build({ kinds: 'customer' })).toEqual({ kinds: ['customer'] })
+      expect(build({ kinds: 'customer,demo' })).toEqual({ kinds: ['customer', 'demo'] })
+      expect(build({ kinds: '["customer","demo"]' })).toEqual({ kinds: ['customer', 'demo'] })
     })
   })
 

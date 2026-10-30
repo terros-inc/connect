@@ -49,6 +49,10 @@ export type UnionSchema = SchemaBase & {
   oneOf: Schema[]
 }
 
+export type AllOfSchema = SchemaBase & {
+  allOf: Schema[]
+}
+
 export type ArraySchema = SchemaBase & {
   type: 'array'
   items: Schema
@@ -68,6 +72,7 @@ export type Schema =
   | NullSchema
   | ObjectSchema
   | UnionSchema
+  | AllOfSchema
   | ArraySchema
   | TupleSchema
 

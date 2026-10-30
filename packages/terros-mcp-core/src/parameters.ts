@@ -15,6 +15,13 @@ type FlattenContext = {
   path: string[]
   required: boolean
   depth: number
+  /** Whether a union or `allOf` of objects here is expanded into its fields rather than taken as one JSON value. */
+  expandUnion: boolean
+}
+
+type ObjectFields = {
+  properties: Record<string, Schema>
+  required: string[]
 }
 
 function isRefSchema(schema: Schema): schema is Schema & { $ref: string } {
@@ -29,6 +36,11 @@ function getVariants(schema: Schema): Schema[] | undefined {
   if ('oneOf' in schema) return schema.oneOf
   if (isAnyOfSchema(schema)) return schema.anyOf
   return undefined
+}
+
+/** An object schema that is not also a union or `allOf`, which zod-openapi writes as `{ type: 'object', oneOf }`. */
+function isPlainObject(schema: Schema): schema is ObjectSchema {
+  return 'type' in schema && schema.type === 'object' && !('allOf' in schema) && getVariants(schema) === undefined
 }
 
 function getEnumValues(schema: Schema): unknown[] | undefined {
@@ -124,17 +136,22 @@ function getSchemaDescription(schema: Schema, components: Components): string | 
 
 function flattenSchema(schema: Schema, context: FlattenContext): EndpointParameter[] {
   const resolved = resolveSchema(schema, context.components)
+  const fields =
+    isPlainObject(resolved) || context.expandUnion ? getObjectFields(resolved, context.components) : undefined
 
-  if ('type' in resolved && resolved.type === 'object' && resolved.properties) {
-    return Object.entries(resolved.properties).flatMap(([name, childSchema]) => {
-      const required = resolved.required?.includes(name) ?? false
-      return flattenSchema(childSchema, {
+  if (fields) {
+    // Only the request body and the one object it wraps are expanded: a union among other fields keeps taking JSON,
+    // so existing `--grouping '{...}'` calls still work.
+    const isWrapper = context.path.length === 0 && Object.keys(fields.properties).length === 1
+    return Object.entries(fields.properties).flatMap(([name, childSchema]) =>
+      flattenSchema(childSchema, {
         components: context.components,
         path: [...context.path, name],
-        required: context.required && required,
+        required: context.required && fields.required.includes(name),
         depth: context.depth,
+        expandUnion: isWrapper,
       })
-    })
+    )
   }
 
   const description = getSchemaDescription(schema, context.components)
@@ -146,6 +163,48 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
       ...(description ? { description } : {}),
     },
   ]
+}
+
+/**
+ * The fields of an object schema. An `allOf` has every member's fields. A union of objects has every variant's fields,
+ * required only when every variant requires them, so a command offers all of them and the API rejects a combination
+ * no variant allows. A field whose schema differs between members takes any of those schemas.
+ */
+export function getObjectFields(schema: Schema, components: Components): ObjectFields | undefined {
+  const resolved = resolveSchema(schema, components)
+  const isAllOf = 'allOf' in resolved
+  const members = isAllOf ? resolved.allOf : getVariants(resolved)
+  if (!members) {
+    if (!isPlainObject(resolved) || !resolved.properties) return undefined
+    return { properties: resolved.properties, required: resolved.required ?? [] }
+  }
+  if (members.length === 0) return undefined
+  const memberFields: ObjectFields[] = []
+  for (const member of members) {
+    const fields = getObjectFields(member, components)
+    if (!fields) return undefined
+    memberFields.push(fields)
+  }
+
+  const schemasByName = new Map<string, Schema[]>()
+  for (const fields of memberFields) {
+    for (const [name, fieldSchema] of Object.entries(fields.properties)) {
+      const schemas = schemasByName.get(name) ?? []
+      if (!schemas.some((known) => JSON.stringify(known) === JSON.stringify(fieldSchema))) schemas.push(fieldSchema)
+      schemasByName.set(name, schemas)
+    }
+  }
+
+  const names = [...schemasByName.keys()]
+  const isRequired = (name: string) => (fields: ObjectFields) => fields.required.includes(name)
+  return {
+    properties: Object.fromEntries(
+      [...schemasByName].map(([name, schemas]) => [name, schemas.length === 1 ? schemas[0]! : { oneOf: schemas }])
+    ),
+    required: names.filter((name) =>
+      isAllOf ? memberFields.some(isRequired(name)) : memberFields.every(isRequired(name))
+    ),
+  }
 }
 
 function hideSingleObjectWrapper(parameters: EndpointParameter[]): EndpointParameter[] {
@@ -172,6 +231,7 @@ export function getEndpointParameters(
       path: [],
       required: true,
       depth,
+      expandUnion: true,
     })
   )
 }
