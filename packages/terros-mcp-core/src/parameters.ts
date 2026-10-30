@@ -83,7 +83,44 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
     return schema.type
   }
 
+  if ('allOf' in schema) return getAllOfType(schema.allOf, components, depth)
+
   return 'unknown'
+}
+
+/**
+ * A value must match every `allOf` member, so it takes the member type every other member accepts: `string` and
+ * `"raised" | "sunken"` give `"raised" | "sunken"`. Members with no such type, such as two different objects, stay
+ * `unknown` and take JSON.
+ */
+function getAllOfType(members: Schema[], components: Components, depth: number): string {
+  const types = [...new Set(members.map((member) => getSchemaType(member, components, depth)))]
+  const narrowest = types.find((type) => types.every((other) => isAcceptedBy(type, other)))
+  return narrowest ?? 'unknown'
+}
+
+function isAcceptedBy(type: string, other: string): boolean {
+  const accepted = splitTopLevelUnion(other)
+  return splitTopLevelUnion(type).every((member) => isMemberAccepted(member, accepted))
+}
+
+function isMemberAccepted(member: string, accepted: string[]): boolean {
+  if (accepted.includes(member)) return true
+  const base = getBaseType(member)
+  return base !== member && isMemberAccepted(base, accepted)
+}
+
+/** The scalar type a literal or `integer` belongs to, e.g. `string` for `"raised"`. */
+function getBaseType(type: string): string {
+  if (type === 'integer') return 'number'
+  try {
+    const literal: unknown = JSON.parse(type)
+    if (literal === null) return 'null'
+    if (typeof literal === 'number') return Number.isInteger(literal) ? 'integer' : 'number'
+    return typeof literal === 'string' || typeof literal === 'boolean' ? typeof literal : type
+  } catch {
+    return type
+  }
 }
 
 /** A union such as user, team, or company ID resolves to `string` three times; print it once. */

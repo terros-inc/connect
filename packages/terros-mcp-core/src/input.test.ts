@@ -268,8 +268,19 @@ describe('buildEndpointInput', () => {
           required: ['gardenId'],
           allOf: [
             { type: 'object' },
-            { type: 'object', properties: { size: { type: 'number' } } },
-            { type: 'object', properties: { size: { type: 'number', minimum: 1 } }, required: ['size'] },
+            {
+              type: 'object',
+              properties: { size: { type: 'number' }, name: { type: 'string' }, kind: { type: 'string' } },
+            },
+            {
+              type: 'object',
+              properties: {
+                size: { type: 'number', minimum: 1 },
+                name: { type: 'string', pattern: '\\S' },
+                kind: { type: 'string', enum: ['raised', 'sunken'] },
+              },
+              required: ['size'],
+            },
           ],
         },
       }
@@ -278,13 +289,18 @@ describe('buildEndpointInput', () => {
         properties: {
           gardenId: { type: 'string' },
           size: { allOf: [{ type: 'number' }, { type: 'number', minimum: 1 }] },
+          name: { allOf: [{ type: 'string' }, { type: 'string', pattern: '\\S' }] },
+          kind: { allOf: [{ type: 'string' }, { type: 'string', enum: ['raised', 'sunken'] }] },
         },
         required: ['gardenId', 'size'],
       })
-      expect(buildEndpointInput(endpoint, { _: [], gardenId: 'Garden.example', size: '4' })).toEqual({
-        gardenId: 'Garden.example',
-        size: 4,
-      })
+      // Bare values, as for any scalar flag: the field takes the narrowest type every member accepts.
+      expect(
+        buildEndpointInput(endpoint, { _: [], gardenId: 'Garden.example', size: '4', name: 'Rose bed', kind: 'raised' })
+      ).toEqual({ gardenId: 'Garden.example', size: 4, name: 'Rose bed', kind: 'raised' })
+      expect(() =>
+        buildEndpointInput(endpoint, { _: [], gardenId: 'Garden.example', size: '4', kind: 'flat' })
+      ).toThrow('must be one of')
     })
   })
 
