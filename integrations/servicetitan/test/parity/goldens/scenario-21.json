@@ -1,0 +1,16 @@
+{
+  "legacySha": "89b9b586b67f1a567bb1124ec3061757e9227117",
+  "scenario": 21,
+  "stRequests": [
+    {
+      "method": "GET",
+      "path": "/settings/v2/tenant/1000/technicians",
+      "query": {
+        "name": "Example Tech"
+      },
+      "body": null
+    }
+  ],
+  "terrosWrites": [],
+  "outcome": "skipped"
+}

@@ -1,0 +1,160 @@
+{
+  "id": 18,
+  "name": "Closer reassigned",
+  "planExpect": "A3/A4. Create, save the bare job id, then cancel with the hard-coded reason.",
+  "companyId": "C.example",
+  "credentials": {
+    "appKey": "example-app-key",
+    "clientId": "example-client",
+    "clientSecret": "example-secret",
+    "tenantId": "1000"
+  },
+  "legacyParams": {
+    "jobTypeId": 456,
+    "serviceTitanJobId": "CF.exampleJob",
+    "customFieldCustomerId": 100,
+    "customFieldLocationId": 101,
+    "customFieldSetter": 102,
+    "customFieldAppointmentOutcome": 103,
+    "campaignIdSetterGen": 11,
+    "campaignIdCloserGen": 22,
+    "campaignIdUnknown": 33,
+    "teamToBusinessUnitMap": {
+      "Example Team": 77
+    }
+  },
+  "connectConfig": {
+    "cancelReasonId": "9001",
+    "teamToBusinessUnitMap": {
+      "Example Team": "77"
+    },
+    "jobTypeId": "456",
+    "customFieldCustomerId": "100",
+    "customFieldLocationId": "101",
+    "customFieldSetter": "102",
+    "customFieldAppointmentOutcome": "103",
+    "campaignIdSetterGen": "11",
+    "campaignIdCloserGen": "22",
+    "campaignIdUnknown": "33",
+    "serviceTitanJobId": "CF.exampleJob"
+  },
+  "payload": {
+    "action": "add",
+    "id": "Event.example",
+    "eventType": "Consultation",
+    "eventDate": "2024-01-15T10:00:00.000Z",
+    "duration": 60,
+    "includeStatus": true,
+    "status": "Scheduled",
+    "title": "Example consultation",
+    "attendee": {
+      "firstName": "Example",
+      "lastName": "Tech",
+      "email": "attendee@example.test",
+      "closerStatus": "Can_Help"
+    },
+    "owner": {
+      "firstName": "Example",
+      "lastName": "Owner",
+      "email": "owner@example.test",
+      "closerStatus": "Can_Help"
+    },
+    "accountId": "Account.example"
+  },
+  "account": {
+    "accountId": "Account.example",
+    "accountSource": "Terros",
+    "resident": {
+      "firstName": "Example",
+      "lastName": "Resident",
+      "email": "resident@example.test",
+      "phone": "5550100000"
+    },
+    "location": {
+      "line1": "100 Example St",
+      "line2": "Suite 1",
+      "locality": "Example City",
+      "countrySubd": "CA",
+      "postal1": "90210",
+      "latlng": {
+        "latitude": 34.05,
+        "longitude": -118.25
+      }
+    },
+    "customFields": {
+      "CF.exampleJob": "555"
+    }
+  },
+  "seed": {
+    "customers": [
+      {
+        "id": 789,
+        "name": "Example Resident",
+        "customFields": [
+          {
+            "typeId": 100,
+            "value": "Account.example"
+          }
+        ]
+      }
+    ],
+    "locations": [
+      {
+        "id": 890,
+        "customerId": 789,
+        "name": "Example Resident"
+      }
+    ],
+    "jobs": [
+      {
+        "id": 555,
+        "customerId": 789,
+        "locationId": 890,
+        "campaignId": 22,
+        "lastAppointmentId": 777,
+        "firstAppointmentId": 777,
+        "businessUnitId": 88,
+        "jobTypeId": 456,
+        "jobStatus": "Scheduled",
+        "customFields": [
+          {
+            "typeId": 102,
+            "value": "Example Owner"
+          },
+          {
+            "typeId": 103,
+            "value": "Scheduled"
+          }
+        ]
+      }
+    ],
+    "appointments": [
+      {
+        "id": 777,
+        "jobId": 555,
+        "customerId": 789,
+        "start": "2024-01-15T10:00:00.000Z",
+        "end": "2024-01-15T11:00:00.000Z"
+      }
+    ],
+    "assignments": [
+      {
+        "id": 111,
+        "technicianId": 999,
+        "technicianName": "Example Other",
+        "jobId": 555,
+        "appointmentId": 777,
+        "active": true
+      }
+    ],
+    "technicians": [
+      {
+        "id": 501,
+        "name": "Example Tech",
+        "businessUnitId": 88,
+        "active": true
+      }
+    ]
+  },
+  "faults": []
+}

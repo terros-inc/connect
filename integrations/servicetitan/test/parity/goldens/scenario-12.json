@@ -1,0 +1,45 @@
+{
+  "legacySha": "89b9b586b67f1a567bb1124ec3061757e9227117",
+  "scenario": 12,
+  "stRequests": [
+    {
+      "method": "GET",
+      "path": "/settings/v2/tenant/1000/technicians",
+      "query": {
+        "name": "Example Tech"
+      },
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/jpm/v2/tenant/1000/jobs/555",
+      "query": {},
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/dispatch/v2/tenant/1000/appointment-assignments",
+      "query": {
+        "appointmentIds": "777"
+      },
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/jpm/v2/tenant/1000/appointments/777",
+      "query": {},
+      "body": null
+    },
+    {
+      "method": "PATCH",
+      "path": "/jpm/v2/tenant/1000/appointments/777/reschedule",
+      "query": {},
+      "body": {
+        "start": "2024-01-16T15:00:00.000Z",
+        "end": "2024-01-16T16:00:00.000Z"
+      }
+    }
+  ],
+  "terrosWrites": [],
+  "outcome": "processed"
+}
