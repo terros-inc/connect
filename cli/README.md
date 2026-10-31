@@ -246,6 +246,14 @@ TERROS_IMPERSONATE=U.example terros whoami
 
 Never guess an ID such as `U:jane`; always take it from a search result.
 
+For a customer's question, act as one of their admins or the affected user:
+reads are scoped to the acting user's company, so as yourself another
+company's records look missing or empty. Use the staff login only for internal
+endpoints such as entitlements and feature flags; a command that takes
+`--companyId` is no reason to stay as staff. `terros help` repeats this, and a
+staff command that is not impersonating prints a hint on standard error when it
+gets `NotFound`, `NotAuthorized` or an empty list.
+
 ## Local Development
 
 Install dependencies:

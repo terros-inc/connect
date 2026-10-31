@@ -2,7 +2,8 @@ import { getPreferredName, type UserProfileSuccess } from '@terros-inc/sdk'
 import { buildTerrosClient } from '../api/query'
 
 export const whoamiCommand = {
-  description: 'Show who the CLI is signed in as, and whether it is impersonating someone',
+  description:
+    'Show who the CLI is signed in as, and whether it is impersonating someone. To act as another user, set TERROS_IMPERSONATE=<userId>; `TERROS_IMPERSONATE=<userId> terros whoami` confirms it.',
   async run(): Promise<void> {
     // /user/profile, not /user/get: only the profile carries the company name for the user@company line.
     // Impersonation is the client's TERROS_IMPERSONATE header, so the real user needs a second call without it.

@@ -2,6 +2,17 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## Unreleased
+
+### New: staff are told when to impersonate
+
+A guessed impersonation flag (`--impersonate`, `--as`, `--asUser`, `--user`, or `--companyId` on a command that does
+not take it) now fails with how to act as another user through `TERROS_IMPERSONATE=<userId>` and `terros whoami`,
+instead of refreshing the schema and pointing to `terros api refresh`. Terros staff signed in as themselves (not
+impersonating) who get `NotFound`, `NotAuthorized` or `Unauthorized workflow IDs`, or an empty list, now also get a
+hint on standard error that reads are scoped to their own company; standard output is unchanged. `terros help` gains a
+"Staff: acting as a customer" section, and `terros whoami help` names `TERROS_IMPERSONATE`.
+
 ## 3.0.0
 
 ### BREAKING: `terros mcp` removed; use the hosted MCP server

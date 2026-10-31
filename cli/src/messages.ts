@@ -1,4 +1,5 @@
 import type { EndpointParameter } from '@terros-inc/mcp-core'
+import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 export const HELP_PARENT_MESSAGE = `
 usage: terros <command> [<subcommand> ...] [parameters]
@@ -19,6 +20,8 @@ export function formatCommandsHelp(commands: string[]): string {
     '',
     `Run "terros <command> help" to see subcommands.`,
     `Run "terros --version" to print the installed CLI version.`,
+    '',
+    STAFF_IMPERSONATION_HELP,
   ]
 
   return lines.join('\n')
