@@ -294,7 +294,9 @@ copy with `--include`, and so does a template company.
 The copy runs in the background, and `{ "type": "success" }` only means it
 started. To check the result, list the target the same way
 (`terros workflow list --companyId C.target`, and so on). Copied items get new
-IDs, so look for them by name. `terros demo setup help` describes every option.
+IDs, so look for them by name. An empty list may only mean the copy hasn't
+finished: list again later, and ignore the hint to impersonate an admin, which
+does not apply here. `terros demo setup help` describes every option.
 
 ## Local Development
 
