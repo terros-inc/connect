@@ -13,6 +13,13 @@ impersonating) who get `NotFound`, `NotAuthorized` or `Unauthorized workflow IDs
 hint on standard error that reads are scoped to their own company; standard output is unchanged. `terros help` gains a
 "Staff: acting as a customer" section, and `terros whoami help` names `TERROS_IMPERSONATE`.
 
+### Bug fix: staying signed in when several commands run at once
+
+The CLI could renew a sign-in twice with the same saved key, for example when one command made several requests or
+when several `terros` commands ran at the same time. The sign-in service treats that as a stolen key and ends the
+session, so `terros auth login` was needed again, sometimes several times a day. The CLI now renews a session once,
+other commands wait for that renewal and use it, and the renewed sign-in is saved safely before it is used.
+
 ## 3.0.0
 
 ### BREAKING: `terros mcp` removed; use the hosted MCP server
