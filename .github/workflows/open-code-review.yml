@@ -4,8 +4,13 @@
 # and posts review comments directly on the PR.
 #
 # Triggers:
-#   - PR opened, synchronized, reopened, marked ready for review (uses pull_request_target for fork secret access)
-#   - Comment on PR containing '/open-code-review' or '@open-code-review'
+#   - PR opened, reopened, marked ready for review
+#   - Comment on a PR starting with '/open-code-review' or '@open-code-review',
+#     from an owner, member or collaborator of the repository
+#
+# PRs from forks are skipped, whichever way they are triggered: the review
+# tool is an LLM agent that reads the PR's code while holding the secrets
+# below, so fork code must never run alongside them.
 #
 # Required secrets:
 #   OPENROUTER_API_KEY - OpenRouter API key for LLM access
@@ -16,14 +21,9 @@
 
 name: Open Code Review
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 on:
-  # Use pull_request_target instead of pull_request so that secrets are
-  # available even for PRs from forks. This is safe because OCR only reads
-  # the diff and does not execute any code from the PR.
+  # pull_request_target gives same-repository PRs the secrets; the job and
+  # step conditions below keep fork PRs from reaching them.
   pull_request_target:
     types: [opened, reopened, ready_for_review]
   issue_comment:
@@ -36,10 +36,16 @@ permissions:
 jobs:
   code-review:
     runs-on: "runs-on=${{ github.run_id }}/pool=review-small-arm64"
+    # Job-level, so a skipped run (any other PR comment) cannot cancel a review in progress.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
     if: |
-      (github.event_name == 'pull_request_target' && github.event.pull_request.draft == false) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/open-code-review')) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && startsWith(github.event.comment.body, '@open-code-review'))
+      (github.event_name == 'pull_request_target' && github.event.pull_request.draft == false &&
+        github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+        (startsWith(github.event.comment.body, '/open-code-review') || startsWith(github.event.comment.body, '@open-code-review')))
     steps:
       - name: Get PR context
         id: pr-context
@@ -54,22 +60,34 @@ jobs:
             })
             core.setOutput('base_ref', pullRequest.base.ref)
             core.setOutput('head_sha', pullRequest.head.sha)
+            // A comment event does not say where the PR's head lives; a deleted fork has no head repo.
+            const sameRepo = pullRequest.head.repo?.full_name === `${context.repo.owner}/${context.repo.repo}`
+            core.setOutput('same_repo', String(sameRepo))
+            if (!sameRepo) core.notice('Skipping review: the PR comes from a fork.')
 
+      # Fails closed: the steps below run for a comment only once the lookup confirmed a
+      # same-repository PR (the job condition already checked pull_request_target).
       - name: Generate GitHub App token
         id: app-token
+        if: github.event_name == 'pull_request_target' || steps.pr-context.outputs.same_repo == 'true'
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ vars.CODE_REVIEW_CLIENT_ID }}
           private-key: ${{ secrets.CODE_REVIEW_PRIVATE_KEY }}
 
       - name: Checkout repository
+        if: github.event_name == 'pull_request_target' || steps.pr-context.outputs.same_repo == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha || steps.pr-context.outputs.head_sha }}
+          # The review agent reads this workspace, so leave no token in .git/config;
+          # the review only diffs local history and posts with the App token.
+          persist-credentials: false
 
       - name: Run OpenCodeReview
-        uses: terros-inc/actions/open-code-review@5f5bf7d5ce0fc3e1150398c87d06561691981b18
+        if: github.event_name == 'pull_request_target' || steps.pr-context.outputs.same_repo == 'true'
+        uses: terros-inc/actions/open-code-review@35ae12f8060ad1627fed1c341e73126da5c9e6b7
         with:
           openrouter_api_key: ${{ secrets.OPENROUTER_API_KEY }}
           github_token: ${{ steps.app-token.outputs.token }}
