@@ -42,6 +42,12 @@ In the public API document this changes three commands: `terros user remove`, `t
 were one `--unsaved` JSON parameter) and `terros customField update` (one `--customField` JSON parameter). Scripts that
 pass `--unsaved` or `--customField` pass each field as a flag instead, or the whole body with `--inputFile`.
 
+### New: `terros connect publish` sets the app's help docs
+
+Publishing now also sets the app's marketplace Documentation tab to the integration's `DOCS.md`, or `README.md` when
+there is no `DOCS.md`, so the docs come from git. With neither file, or an empty one, the app's docs are left as they are. See
+[Integrations](../RELEASING.md#integrations-publish-integrationsyml).
+
 ## 2.1.0
 
 This release also carries the changes listed under 2.0.1, which was not published.
