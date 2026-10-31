@@ -1,4 +1,5 @@
 import { getTokens } from './oauth/tokens.ts'
+import { AuthRequiredError } from './oauth/auth0.ts'
 import { type ApiRoute, isResponseError, TerrosApiError } from './models.ts'
 import { getAnalyticsHeaders, type TerrosHeaderMetadata } from './analytics.ts'
 
@@ -51,7 +52,8 @@ export class TerrosApiClient {
         body: JSON.stringify(input),
       })
     } catch (cause) {
-      throw new Error(`Request to ${route} failed`, { cause })
+      if (cause instanceof AuthRequiredError) throw cause
+      throw new Error(`Request to ${route} failed: ${cause instanceof Error ? cause.message : cause}`, { cause })
     }
     if (!response.ok) throw new Error(response.statusText)
     const output: unknown = await response.json()
@@ -64,10 +66,7 @@ export class TerrosApiClient {
       return `${this.authStrategy.authType} ${this.authStrategy.apiKey}`
     }
     const cliTokens = await getTokens()
-    if (cliTokens === null)
-      throw new Error(
-        'No authorization found. Log in with Terros CLI or provide an API key via environment variables or client config.'
-      )
+    if (cliTokens === null) throw new AuthRequiredError('signed-out')
     return `Bearer ${cliTokens.access_token}`
   }
 
