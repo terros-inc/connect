@@ -10,7 +10,7 @@ export const STAFF_IMPERSONATION_HELP = `Staff: acting as a customer
     terros search --query "<name>"                    find their userId (keep the User in their company)
     TERROS_IMPERSONATE=<userId> terros whoami         confirm who you are acting as
     TERROS_IMPERSONATE=<userId> terros <command> ...
-  Use the staff login only for internal endpoints such as entitlements and feature flags.
+  Use the staff login only for internal endpoints such as entitlements, feature flags and cloning between companies.
   A command that takes --companyId is no reason to stay as staff.`
 
 /** Flags people guess for acting as someone else, lowercased; the CLI only reads that from `TERROS_IMPERSONATE`. */

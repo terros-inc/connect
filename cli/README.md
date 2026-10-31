@@ -249,10 +249,52 @@ Never guess an ID such as `U:jane`; always take it from a search result.
 For a customer's question, act as one of their admins or the affected user:
 reads are scoped to the acting user's company, so as yourself another
 company's records look missing or empty. Use the staff login only for internal
-endpoints such as entitlements and feature flags; a command that takes
+endpoints such as entitlements, feature flags and
+[cloning between companies](#clone-between-companies-terros-staff); a command that takes
 `--companyId` is no reason to stay as staff. `terros help` repeats this, and a
 staff command that is not impersonating prints a hint on standard error when it
 gets `NotFound`, `NotAuthorized` or an empty list.
+
+## Clone Between Companies (Terros Staff)
+
+Terros staff can copy workflows, programs and dashboards from one company to
+another, as the web Clone Tool does. Unlike customer reads, this needs the staff
+login: unset `TERROS_IMPERSONATE`, because the clone commands come from the
+internal schema and the copy runs as you. Refresh the schema first so the
+commands appear:
+
+```sh
+terros api refresh
+terros demo setup help
+```
+
+List the items in the source company and note the IDs to copy:
+
+```sh
+terros workflow list --companyId C.source
+terros program list --companyId C.source
+terros report dashboard list --entityId C.source
+```
+
+The dashboard list returns the source company's company-wide dashboards.
+
+Then start the copy. `--include` names the parts to copy, and each `--filters`
+entry limits one part to the listed `includeItemIds`:
+
+```sh
+terros demo setup --templateId C.source --companyId C.target \
+  --include workflows,programs,dashboards \
+  --filters '[{"functionId":"workflows","includeItemIds":["WF.example"]},{"functionId":"programs","includeItemIds":["Program.example"]},{"functionId":"dashboards","includeItemIds":["Dashboard.example"]}]'
+```
+
+Always pass `--include`. Without it the command runs a full setup, which first
+deletes the target's existing setup data. A customer company accepts only a
+copy with `--include`, and so does a template company.
+
+The copy runs in the background, and `{ "type": "success" }` only means it
+started. To check the result, list the target the same way
+(`terros workflow list --companyId C.target`, and so on). Copied items get new
+IDs, so look for them by name. `terros demo setup help` describes every option.
 
 ## Local Development
 
