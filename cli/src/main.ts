@@ -19,6 +19,7 @@ import {
 } from './messages'
 import { loadEndpoints, loadEndpointsAfterRefresh, type SchemaStatus } from './loadEndpoints'
 import { readInputFile } from './inputFile'
+import { companyScopeHint, impersonationFlagMessage } from './impersonation'
 import {
   buildCliCommandTree,
   checkBuiltinCollisions,
@@ -104,6 +105,12 @@ export async function main(argv: string[]): Promise<void> {
     input = buildEndpointInput(endpoint, flags, base)
   } catch (error) {
     if (!(error instanceof UnknownParameterError)) throw error
+    const impersonationMessage = impersonationFlagMessage(error.parameters)
+    if (impersonationMessage !== undefined) {
+      console.error(impersonationMessage)
+      process.exitCode = 1
+      return
+    }
     if (refreshStatus !== undefined) {
       console.error(unknownParameterMessage(error, refreshStatus))
       process.exitCode = 1
@@ -132,11 +139,23 @@ export async function main(argv: string[]): Promise<void> {
     }
   }
   const client = buildTerrosClient()
-  const response =
-    endpoint.path === '/apiHistory/start'
-      ? await runApiHistoryQuery(client, input)
-      : await client.call(endpoint.path, input)
+  let response: unknown
+  try {
+    response =
+      endpoint.path === '/apiHistory/start'
+        ? await runApiHistoryQuery(client, input)
+        : await client.call(endpoint.path, input)
+  } catch (error) {
+    const hint = await companyScopeHint({ error })
+    if (hint === undefined) throw error
+    console.error(error instanceof Error ? error.message : error)
+    console.error(hint)
+    process.exitCode = 1
+    return
+  }
   console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
+  const hint = await companyScopeHint({ response })
+  if (hint !== undefined) console.error(hint)
 }
 
 async function loadCommandLevel(

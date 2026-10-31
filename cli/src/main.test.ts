@@ -1,6 +1,8 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
+import { TerrosApiError } from '@terros-inc/connect-common'
 import { main, parseArgv } from './main'
 import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
+import { loadInternalSchemaWithStatus } from './crud/internal'
 import { authCommands } from './commands/auth'
 import { clearOpenApiCache } from './cache'
 import { buildTerrosClient } from './api/query'
@@ -8,6 +10,7 @@ import { buildTerrosClient } from './api/query'
 vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn(), loadEndpointsAfterRefresh: vi.fn() }))
 vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
+vi.mock('./crud/internal', () => ({ loadInternalSchemaWithStatus: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
 vi.mock('./commands/connect', () => ({
   connectCommands: { publish: { description: 'Publish an integration', run: vi.fn() } },
@@ -51,11 +54,14 @@ beforeEach(() => {
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
   call.mockResolvedValue({ ok: true })
   vi.mocked(buildTerrosClient).mockReturnValue({ call } as unknown as ReturnType<typeof buildTerrosClient>)
+  vi.mocked(loadInternalSchemaWithStatus).mockResolvedValue({ status: 'unavailable' })
+  vi.stubEnv('TERROS_IMPERSONATE', '')
 })
 
 afterEach(() => {
   log.mockRestore()
   process.exitCode = undefined
+  vi.unstubAllEnvs()
 })
 
 // Built-ins dispatch before endpoint commands, so each case goes through main to prove the built-in never runs.
@@ -283,4 +289,111 @@ it('lets api refresh recover from a stale endpoint collision', async () => {
 
   expect(loadEndpointsAfterRefresh).toHaveBeenCalledOnce()
   expect(clearOpenApiCache).toHaveBeenCalledOnce()
+})
+
+describe('acting as a customer', () => {
+  let stderr: ReturnType<typeof vi.spyOn>
+  const errorOutput = (): string => stderr.mock.calls.map((args: unknown[]) => args.join(' ')).join('\n')
+  const asStaff = (): unknown => vi.mocked(loadInternalSchemaWithStatus).mockResolvedValue({ status: 'available' })
+  const notFound = new TerrosApiError({ type: 'error', error: 'NotFound', message: 'Area not found' })
+
+  beforeEach(() => {
+    stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => stderr.mockRestore())
+
+  // A guessed impersonation flag can never become valid, so sending the caller to `api refresh` only hides the fix.
+  it.each(['impersonate', 'as', 'asUser', 'user', 'companyId'])(
+    'answers --%s with TERROS_IMPERSONATE instead of a schema refresh',
+    async (flag) => {
+      vi.mocked(loadEndpoints).mockImplementation(async () =>
+        parseEndpoints(schemaWithParameter('/account/get', 'accountId'))
+      )
+
+      await main(['account', 'get', '--accountId', 'Account.example', `--${flag}`, 'C.example'])
+
+      expect(errorOutput()).toContain('TERROS_IMPERSONATE=<userId>')
+      expect(errorOutput()).not.toContain('api refresh')
+      expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
+      expect(call).not.toHaveBeenCalled()
+      expect(process.exitCode).toBe(1)
+    }
+  )
+
+  // A staff caller read another company's NotFound as "the record does not exist".
+  it.each([
+    ['NotFound', 'Area not found'],
+    ['NotAuthorized', 'You do not have permission to view this account.'],
+    ['InvalidRequest', 'Unauthorized workflow IDs: WF.example'],
+  ])('tells staff acting as themselves that a %s may be another company', async (code, message) => {
+    asStaff()
+    schema('/area/get')
+    call.mockRejectedValue(new TerrosApiError({ type: 'error', error: code, message }))
+
+    await main(['area', 'get'])
+
+    expect(errorOutput()).toContain(`${code}: ${message}`)
+    expect(errorOutput()).toContain('TERROS_IMPERSONATE=<userId>')
+    expect(log).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('leaves stdout JSON unchanged when it hints at an empty list', async () => {
+    asStaff()
+    schema('/area/list')
+    call.mockResolvedValue({ type: 'success', areas: [], total: 0 })
+
+    await main(['area', 'list'])
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ type: 'success', areas: [], total: 0 })
+    expect(errorOutput()).toContain('TERROS_IMPERSONATE=<userId>')
+  })
+
+  // An impersonating or customer caller already reads the right company; a hint would send them chasing nothing.
+  it.each([
+    ['impersonating', 'available', 'U.example'],
+    ['not staff', 'unavailable', ''],
+  ])('prints no hint while %s', async (_, status, impersonate) => {
+    vi.mocked(loadInternalSchemaWithStatus).mockResolvedValue({ status: status as 'available' | 'unavailable' })
+    vi.stubEnv('TERROS_IMPERSONATE', impersonate)
+    schema('/area/get', '/area/list')
+
+    call.mockRejectedValue(notFound)
+    await expect(main(['area', 'get'])).rejects.toBe(notFound)
+    call.mockResolvedValue({ type: 'success', areas: [], total: 0 })
+    await main(['area', 'list'])
+
+    expect(stderr).not.toHaveBeenCalled()
+  })
+
+  // A match or a validation error is a real answer, not a company-scope miss.
+  it.each([
+    ['a matched record', { type: 'success', account: { accountId: 'Account.example' }, additionalMatches: [] }],
+    ['a non-empty list', { type: 'success', areas: [{ areaId: 'Area.example' }], total: 1 }],
+  ])('prints no hint for %s', async (_, response) => {
+    asStaff()
+    schema('/area/list')
+    call.mockResolvedValue(response)
+
+    await main(['area', 'list'])
+
+    expect(stderr).not.toHaveBeenCalled()
+  })
+
+  it('rethrows an unrelated failure without a hint', async () => {
+    asStaff()
+    schema('/area/get')
+    const invalid = new TerrosApiError({ type: 'error', error: 'InvalidRequest', message: 'areaId is required' })
+    call.mockRejectedValue(invalid)
+
+    await expect(main(['area', 'get'])).rejects.toBe(invalid)
+    expect(stderr).not.toHaveBeenCalled()
+  })
+
+  it.each([['help'], ['whoami', 'help']])('names TERROS_IMPERSONATE in `terros %s`', async (...words) => {
+    schema('/area/get')
+    await main(words)
+    expect(log.mock.calls.join('\n')).toContain('TERROS_IMPERSONATE=<userId>')
+  })
 })

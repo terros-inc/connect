@@ -5,16 +5,19 @@ import {
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
 } from './messages'
+import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 describe('formatCommandsHelp', () => {
-  it('includes version help after the command list', () => {
+  it('includes version help and the staff impersonation guide after the command list', () => {
     expect(formatCommandsHelp(['account'])).toBe(`usage: terros <command> [<subcommand> ...] [parameters]
 
 Commands:
   account
 
 Run "terros <command> help" to see subcommands.
-Run "terros --version" to print the installed CLI version.`)
+Run "terros --version" to print the installed CLI version.
+
+${STAFF_IMPERSONATION_HELP}`)
   })
 })
 

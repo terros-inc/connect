@@ -4,6 +4,12 @@ import type { Endpoint, EndpointParameter } from './endpoint.ts'
 
 export class UnknownParameterError extends Error {
   name = 'UnknownParameterError'
+  readonly parameters: string[]
+
+  constructor(parameters: string[]) {
+    super(`Unknown parameter(s): ${parameters.map((name) => `--${name}`).join(', ')}`)
+    this.parameters = parameters
+  }
 }
 
 export type ParsedArgs = { _: string[]; [key: string]: unknown }
@@ -34,9 +40,7 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base:
   const knownParameterNames = new Set(parameters.map((parameter) => parameter.name))
   const unknownParameterNames = providedParameterNames.filter((name) => !knownParameterNames.has(name))
   if (unknownParameterNames.length > 0) {
-    throw new UnknownParameterError(
-      `Unknown parameter(s): ${unknownParameterNames.map((name) => `--${name}`).join(', ')}`
-    )
+    throw new UnknownParameterError(unknownParameterNames)
   }
 
   const missingParameters = parameters.filter(
