@@ -25,6 +25,13 @@ second time in the same command, and help and commands that don't need a sign-in
 Other errors also print without a stack trace; set `TERROS_DEBUG=1` to see the full error. A sign-in service outage or a
 lost connection now says so instead of telling you to sign in again.
 
+### Bug fix: staying signed in when several commands run at once
+
+The CLI could renew a sign-in twice with the same saved key, for example when one command made several requests or
+when several `terros` commands ran at the same time. The sign-in service treats that as a stolen key and ends the
+session, so `terros auth login` was needed again, sometimes several times a day. The CLI now renews a session once,
+other commands wait for that renewal and use it, and the renewed sign-in is saved safely before it is used.
+
 ## 3.0.0
 
 ### BREAKING: `terros mcp` removed; use the hosted MCP server
