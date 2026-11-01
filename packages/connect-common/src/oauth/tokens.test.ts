@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import type { TokenResponse } from './types.ts'
-import { refreshTokens } from './auth0.ts'
+import { AuthRequiredError, refreshTokens } from './auth0.ts'
 import { getTokens, saveTokens } from './index.ts'
 
 const home = vi.hoisted(() => ({ dir: '' }))
@@ -15,7 +15,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const fs = await importOriginal<typeof import('node:fs/promises')>()
   return { ...fs, readFile: vi.fn(fs.readFile) }
 })
-vi.mock('./auth0.ts', () => ({ refreshTokens: vi.fn() }))
+vi.mock('./auth0.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./auth0.ts')>()),
+  refreshTokens: vi.fn(),
+}))
 const realReadFile = (await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')).readFile
 
 const rotated: TokenResponse = {
@@ -180,6 +183,27 @@ describe('getTokens', () => {
     await expect(getTokens()).rejects.toThrow('Unable to refresh token')
     expect(await readFile(authFile(), 'utf-8')).toBe(expired)
     await expect(stat(lockFile())).rejects.toThrow()
+  })
+
+  // Guards against resending a refresh token Auth0 rejected, against an Auth0 outage being remembered so a long-running
+  // process can't recover once it clears, and against a new login staying blocked after an earlier session was rejected.
+  it('never resends a rejected refresh token but retries other failures and new logins', async () => {
+    const login = (refreshToken: string) => JSON.stringify({ refresh_token: refreshToken, expires_at: 0 })
+    await writeAuth(login('outage-refresh-token'))
+    vi.mocked(refreshTokens).mockRejectedValue(new Error('Unable to refresh the Terros session'))
+    await expect(getTokens()).rejects.toThrow('Unable to refresh the Terros session')
+    await expect(getTokens()).rejects.toThrow('Unable to refresh the Terros session')
+    expect(refreshTokens).toHaveBeenCalledTimes(2)
+
+    await writeAuth(login('dead-refresh-token'))
+    vi.mocked(refreshTokens).mockRejectedValue(new AuthRequiredError('expired'))
+    await expect(getTokens()).rejects.toThrow(AuthRequiredError)
+    await expect(getTokens()).rejects.toThrow(AuthRequiredError)
+    expect(refreshTokens).toHaveBeenCalledTimes(3)
+
+    await writeAuth(login('new-refresh-token'))
+    await expect(getTokens()).rejects.toThrow(AuthRequiredError)
+    expect(refreshTokens).toHaveBeenLastCalledWith('new-refresh-token')
   })
 })
 
