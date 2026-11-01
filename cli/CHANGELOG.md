@@ -13,6 +13,18 @@ impersonating) who get `NotFound`, `NotAuthorized` or `Unauthorized workflow IDs
 hint on standard error that reads are scoped to their own company; standard output is unchanged. `terros help` gains a
 "Staff: acting as a customer" section, and `terros whoami help` names `TERROS_IMPERSONATE`.
 
+### Fixed: one clear message when you need to sign in again
+
+When your saved session has expired or nobody is signed in, `terros whoami`, `terros auth token` and every other command
+that needs a sign-in now print one line on standard error, "Your Terros session has expired. Run `terros auth login` to
+sign in again." or "You're not signed in to Terros. Run `terros auth login` to sign in.", and exit with code 1. Before,
+an expired session printed an "Unable to load internal API commands" warning and then the same error with a stack
+trace, and `terros auth token` exited 0 when nobody was signed in. The CLI also no longer tries the expired session a
+second time in the same command, and help and commands that don't need a sign-in no longer print the warning.
+
+Other errors also print without a stack trace; set `TERROS_DEBUG=1` to see the full error. A sign-in service outage or a
+lost connection now says so instead of telling you to sign in again.
+
 ## 3.0.0
 
 ### BREAKING: `terros mcp` removed; use the hosted MCP server

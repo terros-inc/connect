@@ -1,5 +1,5 @@
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
-import { refreshTokens } from './auth0.ts'
+import { AuthRequiredError, refreshTokens } from './auth0.ts'
 import { getTokens, saveTokens } from './index.ts'
 
 vi.mock('node:fs/promises', () => ({
@@ -8,7 +8,10 @@ vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn(),
   chmod: vi.fn(),
 }))
-vi.mock('./auth0.ts', () => ({ refreshTokens: vi.fn() }))
+vi.mock('./auth0.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./auth0.ts')>()),
+  refreshTokens: vi.fn(),
+}))
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -77,6 +80,24 @@ describe('getTokens', () => {
     vi.mocked(refreshTokens).mockRejectedValue(new Error('Unable to refresh token'))
     await expect(getTokens()).rejects.toThrow('Unable to refresh token')
     expect(writeFile).not.toHaveBeenCalled()
+  })
+
+  // Guards against an Auth0 outage being remembered so a long-running process can't recover once it clears, and against
+  // a new login staying blocked after an earlier session was rejected.
+  it('retries other refresh failures and new logins', async () => {
+    const login = (refreshToken: string) => JSON.stringify({ refresh_token: refreshToken, expires_at: 0 })
+    vi.mocked(readFile).mockResolvedValue(login('outage-refresh-token'))
+    vi.mocked(refreshTokens).mockRejectedValue(new Error('Unable to refresh the Terros session'))
+    await expect(getTokens()).rejects.toThrow('Unable to refresh the Terros session')
+    await expect(getTokens()).rejects.toThrow('Unable to refresh the Terros session')
+    expect(refreshTokens).toHaveBeenCalledTimes(2)
+
+    vi.mocked(readFile).mockResolvedValue(login('dead-refresh-token'))
+    vi.mocked(refreshTokens).mockRejectedValue(new AuthRequiredError('expired'))
+    await expect(getTokens()).rejects.toThrow(AuthRequiredError)
+    vi.mocked(readFile).mockResolvedValue(login('new-refresh-token'))
+    await expect(getTokens()).rejects.toThrow(AuthRequiredError)
+    expect(refreshTokens).toHaveBeenLastCalledWith('new-refresh-token')
   })
 })
 
