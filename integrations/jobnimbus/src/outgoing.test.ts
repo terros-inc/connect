@@ -1,5 +1,5 @@
-import type { AccountWebhook, AccountWebhookData } from '@terros-inc/sdk'
-import { handler, sendAccount } from './outgoing.ts'
+import type { AccountWebhookData } from '@terros-inc/sdk'
+import { getAccountToSend, sendAccount } from './outgoing.ts'
 import { fakeJobNimbus, fakeTerros } from './fakeJobNimbus.ts'
 
 const users = [{ id: 'user-1', email: 'rep@example.test' }]
@@ -203,17 +203,29 @@ describe('sendAccount', () => {
   })
 })
 
-describe('handler', () => {
-  // An Account webhook without data failed every run, and each failure looked the same as a real outage.
-  test('skips an Account update without account data and says why', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const payload = { entity: 'Account', action: 'update' } as unknown as AccountWebhook
-    const config = { scriptConfig: {}, secrets: { apiKey: 'key-example' } }
+describe('getAccountToSend', () => {
+  // A JobNimbus webhook posted to this script's slug failed every run as "Missing account data", which says nothing
+  // about the wrong slug; a silent skip instead would hide it from the run failure count.
+  test('fails a JobNimbus webhook body as a permanent wrong-slug error that names its fields only', () => {
+    const jobNimbusBody = { jnid: 'jn-job', type: 'job', name: 'Quinn Example', status_name: 'Lead' }
 
-    await expect(handler({ runId: 'ConnectRun.example', context: { payload, config } })).resolves.toBeUndefined()
-
-    expect(warn).toHaveBeenCalledWith(
-      'Skipping JobNimbus send: the Account update payload has no account data (fields: entity, action)'
+    expect(() => getAccountToSend(jobNimbusBody)).toThrow(
+      expect.objectContaining({
+        name: 'PermanentError',
+        message:
+          'Not a Terros Account webhook (fields: jnid, type, name, status_name). It probably reached the outgoing ' +
+          'JobNimbus Send script through the wrong slug: JobNimbus webhooks belong at the incoming JobNimbus Webhook script.',
+      })
     )
+  })
+
+  // Prevents a remove, which carries only the account id, from failing a run or being sent to JobNimbus.
+  test('skips an Account remove and sends an add or update', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const data = account('Damage Found')
+
+    expect(getAccountToSend({ entity: 'Account', action: 'remove', data: data.id })).toBeUndefined()
+    expect(log).toHaveBeenCalledWith('Skipping JobNimbus send: an Account remove has no account to send')
+    expect(getAccountToSend({ entity: 'Account', action: 'update', data })).toBe(data)
   })
 })
