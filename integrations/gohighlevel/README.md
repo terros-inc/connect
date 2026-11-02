@@ -99,8 +99,3 @@ Acme Solar's Account Sync and Opportunity Webhook config, using placeholder valu
 - `no Terros account is linked to this contact, skipping` the Opportunity Webhook found no Terros account for the contact. Expected for appointments booked directly in GoHighLevel; it cannot tell that apart from a lost link, and nothing alerts.
 - `pipeline stage is blank, so only notes are imported` the workflow posted no stage (a note-change trigger, or a contact with no opportunity). The stage write is skipped and notes are imported as usual.
 - `No stageMappings entry matched pipeline stage` the GoHighLevel stage name was sent to Terros as is.
-
-## Developing and publishing
-
-- `pnpm --filter @terros-inc/sdk... build`, then `pnpm exec tsc --noEmit` and `pnpm test` in this directory.
-- Bump `version` in `package.json` before publishing; the `publish-integrations.yml` workflow publishes it.
