@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { mkdir, writeFile, readFile, chmod, rename, rm } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, chmod, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { SavedTokens, TokenResponse } from './types.ts'
 import { AuthRequiredError, refreshTokens } from './auth0.ts'
@@ -13,6 +13,7 @@ const MINUTE = 60 * SECOND
 const LOCK_RETRY_MS = 50
 // Sending the token while another process may still be refreshing could revoke the login, so a waiter gives up instead.
 const LOCK_TIMEOUT_MS = MINUTE
+const LOCK_OWNER = /^(\d+):([\w-]+)$/
 
 let pendingRefresh: Promise<SavedTokens | null> | undefined
 let deadRefreshToken: string | undefined
@@ -74,18 +75,19 @@ async function tryLock(lockFile: string, owner: string): Promise<boolean> {
     if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e
   }
   const holder = await readFile(lockFile, 'utf-8').catch(() => null)
-  if (holder !== null && isDeadOwner(holder)) await removeDeadLock(lockFile, holder)
+  if (holder !== null && (await isDeadLock(lockFile, holder))) await removeDeadLock(lockFile, holder)
   return false
 }
 
 // Checking that the lock still names the dead holder and removing it are two steps, so only the process that creates
 // this holder's guard file runs them; otherwise a second taker could delete the lock the first had just taken. A guard
-// left by a killed taker is itself a dead lock and is taken over the same way.
+// left by a killed taker is itself a dead lock and is taken over the same way. Every empty lock reads the same, so the
+// check is repeated under the guard: the old lock may already be gone and replaced by one just created.
 async function removeDeadLock(lockFile: string, holder: string): Promise<void> {
-  const guard = `${lockFile}.${holder.split(':')[1]}`
+  const guard = `${lockFile}.${LOCK_OWNER.exec(holder)?.[2] ?? 'unowned'}`
   if (!(await tryLock(guard, `${process.pid}:${randomUUID()}`))) return
   try {
-    await removeLock(lockFile, holder)
+    if (await isDeadLock(lockFile, holder)) await removeLock(lockFile, holder)
   } finally {
     await rm(guard, { force: true })
   }
@@ -97,10 +99,13 @@ async function removeLock(lockFile: string, owner: string): Promise<void> {
   if (current === owner) await rm(lockFile, { force: true })
 }
 
-function isDeadOwner(owner: string): boolean {
-  // A lock just created is empty until its owner is written.
-  const pid = /^(\d+):[\w-]+$/.exec(owner)?.[1]
-  if (pid === undefined) return false
+async function isDeadLock(lockFile: string, holder: string): Promise<boolean> {
+  const pid = LOCK_OWNER.exec(holder)?.[1]
+  // A lock just created is empty until its owner is written, so only one left that way by a crash long ago is dead.
+  if (pid === undefined) {
+    const stats = await stat(lockFile).catch(() => null)
+    return stats !== null && Date.now() - stats.mtimeMs > LOCK_TIMEOUT_MS
+  }
   try {
     process.kill(Number(pid), 0)
     return false

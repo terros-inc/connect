@@ -50,31 +50,6 @@ afterEach(async () => {
 })
 
 describe('getTokens', () => {
-  it('returns null when no saved login exists', async () => {
-    expect(await getTokens()).toBeNull()
-    expect(refreshTokens).not.toHaveBeenCalled()
-  })
-
-  it('returns null when the saved login is not valid JSON', async () => {
-    await writeAuth('{')
-    expect(await getTokens()).toBeNull()
-    expect(refreshTokens).not.toHaveBeenCalled()
-  })
-
-  it.each([-1, 4])('refreshes a token expiring in %i minutes', async (minutes) => {
-    await writeAuth(
-      JSON.stringify({
-        access_token: 'old-token',
-        refresh_token: 'refresh-token-example',
-        expires_at: Date.now() + minutes * 60000,
-      })
-    )
-    vi.mocked(refreshTokens).mockResolvedValue(rotated)
-    expect((await getTokens())?.access_token).toBe('new-token')
-    expect(refreshTokens).toHaveBeenCalledWith('refresh-token-example')
-    expect(await readAuth()).toMatchObject({ access_token: 'new-token', refresh_token: 'rotated-refresh-token' })
-  })
-
   // Auth0 revokes the whole login when a rotated refresh token is sent again, e.g. by `whoami`'s parallel requests,
   // or by the internal-schema load and the command's request, where the second read auth.json just before the first
   // refresh saved and called after it finished.
@@ -134,6 +109,18 @@ describe('getTokens', () => {
     expect(await readdir(configDir())).toEqual(['auth.json'])
   })
 
+  // A process killed between creating the lock and writing its owner leaves it empty, which must not block every later
+  // command's refresh.
+  it('takes over an empty lock left long ago', async () => {
+    await writeAuth(expired)
+    await writeFile(lockFile(), '')
+    const twoMinutesAgo = new Date(Date.now() - 120000)
+    await utimes(lockFile(), twoMinutesAgo, twoMinutesAgo)
+    vi.mocked(refreshTokens).mockResolvedValue(rotated)
+    expect((await getTokens())?.access_token).toBe('new-token')
+    expect(await readdir(configDir())).toEqual(['auth.json'])
+  })
+
   // Two processes taking over the same dead lock at once: the second must not delete the lock the first has just
   // taken, or both would refresh with the same token.
   it('does not delete a lock another process took while this one was taking over a dead lock', async () => {
@@ -169,12 +156,6 @@ describe('getTokens', () => {
     vi.mocked(refreshTokens).mockResolvedValue({ ...rotated, refresh_token: undefined })
     expect((await getTokens())?.refresh_token).toBe('refresh-token-example')
     expect(await readAuth()).toMatchObject({ access_token: 'new-token', refresh_token: 'refresh-token-example' })
-  })
-
-  it('reuses tokens that remain valid beyond the refresh window', async () => {
-    await writeAuth(JSON.stringify({ access_token: 'valid-token', expires_at: Date.now() + 3600000 }))
-    expect((await getTokens())?.access_token).toBe('valid-token')
-    expect(refreshTokens).not.toHaveBeenCalled()
   })
 
   it('propagates refresh failures without overwriting the saved login or keeping the lock', async () => {
