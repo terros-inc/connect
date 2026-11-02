@@ -242,6 +242,15 @@ export class FakeApis {
         })
       case 'user/list':
         return ok({ users: [] })
+      case 'account/update': {
+        // Like the real API, customFieldsPatch merges per key and null removes one.
+        const account = this.terros.accounts.get(body.account.accountId)
+        if (!account) return err('NotFound', `no account ${body.account.accountId}`)
+        const customFields = { ...account.customFields, ...body.account.customFieldsPatch }
+        for (const [key, value] of Object.entries(customFields)) if (value === null) delete customFields[key]
+        account.customFields = customFields
+        return ok({ account })
+      }
       case 'account/upsert': {
         const a = body.account
         const account = this.terros.accounts.get(a.accountId)

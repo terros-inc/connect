@@ -19,8 +19,9 @@ export const handler = wrapConnectHandler<CalendarEventWebhook, void, RawConfig>
     const api = new ServiceTitanClient(parseSecrets(input.context.config.secrets))
     outcome = await sync(payload, config, api, {
       readAccount: async (accountId) => (await client.account.get({ accountId })).account,
-      writeAccountCustomField: async (accountId, customFields) => {
-        await client.account.update({ account: { accountId, customFields } })
+      writeAccountCustomField: async (accountId, fieldId, value) => {
+        // A patch changes only this key, so fields the token cannot view or another writer just set are kept.
+        await client.account.update({ account: { accountId, customFieldsPatch: { [fieldId]: value } } })
       },
       writeEventSourceId: async (eventId, sourceId) => {
         await client.calendar.event.update({ event: { eventId, sourceId } })
