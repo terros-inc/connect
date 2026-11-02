@@ -36,7 +36,7 @@ export function parseEndpoints(file: string): EndpointGroups {
     groupEndpoints[rest.join(' ')] = {
       path,
       description: config.post.description ?? config.post.summary,
-      example: example ?? Object.values(examples ?? {})[0]?.value,
+      example: example ?? Object.values(examples ?? {}).find((named) => named.value !== undefined)?.value,
       properties: schema,
       components: data.components,
     }

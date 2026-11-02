@@ -84,12 +84,16 @@ export function getExampleArguments(endpoint: Endpoint, example: unknown): strin
   for (const parameter of getEndpointInputParameters(endpoint)) {
     const path = toPath(prefix, parameter.name)
     const value = getNestedValue(example, path)
-    if (value === undefined) continue
+    if (value === undefined) {
+      if (parameter.required) return undefined
+      continue
+    }
     const text = [typeof value === 'string' ? value : undefined, JSON.stringify(value)].find(
       (candidate) => candidate !== undefined && reproduces(candidate, value, parameter)
     )
     if (text === undefined) return undefined
-    args.push(`--${parameter.name}`, text)
+    // A value starting with `-` would be read as another flag, or dropped as `-h`, unless joined to its name.
+    args.push(...(text.startsWith('-') ? [`--${parameter.name}=${text}`] : [`--${parameter.name}`, text]))
     setNestedValue(covered, path, value)
   }
   return args.length > 0 && isDeepStrictEqual(covered, example) ? args : undefined
@@ -154,7 +158,8 @@ function setNestedValue(input: Record<string, unknown>, path: string[], value: u
 
   let current = input
   for (const key of path.slice(0, -1)) {
-    const existing = current[key]
+    // An inherited key such as `constructor` is not a value the caller set.
+    const existing = Object.hasOwn(current, key) ? current[key] : undefined
     if (existing === undefined) {
       const next: Record<string, unknown> = {}
       current[key] = next

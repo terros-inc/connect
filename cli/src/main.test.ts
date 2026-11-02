@@ -190,6 +190,7 @@ describe('the example in endpoint help', () => {
     searchInput: {
       stageIds: ['S.123'],
       zipCode: '02134',
+      tag: '-h',
       lastActionDate: { gte: 1767225600000 },
       grouping: { by: 'team' },
     },
@@ -216,6 +217,7 @@ describe('the example in endpoint help', () => {
                           properties: {
                             stageIds: { type: 'array', items: { type: 'string' } },
                             zipCode: { type: 'string' },
+                            tag: { type: 'string' },
                             lastActionDate: { type: 'object', properties: { gte: { type: 'number' } } },
                             grouping: {
                               anyOf: [
@@ -237,8 +239,8 @@ describe('the example in endpoint help', () => {
       })
     ).garden?.['bed list']
 
-  // A zip code minimist would read as the number 2134, or a union only JSON can carry, would otherwise be shown as a
-  // command that sends a different request than the documented one.
+  // A zip code minimist would read as the number 2134, a value minimist or the help check would take as a flag, or a
+  // union only JSON can carry, would otherwise be shown as a command that sends a different request.
   it('sends exactly the documented request body', () => {
     const bed = endpoint()
     if (!bed) throw new Error('missing endpoint')
@@ -246,6 +248,7 @@ describe('the example in endpoint help', () => {
 
     expect(args).toBeDefined()
     expect(buildEndpointInput(bed, parseArgv(args ?? []))).toEqual(example)
+    expect(args).toContain('--searchInput.tag=-h')
   })
 
   it('is left out when a field of the example has no parameter', () => {
