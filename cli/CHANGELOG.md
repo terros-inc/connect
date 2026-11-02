@@ -4,6 +4,14 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
+### New: `--help` and `-h` work on every command, and help shows an example
+
+`terros <command> [<subcommand> ...] --help` and `-h` now print the same help as a trailing `help` and exit 0, on every
+command and built-in, nested ones included. Before, an endpoint command failed with `Unknown parameter(s): --help`, and
+a built-in such as `terros auth login --help` ran the command. Endpoint help also ends with an example command built
+from the API's documented request, such as `terros account list ... --size 100`, when its flags can send that request
+exactly.
+
 ### New: staff are told when to impersonate
 
 A guessed impersonation flag (`--impersonate`, `--as`, `--asUser`, `--user`, or `--companyId` on a command that does

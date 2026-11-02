@@ -179,11 +179,15 @@ terros <command> help
 terros <command> <subcommand> help
 ```
 
-Show parameters for a command (and any subcommands nested below it):
+Show parameters for a command (and any subcommands nested below it), with an
+example command when the API documents one:
 
 ```sh
 terros <command> [<subcommand> ...] help
 ```
+
+`--help` and `-h` anywhere on the line print the same help and never run the
+command.
 
 Use `--depth` to show additional nested object type detail. The default depth is
 one layer:

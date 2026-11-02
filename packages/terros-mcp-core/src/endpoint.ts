@@ -11,6 +11,8 @@ export type EndpointParameter = {
 export type Endpoint = {
   path: string
   description?: string
+  /** A request body from the document's examples, used to show a sample command. */
+  example?: unknown
   properties: Schema
   components: Components
 }

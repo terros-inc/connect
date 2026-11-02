@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { splitTopLevelUnion } from './util.ts'
 import { getEndpointParameters, getObjectFields } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
@@ -67,6 +68,45 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base:
   return input
 }
 
+/** minimist reads a flag value that looks like a number as a number. */
+const MINIMIST_NUMBER = /^(?:0x[0-9a-f]+|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)$/i
+
+/**
+ * The command-line arguments that send `example` to the endpoint, the inverse of `buildEndpointInput`: `--size 100
+ * --searchInput.stageIds '["S.123"]'`. Undefined when the example holds a field no parameter carries or a value
+ * the flags cannot reproduce, so help never shows a command that would send something else.
+ */
+export function getExampleArguments(endpoint: Endpoint, example: unknown): string[] | undefined {
+  if (!isRecord(example)) return undefined
+  const prefix = getHiddenWrapperPrefix(endpoint)
+  const args: string[] = []
+  const covered: Record<string, unknown> = {}
+  for (const parameter of getEndpointInputParameters(endpoint)) {
+    const path = toPath(prefix, parameter.name)
+    const value = getNestedValue(example, path)
+    if (value === undefined) {
+      if (parameter.required) return undefined
+      continue
+    }
+    const text = [typeof value === 'string' ? value : undefined, JSON.stringify(value)].find(
+      (candidate) => candidate !== undefined && reproduces(candidate, value, parameter)
+    )
+    if (text === undefined) return undefined
+    // A value starting with `-` would be read as another flag, or dropped as `-h`, unless joined to its name.
+    args.push(...(text.startsWith('-') ? [`--${parameter.name}=${text}`] : [`--${parameter.name}`, text]))
+    setNestedValue(covered, path, value)
+  }
+  return args.length > 0 && isDeepStrictEqual(covered, example) ? args : undefined
+}
+
+function reproduces(text: string, value: unknown, parameter: EndpointParameter): boolean {
+  try {
+    return isDeepStrictEqual(parseParameterValue(MINIMIST_NUMBER.test(text) ? Number(text) : text, parameter), value)
+  } catch {
+    return false
+  }
+}
+
 function toPath(prefix: string[], parameterName: string): string[] {
   return [...prefix, ...parameterName.split('.').filter(Boolean)]
 }
@@ -118,7 +158,8 @@ function setNestedValue(input: Record<string, unknown>, path: string[], value: u
 
   let current = input
   for (const key of path.slice(0, -1)) {
-    const existing = current[key]
+    // An inherited key such as `constructor` is not a value the caller set.
+    const existing = Object.hasOwn(current, key) ? current[key] : undefined
     if (existing === undefined) {
       const next: Record<string, unknown> = {}
       current[key] = next
