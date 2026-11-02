@@ -94,6 +94,18 @@ describe('sendAccount', () => {
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'jn-1' } }])
   })
 
+  // Deleting a job in JobNimbus only archives it; linking back to it hid the rep's lead on a job nobody can see.
+  test('creates a new job instead of linking an archived one', async () => {
+    const archived = { jnid: 'jn-archived', external_id: 'Account.example', is_active: false }
+    const { client, jobs } = fakeJobNimbus({ users, jobs: [archived] })
+    const { terros, updates } = fakeTerros()
+
+    await sendAccount(account('Damage Found'), config, client, terros)
+
+    expect(jobs.get('jn-1')).toMatchObject({ external_id: 'Account.example', is_active: true })
+    expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'jn-1' } }])
+  })
+
   // Prevents a rate-limited create from failing the delivery when JobNimbus would accept it moments later.
   test('a create rate limited once is retried and creates one job', async () => {
     const { client, jobs, slept } = fakeJobNimbus({ users, fail: { 'POST /jobs': [{ status: 429 }] } })
