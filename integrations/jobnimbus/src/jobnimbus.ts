@@ -135,6 +135,7 @@ const maxRetryWaitMs = 5000
 
 export type JobNimbusRecord = {
   jnid?: string
+  is_active?: boolean
   external_id?: string
   name?: string
   status_name?: string
@@ -190,7 +191,10 @@ export class JobNimbusClient {
     const result = (await this.request('GET', `/${path}?${new URLSearchParams({ filter, size: '10' })}`)) as {
       results?: JobNimbusRecord[]
     }
-    return result?.results?.find((record) => record.jnid && record.external_id === externalId)
+    // Deleting a record in JobNimbus only archives it (is_active: false), and an archived record must not be linked again.
+    return result?.results?.find(
+      (record) => record.jnid && record.external_id === externalId && record.is_active !== false
+    )
   }
 
   create(path: 'jobs' | 'contacts', record: Record<string, unknown>): Promise<JobNimbusRecord> {
