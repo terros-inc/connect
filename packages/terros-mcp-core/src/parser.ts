@@ -31,11 +31,12 @@ export function parseEndpoints(file: string): EndpointGroups {
 
     const groupEndpoints: Endpoints = (endpoints[group] ??= Object.create(null))
 
-    const schema = config.post.requestBody.content['application/json'].schema
+    const { schema, example, examples } = config.post.requestBody.content['application/json']
 
     groupEndpoints[rest.join(' ')] = {
       path,
       description: config.post.description ?? config.post.summary,
+      example: example ?? Object.values(examples ?? {})[0]?.value,
       properties: schema,
       components: data.components,
     }

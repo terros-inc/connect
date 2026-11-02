@@ -50,7 +50,8 @@ export function formatSubcommandParametersHelp(
   parameters: EndpointParameter[],
   description?: string,
   showDepthHelp = false,
-  subcommands: string[] = []
+  subcommands: string[] = [],
+  exampleArguments?: string[]
 ): string {
   const commandParts = [command]
   if (subcommand) commandParts.push(subcommand)
@@ -76,6 +77,10 @@ export function formatSubcommandParametersHelp(
     })
   }
 
+  if (exampleArguments) {
+    lines.push('', 'Example:', `  terros ${[...commandParts, ...exampleArguments.map(quoteShellArgument)].join(' ')}`)
+  }
+
   if (showDepthHelp) {
     lines.push(
       '',
@@ -89,4 +94,9 @@ export function formatSubcommandParametersHelp(
   }
 
   return lines.join('\n')
+}
+
+/** Quote an argument for a POSIX shell, leaving plain words such as `--size` and `100` bare. */
+function quoteShellArgument(argument: string): string {
+  return /^[\w.,:@/+=-]+$/.test(argument) ? argument : `'${argument.replaceAll("'", `'\\''`)}'`
 }

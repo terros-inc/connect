@@ -110,6 +110,8 @@ export type OpenAPISchema = {
           content: {
             'application/json': {
               schema: Schema
+              example?: unknown
+              examples?: { [name: string]: { value?: unknown } }
             }
           }
         }

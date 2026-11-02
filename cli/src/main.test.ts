@@ -1,4 +1,4 @@
-import { parseEndpoints } from '@terros-inc/mcp-core'
+import { buildEndpointInput, getExampleArguments, parseEndpoints, type Endpoint } from '@terros-inc/mcp-core'
 import { TerrosApiError } from '@terros-inc/connect-common'
 import { main, parseArgv } from './main'
 import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
@@ -158,6 +158,104 @@ describe('an endpoint command', () => {
 })
 
 // minimist alone reads `--longitude -124.5` as the short flags -1, -2 and -4, so a map query failed as unknown flags.
+describe('--help and -h', () => {
+  const printed = async (argv: string[]): Promise<unknown[][]> => {
+    log.mockClear()
+    await main(argv)
+    expect(process.exitCode).toBeUndefined()
+    return log.mock.calls
+  }
+
+  it.each([['--help'], ['-h']])('print the same help as `help` on a nested subcommand: %s', async (flag) => {
+    schema('/garden/bed/list')
+    const help = await printed(['garden', 'bed', 'list', 'help'])
+
+    expect(help[0]?.[0]).toContain('usage: terros garden bed list [parameters]')
+    expect(await printed(['garden', 'bed', 'list', flag])).toEqual(help)
+    expect(await printed(['garden', flag, 'bed', 'list', '--size', '5'])).toEqual(help)
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('show a built-in command its help instead of running it', async () => {
+    schema()
+    const help = await printed(['auth', 'login', 'help'])
+
+    expect(await printed(['auth', 'login', '--help'])).toEqual(help)
+    expect(login).not.toHaveBeenCalled()
+  })
+})
+
+describe('the example in endpoint help', () => {
+  const example = {
+    searchInput: {
+      stageIds: ['S.123'],
+      zipCode: '02134',
+      lastActionDate: { gte: 1767225600000 },
+      grouping: { by: 'team' },
+    },
+    note: "it's a test",
+  }
+  const endpoint = (): Endpoint | undefined =>
+    parseEndpoints(
+      JSON.stringify({
+        openapi: '3.1.1',
+        paths: {
+          '/garden/bed/list': {
+            post: {
+              summary: 'List beds',
+              requestBody: {
+                content: {
+                  'application/json': {
+                    example,
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        note: { type: 'string' },
+                        searchInput: {
+                          type: 'object',
+                          properties: {
+                            stageIds: { type: 'array', items: { type: 'string' } },
+                            zipCode: { type: 'string' },
+                            lastActionDate: { type: 'object', properties: { gte: { type: 'number' } } },
+                            grouping: {
+                              anyOf: [
+                                { type: 'object', properties: { by: { type: 'string' } } },
+                                { type: 'object', properties: { size: { type: 'number' } } },
+                              ],
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: { schemas: {} },
+      })
+    ).garden?.['bed list']
+
+  // A zip code minimist would read as the number 2134, or a union only JSON can carry, would otherwise be shown as a
+  // command that sends a different request than the documented one.
+  it('sends exactly the documented request body', () => {
+    const bed = endpoint()
+    if (!bed) throw new Error('missing endpoint')
+    const args = getExampleArguments(bed, bed.example)
+
+    expect(args).toBeDefined()
+    expect(buildEndpointInput(bed, parseArgv(args ?? []))).toEqual(example)
+  })
+
+  it('is left out when a field of the example has no parameter', () => {
+    const bed = endpoint()
+    if (!bed) throw new Error('missing endpoint')
+
+    expect(getExampleArguments(bed, { ...example, unknownField: 1 })).toBeUndefined()
+  })
+})
+
 describe('parseArgv', () => {
   it.each([
     ['-124.5', -124.5],

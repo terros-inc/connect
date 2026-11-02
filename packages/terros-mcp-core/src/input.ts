@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { splitTopLevelUnion } from './util.ts'
 import { getEndpointParameters, getObjectFields } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
@@ -65,6 +66,41 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base:
   }
 
   return input
+}
+
+/** minimist reads a flag value that looks like a number as a number. */
+const MINIMIST_NUMBER = /^(?:0x[0-9a-f]+|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)$/i
+
+/**
+ * The command-line arguments that send `example` to the endpoint, the inverse of `buildEndpointInput`: `--size 100
+ * --searchInput.stageIds '["S.123"]'`. Undefined when the example holds a field no parameter carries or a value
+ * the flags cannot reproduce, so help never shows a command that would send something else.
+ */
+export function getExampleArguments(endpoint: Endpoint, example: unknown): string[] | undefined {
+  if (!isRecord(example)) return undefined
+  const prefix = getHiddenWrapperPrefix(endpoint)
+  const args: string[] = []
+  const covered: Record<string, unknown> = {}
+  for (const parameter of getEndpointInputParameters(endpoint)) {
+    const path = toPath(prefix, parameter.name)
+    const value = getNestedValue(example, path)
+    if (value === undefined) continue
+    const text = [typeof value === 'string' ? value : undefined, JSON.stringify(value)].find(
+      (candidate) => candidate !== undefined && reproduces(candidate, value, parameter)
+    )
+    if (text === undefined) return undefined
+    args.push(`--${parameter.name}`, text)
+    setNestedValue(covered, path, value)
+  }
+  return args.length > 0 && isDeepStrictEqual(covered, example) ? args : undefined
+}
+
+function reproduces(text: string, value: unknown, parameter: EndpointParameter): boolean {
+  try {
+    return isDeepStrictEqual(parseParameterValue(MINIMIST_NUMBER.test(text) ? Number(text) : text, parameter), value)
+  } catch {
+    return false
+  }
 }
 
 function toPath(prefix: string[], parameterName: string): string[] {

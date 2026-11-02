@@ -5,6 +5,7 @@ import {
   UnknownParameterError,
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
+  getExampleArguments,
   type EndpointGroups,
   type CommandNode,
   withoutUploadUrls,
@@ -71,9 +72,20 @@ export async function runCli(argv: string[]): Promise<void> {
   }
 }
 
+/** Agents and people type these out of habit; they ask for help wherever they appear, as a trailing `help` word does. */
+const HELP_FLAGS = new Set(['--help', '-h'])
+
 export async function main(argv: string[]): Promise<void> {
-  const params = parseArgv(argv)
+  const optionsEnd = argv.includes('--') ? argv.indexOf('--') : argv.length
+  const helpFlag = argv.slice(0, optionsEnd).some((arg) => HELP_FLAGS.has(arg))
+  const params = parseArgv(argv.filter((arg, index) => index >= optionsEnd || !HELP_FLAGS.has(arg)))
   const words = params._.map(String)
+  // Help is checked before any command runs, so `--help` can never start one (such as an interactive sign-in).
+  if (helpFlag || words.at(-1) === 'help') {
+    await showHelp(words.at(-1) === 'help' ? words.slice(0, -1) : words, params.depth)
+    return
+  }
+
   if (words.length === 0) {
     if (params.v === true || params.version === true) {
       console.log(packageJson.version)
@@ -81,11 +93,6 @@ export async function main(argv: string[]): Promise<void> {
     }
 
     console.log(HELP_PARENT_MESSAGE)
-    return
-  }
-
-  if (words.at(-1) === 'help') {
-    await showHelp(words.slice(0, -1), params.depth)
     return
   }
 
@@ -237,7 +244,8 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
         parameters,
         endpoint.description,
         true,
-        level.subcommands
+        level.subcommands,
+        getExampleArguments(endpoint, endpoint.example)
       )
     )
     return
