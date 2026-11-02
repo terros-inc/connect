@@ -106,6 +106,20 @@ describe('sendAccount', () => {
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'jn-1' } }])
   })
 
+  // The saved link skips the lookup, so a linked account kept updating its archived job.
+  test('a linked account whose job was archived gets a new job, but only at a mapped stage', async () => {
+    const archived = { jnid: 'jn-archived', external_id: 'Account.example', is_active: false }
+    const { client, jobs } = fakeJobNimbus({ users, jobs: [archived] })
+    const { terros, updates } = fakeTerros()
+
+    await sendAccount(account('Knock', { externalLeadId: 'jn-archived' }), config, client, terros)
+    expect(jobs.size).toBe(1)
+
+    await sendAccount(account('Damage Found', { externalLeadId: 'jn-archived' }), config, client, terros)
+    expect(jobs.get('jn-1')).toMatchObject({ external_id: 'Account.example', is_active: true, status_name: 'Lead' })
+    expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'jn-1' } }])
+  })
+
   // Prevents a rate-limited create from failing the delivery when JobNimbus would accept it moments later.
   test('a create rate limited once is retried and creates one job', async () => {
     const { client, jobs, slept } = fakeJobNimbus({ users, fail: { 'POST /jobs': [{ status: 429 }] } })

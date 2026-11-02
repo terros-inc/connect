@@ -67,7 +67,12 @@ export async function sendAccount(
 
   const linkedId = account.externalLeadId || (await jobNimbus.findByExternalId(path, account.id))?.jnid
   if (linkedId) {
-    await jobNimbus.update(path, linkedId, record)
+    const updated = await jobNimbus.update(path, linkedId, record)
+    // A deleted record is only archived, so the saved link can point at a job nobody in JobNimbus sees.
+    if (account.externalLeadId && updated?.is_active === false) {
+      console.log(`JobNimbus ${recordType} ${linkedId} for account ${account.id} is archived; sending it as unlinked`)
+      return sendAccount({ ...account, externalLeadId: undefined }, scriptConfig, jobNimbus, terros)
+    }
     console.log(`Updated JobNimbus ${recordType} ${linkedId} for account ${account.id}`)
     if (account.externalLeadId) return
     await saveExternalLeadId(account, linkedId, terros)

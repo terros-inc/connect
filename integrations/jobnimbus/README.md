@@ -39,7 +39,7 @@ A job has no phone or email fields. When an install sets `contactType` and `cont
 
 ## Retries and duplicates
 
-Every record Send creates carries the Terros account ID in `external_id`. Before creating, Send looks for a record with this account's ID (`GET /jobs?filter={"must":[{"term":{"external_id":…}}]}`) and, if it finds one, updates and links that record instead. So a delivery retried after the `externalLeadId` save failed, or a later change on an account whose `externalLeadId` never reached Terros, updates the job it already has rather than creating a second one. Archived records (JobNimbus's delete sets `is_active: false`) are ignored, so an account whose job was deleted gets a new one instead of being linked back to the archived job.
+Every record Send creates carries the Terros account ID in `external_id`. Before creating, Send looks for a record with this account's ID (`GET /jobs?filter={"must":[{"term":{"external_id":…}}]}`) and, if it finds one, updates and links that record instead. So a delivery retried after the `externalLeadId` save failed, or a later change on an account whose `externalLeadId` never reached Terros, updates the job it already has rather than creating a second one. Archived records (JobNimbus's delete sets `is_active: false`) are ignored, so an account whose job was deleted gets a new one instead of being linked back to the archived job. The same goes for an account still linked to a deleted job: when the update shows the job is archived, Send treats the account as unlinked, so it gets a new job once it is at a mapped stage.
 
 Only a new record gets `status_name` and `record_type_name`; after that JobNimbus owns them and updates leave them alone.
 
