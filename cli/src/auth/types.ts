@@ -4,5 +4,5 @@ export type DeviceCodeResponse = {
   expires_in: number
   interval: number
   verification_uri: string
-  verification_uri_complete: string
+  // verification_uri_complete is left out on purpose: the CLI must never open or print the pre-filled link.
 }
