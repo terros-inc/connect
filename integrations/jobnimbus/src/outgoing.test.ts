@@ -1,5 +1,5 @@
-import type { AccountWebhookData } from '@terros-inc/sdk'
-import { sendAccount } from './outgoing.ts'
+import type { AccountWebhook, AccountWebhookData } from '@terros-inc/sdk'
+import { handler, sendAccount } from './outgoing.ts'
 import { fakeJobNimbus, fakeTerros } from './fakeJobNimbus.ts'
 
 const users = [{ id: 'user-1', email: 'rep@example.test' }]
@@ -200,5 +200,20 @@ describe('sendAccount', () => {
       expect(contacts.size).toBe(1)
       expect(jobs.get('jn-1')).toMatchObject({ primary: { id: 'jn-2' } })
     })
+  })
+})
+
+describe('handler', () => {
+  // An Account webhook without data failed every run, and each failure looked the same as a real outage.
+  test('skips an Account update without account data and says why', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const payload = { entity: 'Account', action: 'update' } as unknown as AccountWebhook
+    const config = { scriptConfig: {}, secrets: { apiKey: 'key-example' } }
+
+    await expect(handler({ runId: 'ConnectRun.example', context: { payload, config } })).resolves.toBeUndefined()
+
+    expect(warn).toHaveBeenCalledWith(
+      'Skipping JobNimbus send: the Account update payload has no account data (fields: entity, action)'
+    )
   })
 })

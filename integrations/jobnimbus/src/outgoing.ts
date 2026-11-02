@@ -17,8 +17,15 @@ export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptC
     return
   }
 
+  // Retrying a payload without data would fail the same way every time, so it is skipped. The log names the action
+  // and the fields that did arrive, which is what a responder needs to find what sent it.
   const account = payload.data
-  if (!account) throw Error('Missing account data')
+  if (!account) {
+    console.warn(
+      `Skipping JobNimbus send: the Account ${payload.action} payload has no account data (fields: ${Object.keys(payload).join(', ')})`
+    )
+    return
+  }
 
   const apiKey = input.context.config.secrets?.apiKey
   if (!apiKey) throw Error('No JobNimbus apiKey')
