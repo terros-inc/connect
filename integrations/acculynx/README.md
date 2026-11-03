@@ -22,7 +22,7 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
    - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)).
    - `accountSource` (optional): defaults to `AccuLynx`.
    - `subscriptionId`: from step 5.
-4. **Webhook URL.** `https://<terros-api>/connect/incoming/<installId>/acculynx-webhook?apiKey=<dedicated low-privilege Terros key>`. The Webhook's Terros calls run as that key, so use a key owned by a user of the install's company, made for this webhook alone and limited to `account:list` and `account:save`; it travels in the URL, so it must grant nothing else.
+4. **Webhook URL.** `https://<terros-api>/connect/incoming/<installId>/acculynx-webhook?apiKey=<dedicated low-privilege Terros key>`. The Webhook's Terros calls run as that key, so use a key owned by a user of the install's company, made for this webhook alone and limited to `account:list` and `account:save`, plus `account:add` when `requestType` is `upsert`; it travels in the URL, so it must grant nothing else.
 5. **Subscription.** Create the location's AccuLynx subscription to that URL for topic `job.milestone.current_changed` (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key), and copy the returned subscription ID into `subscriptionId`.
 
 ## Locations and API keys

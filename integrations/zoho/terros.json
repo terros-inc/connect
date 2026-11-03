@@ -32,7 +32,7 @@
         }
       ],
       "authSchema": {},
-      "permissions": [],
+      "permissions": ["account:add", "account:list", "account:save"],
       "slug": "zoho-lead-sync"
     }
   ]
