@@ -86,7 +86,7 @@
       "authSchema": {
         "apiKey": "JobNimbus API key, used to read each job back from JobNimbus"
       },
-      "permissions": [],
+      "permissions": ["account:add", "account:list", "account:manage", "account:save"],
       "slug": "jobnimbus-webhook"
     }
   ]

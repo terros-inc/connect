@@ -28,7 +28,7 @@
       "type": "incoming",
       "configSchema": [],
       "authSchema": {},
-      "permissions": ["account:list"],
+      "permissions": ["account:add", "account:list", "account:manage", "account:save"],
       "slug": "salesforce-status-sync"
     }
   ]
