@@ -23,7 +23,7 @@ JobNimbus keys expire one year after they are created, and keys created before S
 
 ## Webhook setup
 
-JobNimbus sends webhooks from Automations. For each status change Terros should follow, create an Automation (Settings > Automations) on jobs whose trigger is the status change and whose action is **Webhook**, pointing at the install's `jobnimbus-webhook` URL. Only the payload's `jnid` is used.
+JobNimbus sends webhooks from Automations. For each status change Terros should follow, create an Automation (Settings > Automations) on jobs whose trigger is the status change and whose action is **Webhook**, pointing at the install's `jobnimbus-webhook` URL. Only the payload's `jnid` is used. An Automation pointed at the `jobnimbus-send` URL instead fails every delivery with `Not a Terros Account webhook … probably reached the outgoing JobNimbus Send script through the wrong slug`: point it at `jobnimbus-webhook`.
 
 JobNimbus caps how many Automations an account can have, and every webhook Automation counts toward it. Prefer one Automation whose trigger covers all the statuses Terros maps over one per status.
 

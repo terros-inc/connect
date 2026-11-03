@@ -1,4 +1,10 @@
-import { type AccountWebhook, type AccountWebhookData, type TerrosClient, wrapConnectHandler } from '@terros-inc/sdk'
+import {
+  type AccountWebhook,
+  type AccountWebhookData,
+  PermanentError,
+  type TerrosClient,
+  wrapConnectHandler,
+} from '@terros-inc/sdk'
 import { maskEmail } from './util.ts'
 import {
   getCreateSkipReason,
@@ -11,20 +17,38 @@ import {
 import { linkPrimaryContact, syncPrimaryContact } from './contact.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptConfig>(async (input, client) => {
-  const payload = input.context.payload
-  if (payload.action === 'remove') {
-    console.log('Skipping JobNimbus send for Account remove')
-    return
-  }
-
-  const account = payload.data
-  if (!account) throw Error('Missing account data')
+  const account = getAccountToSend(input.context.payload)
+  if (!account) return
 
   const apiKey = input.context.config.secrets?.apiKey
   if (!apiKey) throw Error('No JobNimbus apiKey')
 
   await sendAccount(account, input.context.config.scriptConfig, new JobNimbusClient(apiKey), client)
 })
+
+const accountActions: readonly unknown[] = ['add', 'update', 'remove']
+
+// Terros sends this script only Account webhooks, and every add or update carries the account. Anything else, such as
+// a JobNimbus webhook posted to this script's slug, fails the same way on every run, so it is a PermanentError: it
+// still counts as a failed run but is not retried. The message names the top-level fields only, never their values.
+export function getAccountToSend(payload: unknown): AccountWebhookData | undefined {
+  const webhook = (payload ?? {}) as Partial<Record<keyof AccountWebhook, unknown>>
+  const fields = Object.keys(webhook).join(', ') || 'none'
+  if (webhook.entity !== 'Account' || !accountActions.includes(webhook.action)) {
+    throw new PermanentError(
+      `Not a Terros Account webhook (fields: ${fields}). It probably reached the outgoing JobNimbus Send script ` +
+        'through the wrong slug: JobNimbus webhooks belong at the incoming JobNimbus Webhook script.'
+    )
+  }
+  if (webhook.action === 'remove') {
+    console.log('Skipping JobNimbus send: an Account remove has no account to send')
+    return
+  }
+  if (!webhook.data) {
+    throw new PermanentError(`The Account ${webhook.action} webhook has no account data (fields: ${fields})`)
+  }
+  return webhook.data as AccountWebhookData
+}
 
 // Creates the JobNimbus record the first time a mapped account is sent and updates it after that.
 //
