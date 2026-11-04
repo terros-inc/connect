@@ -21,3 +21,11 @@ export const handler = wrapConnectHandler(async (input) => {
   if (!locationId) throw new PermanentError('scriptConfig.locationId is required')
 })
 ```
+
+### IntegrationError
+
+`IntegrationError` is a `PermanentError` the customer's side caused, so only the customer can fix it: the install's config or credentials, a payload sent to the wrong script slug, or a third party rejecting the request with a non-retryable 4xx such as bad credentials. It is not retried either, and the execution engine counts it as an integration failure: it stays visible in the run's logs and metrics but does not alarm Terros. Every other failure, a `PermanentError` or a plain `Error` included, counts as a Terros failure, so throw `IntegrationError` only when you know the cause is on the customer's side.
+
+```ts
+if (response.status === 400) throw new IntegrationError('The third party rejected the install credentials')
+```

@@ -205,13 +205,14 @@ describe('sendAccount', () => {
 
 describe('getAccountToSend', () => {
   // A JobNimbus webhook posted to this script's slug failed every run as "Missing account data", which says nothing
-  // about the wrong slug; a silent skip instead would hide it from the run failure count.
-  test('fails a JobNimbus webhook body as a permanent wrong-slug error that names its fields only', () => {
+  // about the wrong slug; a silent skip instead would hide it from the run failure count, and a PermanentError would
+  // alarm Terros for the customer's misdirected webhook.
+  test('fails a JobNimbus webhook body as a wrong-slug integration error that names its fields only', () => {
     const jobNimbusBody = { jnid: 'jn-job', type: 'job', name: 'Quinn Example', status_name: 'Lead' }
 
     expect(() => getAccountToSend(jobNimbusBody)).toThrow(
       expect.objectContaining({
-        name: 'PermanentError',
+        name: 'IntegrationError',
         message:
           'Not a Terros Account webhook (fields: jnid, type, name, status_name). It probably reached the outgoing ' +
           'JobNimbus Send script through the wrong slug: JobNimbus webhooks belong at the incoming JobNimbus Webhook script.',

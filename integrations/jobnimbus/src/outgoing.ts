@@ -1,6 +1,7 @@
 import {
   type AccountWebhook,
   type AccountWebhookData,
+  IntegrationError,
   PermanentError,
   type TerrosClient,
   wrapConnectHandler,
@@ -29,13 +30,14 @@ export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptC
 const accountActions: readonly unknown[] = ['add', 'update', 'remove']
 
 // Terros sends this script only Account webhooks, and every add or update carries the account. Anything else, such as
-// a JobNimbus webhook posted to this script's slug, fails the same way on every run, so it is a PermanentError: it
-// still counts as a failed run but is not retried. The message names the top-level fields only, never their values.
+// a JobNimbus webhook posted to this script's slug, is the customer's misdirected webhook, so it is an IntegrationError:
+// a failed run, not retried, that does not alarm Terros. An add or update without data would be a Terros bug, so it
+// stays a PermanentError. The messages name the top-level fields only, never their values.
 export function getAccountToSend(payload: unknown): AccountWebhookData | undefined {
   const webhook = (payload ?? {}) as Partial<Record<keyof AccountWebhook, unknown>>
   const fields = Object.keys(webhook).join(', ') || 'none'
   if (webhook.entity !== 'Account' || !accountActions.includes(webhook.action)) {
-    throw new PermanentError(
+    throw new IntegrationError(
       `Not a Terros Account webhook (fields: ${fields}). It probably reached the outgoing JobNimbus Send script ` +
         'through the wrong slug: JobNimbus webhooks belong at the incoming JobNimbus Webhook script.'
     )

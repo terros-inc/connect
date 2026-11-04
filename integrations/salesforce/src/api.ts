@@ -1,3 +1,4 @@
+import { IntegrationError } from '@terros-inc/sdk'
 import type { SalesforceLeadAddRequest, SalesforceLeadAddResponse } from './model'
 
 export type SalesforceApiConfig = {
@@ -52,7 +53,13 @@ async function getAccessToken(config: SalesforceApiConfig): Promise<string> {
     }),
   })
 
-  if (!response.ok) throw new Error('Error getting access token: ' + response.statusText)
+  if (!response.ok) {
+    const message = `Error getting access token: ${response.status} ${response.statusText}`
+    // A 4xx here is Salesforce rejecting the install's client credentials or connected app, which only the customer
+    // can fix; a timeout, a rate limit or a 5xx may pass on its own.
+    if (isRejectedRequest(response.status)) throw new IntegrationError(message)
+    throw new Error(message)
+  }
 
   const data = (await response.json()) as { access_token?: string; expires_in?: number }
   if (!data.access_token) throw new Error('Error getting access token: ' + JSON.stringify(data))
@@ -60,4 +67,8 @@ async function getAccessToken(config: SalesforceApiConfig): Promise<string> {
   const ttlMs = ((data.expires_in ?? 900) - 30) * 1000
   tokenCache.set(config.clientId, { accessToken: data.access_token, expiresAt: Date.now() + ttlMs })
   return data.access_token
+}
+
+function isRejectedRequest(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429
 }
