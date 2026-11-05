@@ -126,8 +126,15 @@ terros api log --companyId <companyId> [--endpoint /account/add] [--errorsOnly] 
 
 Each request includes its timestamp, endpoint, user, stored status, latency,
 error type and message, and a redacted, truncated request body. Typed errors
-are stored with status 200, so use `--errorsOnly` to find them. If `--since` is
-older than seven days, the CLI prints the effective clipped start time.
+are stored with status 200, so use `--errorsOnly` to find them. `--since`
+defaults to the last day; if it is older than seven days, the CLI prints the
+effective clipped start time. `--limit` takes 1 to 100 and defaults to 25.
+
+`terros api log` runs the `apiHistory start` query, waits for it and prints only
+the requests. Use `terros apiHistory start` instead to filter by `--userId` or to
+see the whole response. Either command waits up to two minutes; when it times
+out it prints the query ID, and `terros apiHistory status --queryId <queryId>`
+resumes it.
 
 ## Find Commands
 
@@ -189,8 +196,9 @@ terros <command> [<subcommand> ...] help
 `--help` and `-h` anywhere on the line print the same help and never run the
 command.
 
-Use `--depth` to show additional nested object type detail. The default depth is
-one layer:
+Use `--depth` with `help` to show additional nested object type detail. The
+default depth is one layer. It only changes help output: running a command with
+`--depth` fails with an unknown parameter error.
 
 ```sh
 terros <command> [<subcommand> ...] help --depth 2
@@ -205,7 +213,8 @@ terros <command> [<subcommand> ...] --name "Acme Inc." --active true
 ```
 
 Parameter values are validated based on the Terros API schema. Supported values
-include strings, numbers, booleans, arrays, and JSON objects.
+include strings, numbers, booleans, arrays, and JSON objects. Pass an array as
+one JSON value, quoted for your shell, as in the `--ids` example below.
 
 Pass `null` to clear a nullable parameter, for example `--value null`. `terros preference update` requires
 `--value` (or `value` in `--inputFile`), so clearing a preference always takes an explicit `--value null`.
@@ -215,7 +224,7 @@ Examples:
 ```sh
 terros <command> [<subcommand> ...] --count 10
 terros <command> [<subcommand> ...] --active true
-terros <command> [<subcommand> ...] --ids id_1,id_2,id_3
+terros <command> [<subcommand> ...] --ids '["id_1","id_2","id_3"]'
 terros <command> [<subcommand> ...] --metadata '{"source":"cli"}'
 ```
 
