@@ -25,3 +25,43 @@ it('accepts a three-part permission', () => {
   }
   expect(ConnectConfig.safeParse(manifest).success).toBe(true)
 })
+
+it('keeps custom field access on a string config field', () => {
+  const manifest = {
+    appId: 'App.example',
+    scripts: [
+      {
+        name: 'Sync',
+        entrypoint: 'src/sync.ts',
+        type: 'scheduled',
+        cron: '0 * * * ? *',
+        configSchema: [{ name: 'linkField', type: 'string', customFieldAccess: 'write' }],
+        authSchema: {},
+        permissions: [],
+      },
+    ],
+  }
+
+  expect(ConnectConfig.parse(manifest).scripts[0]?.configSchema).toEqual([
+    { name: 'linkField', type: 'string', customFieldAccess: 'write' },
+  ])
+})
+
+it.each(['number', 'mapping'])('rejects custom field access on a %s config field', (type) => {
+  const manifest = {
+    appId: 'App.example',
+    scripts: [
+      {
+        name: 'Sync',
+        entrypoint: 'src/sync.ts',
+        type: 'scheduled',
+        cron: '0 * * * ? *',
+        configSchema: [{ name: 'linkField', type, customFieldAccess: 'read' }],
+        authSchema: {},
+        permissions: [],
+      },
+    ],
+  }
+
+  expect(ConnectConfig.safeParse(manifest).success).toBe(false)
+})

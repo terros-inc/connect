@@ -12,12 +12,28 @@ export const ConfigMappingDataType = z.enum(['None', 'Account', 'User', 'Event']
 
 export const ConfigFieldType = z.enum(['string', 'number', 'mapping'])
 
-export const ConfigSchemaField = z.object({
+const ConfigSchemaFieldBase = z.object({
   name: z.string(),
-  type: ConfigFieldType,
   description: z.string().optional(),
   dataType: ConfigMappingDataType.optional(),
 })
+
+const CustomFieldAccess = z.enum(['read', 'write'])
+
+export const ConfigSchemaField = z.discriminatedUnion('type', [
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['string']),
+    customFieldAccess: CustomFieldAccess.optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['number']),
+    customFieldAccess: z.never().optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['mapping']),
+    customFieldAccess: z.never().optional(),
+  }),
+])
 
 export const ConfigSchema = z.array(ConfigSchemaField)
 

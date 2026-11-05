@@ -28,25 +28,81 @@
               "configSchema": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["string"]
+                        },
+                        "customFieldAccess": {
+                          "type": "string",
+                          "enum": ["read", "write"]
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     },
-                    "type": {
-                      "type": "string",
-                      "enum": ["string", "number", "mapping"]
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["number"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     },
-                    "description": {
-                      "type": "string"
-                    },
-                    "dataType": {
-                      "type": "string",
-                      "enum": ["None", "Account", "User", "Event"]
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["mapping"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": ["name", "type"],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "authSchema": {
@@ -110,25 +166,81 @@
               "configSchema": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["string"]
+                        },
+                        "customFieldAccess": {
+                          "type": "string",
+                          "enum": ["read", "write"]
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     },
-                    "type": {
-                      "type": "string",
-                      "enum": ["string", "number", "mapping"]
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["number"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     },
-                    "description": {
-                      "type": "string"
-                    },
-                    "dataType": {
-                      "type": "string",
-                      "enum": ["None", "Account", "User", "Event"]
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["mapping"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": ["name", "type"],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "authSchema": {
@@ -196,25 +308,81 @@
               "configSchema": {
                 "type": "array",
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["string"]
+                        },
+                        "customFieldAccess": {
+                          "type": "string",
+                          "enum": ["read", "write"]
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     },
-                    "type": {
-                      "type": "string",
-                      "enum": ["string", "number", "mapping"]
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["number"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     },
-                    "description": {
-                      "type": "string"
-                    },
-                    "dataType": {
-                      "type": "string",
-                      "enum": ["None", "Account", "User", "Event"]
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["mapping"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     }
-                  },
-                  "required": ["name", "type"],
-                  "additionalProperties": false
+                  ]
                 }
               },
               "authSchema": {
