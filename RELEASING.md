@@ -99,6 +99,9 @@ not to npm, and there is no staging or approval step.
 
 - In GitHub, go to **Actions → Publish Integrations** (`.github/workflows/publish-integrations.yml`), run it on
   `main`, and pick the integration.
+- Before review, run `pnpm exec terros connect validate` from the integration directory. It checks every script
+  payload against the server schema and reports all invalid fields together; `pack` and `publish` run the same check
+  automatically. For example, `configSchema` must be an array such as `[{ "name": "region", "type": "string" }]`.
 - The workflow builds the workspace and runs `pnpm run publish` (`terros connect publish`) in the integration's
   directory. It uses the workspace's own CLI, not the version on npm, so you do not need an npm release first.
 - It authenticates with the `TERROS_API_KEY` secret in the `terros` GitHub environment. That environment only allows

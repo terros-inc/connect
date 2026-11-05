@@ -19,7 +19,11 @@ const registry: CommandRegistry = {
   },
   connect: {
     description: 'connect',
-    subcommands: { pack: { description: 'pack', run }, publish: { description: 'publish', run } },
+    subcommands: {
+      pack: { description: 'pack', run },
+      publish: { description: 'publish', run },
+      validate: { description: 'validate', run },
+    },
   },
   mcp: { description: 'mcp', run, subcommands: {} },
 }
@@ -71,7 +75,7 @@ describe('matchCommand', () => {
   })
 
   it('lists built-in subcommands next to endpoints under the same word', () => {
-    expect(matchCommand(tree, registry, ['connect']).subcommands).toEqual(['greenhouse', 'pack', 'publish'])
+    expect(matchCommand(tree, registry, ['connect']).subcommands).toEqual(['greenhouse', 'pack', 'publish', 'validate'])
     expect(matchCommand(tree, registry, ['connect', 'greenhouse', 'get']).node.endpoint?.path).toBe(
       '/connect/greenhouse/get'
     )

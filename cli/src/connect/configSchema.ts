@@ -2,11 +2,12 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { CONNECT_PERMISSION_TYPES } from './permissionTypes'
 import { CONFIG_FILE_NAME } from './constants'
 
 export const ScriptType = z.enum(['incoming', 'outgoing', 'scheduled'])
 
-export const ScriptDataType = z.enum(['Account', 'Company', 'User', 'Event'])
+export const ScriptDataType = z.enum(['Account', 'Company', 'User', 'Event', 'Screenshot'])
 
 export const ConfigMappingDataType = z.enum(['None', 'Account', 'User', 'Event'])
 
@@ -34,18 +35,13 @@ export const ScriptAuth = z.record(
 
 export const UnsavedScriptBase = z.object({
   name: z.string(),
-  description: z.string().optional().meta({
+  description: z.string().max(10_000).optional().meta({
     description: 'Instructions on how to configure the script',
   }),
   entrypoint: z.string(),
   configSchema: ConfigSchema,
   authSchema: ScriptAuth,
-  // Terros skips authorizing a script whose list holds anything but colon-style permission types.
-  permissions: z.array(
-    z
-      .string()
-      .regex(/^[a-z][A-Za-z]*(:[a-z][A-Za-z]*)+$/, 'Use a colon-style Terros permission type, such as account:save')
-  ),
+  permissions: z.array(z.enum(CONNECT_PERMISSION_TYPES)),
   slug: z.string().optional().meta({
     description: 'Stable public key used in incoming webhook URLs. Generated on create when omitted.',
   }),

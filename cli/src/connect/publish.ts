@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { type AppId, type AppVersionData, TerrosClient, type VersionAddSuccess } from '@terros-inc/sdk'
+import { buildScriptPayload } from './validate'
 import { packageScripts, type ScriptZip } from './package'
 
 export async function publishConnectScripts(): Promise<void> {
@@ -78,31 +79,30 @@ async function uploadScript(
   appVersion: string,
   { script, zip }: ScriptZip
 ): Promise<void> {
-  const { size: scriptSize } = await stat(zip)
-  const data = await readFile(zip)
-  const { entrypoint, ...rest } = script
+  try {
+    const { size: scriptSize } = await stat(zip)
+    const data = await readFile(zip)
+    const res = await client.connect.script.add({
+      script: buildScriptPayload(script, appId, appVersion),
+      scriptSize,
+    })
 
-  const res = await client.connect.script.add({
-    script: {
-      ...rest,
-      appId,
-      appVersion,
-      scriptStorage: 'blob',
-    },
-    scriptSize,
-  })
+    if (!res.uploadUrl) throw new Error('Failed to create app script')
 
-  if (!res.uploadUrl) throw new Error('Failed to create app script')
+    const uploadRes = await fetch(res.uploadUrl, {
+      method: 'PUT',
+      body: data,
+      headers: {
+        'Content-Type': 'application/zip',
+        'If-None-Match': '*',
+      },
+    })
 
-  const uploadRes = await fetch(res.uploadUrl, {
-    method: 'PUT',
-    body: data,
-    headers: {
-      'Content-Type': 'application/zip',
-      'If-None-Match': '*',
-    },
-  })
-
-  if (!uploadRes.ok) throw new Error(`Failed to upload app script, ${await uploadRes.text()}`)
-  console.log(`Uploaded '${script.name}' script`)
+    if (!uploadRes.ok) throw new Error(`Failed to upload app script, ${await uploadRes.text()}`)
+    console.log(`Uploaded '${script.name}' script`)
+  } catch (error) {
+    throw new Error(
+      `terros.json script ${JSON.stringify(script.name)}: ${error instanceof Error ? error.message : error}`
+    )
+  }
 }

@@ -7,6 +7,7 @@
     "url": "https://github.com/terros-inc/connect/issues"
   },
   "dependencies": {
+    "ajv": "catalog:",
     "luxon": "catalog:",
     "minimist": "catalog:",
     "open": "catalog:",

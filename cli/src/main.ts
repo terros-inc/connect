@@ -18,7 +18,7 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
 } from './messages'
-import { loadEndpoints, loadEndpointsAfterRefresh, type SchemaStatus } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
 import { readInputFile } from './inputFile'
 import { companyScopeHint, impersonationFlagMessage } from './impersonation'
 import {
@@ -99,7 +99,7 @@ export async function main(argv: string[]): Promise<void> {
   const builtin = findBuiltin(commandRegistry, words)
   if (builtin) {
     if (!(words[0] === 'api' && words[1] === 'refresh')) {
-      await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
+      await checkBuiltinCollisions(words[0] === 'connect' ? loadPublicEndpoints : loadEndpoints, commandRegistry, words)
     }
     await builtin.run({ params, args: builtin.args })
     return
@@ -220,7 +220,7 @@ function formatLevelHelp(level: CommandLevel): string {
 async function showHelp(words: string[], requestedDepth: unknown): Promise<void> {
   const builtinHelp = formatBuiltinHelp(commandRegistry, words)
   if (builtinHelp !== undefined) {
-    await checkBuiltinCollisions(loadEndpoints, commandRegistry, words)
+    await checkBuiltinCollisions(words[0] === 'connect' ? loadPublicEndpoints : loadEndpoints, commandRegistry, words)
     console.log(builtinHelp)
     return
   }
