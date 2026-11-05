@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { type z } from 'zod'
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js'
 import { CONFIG_FILE_NAME } from './constants'
-import { ConnectConfig, type ConnectConfig as ConnectConfigData, type UnsavedScript } from './configSchema'
+import { ConnectConfig, type ConnectConfig as ConnectConfigData, UnsavedScript } from './configSchema'
 
 export const CONNECT_SCRIPT_SCHEMA_URL = 'https://docs.terros.com/openapi/connect-script.schema.json'
 
@@ -36,18 +36,20 @@ export async function validateConnectScripts(
   let schema = options.schema
 
   if (schema === undefined) {
+    let response: Response | undefined
     try {
-      const response = await (options.fetchSchema ?? fetch)(CONNECT_SCRIPT_SCHEMA_URL, {
+      response = await (options.fetchSchema ?? fetch)(CONNECT_SCRIPT_SCHEMA_URL, {
         signal: AbortSignal.timeout(3000),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      schema = (await response.json()) as JsonSchema
     } catch {
       console.warn(`Warning: could not fetch ${CONNECT_SCRIPT_SCHEMA_URL}; using the CLI schema.`)
+      response = undefined
     }
+    if (response !== undefined) schema = (await response.json()) as JsonSchema
   }
 
-  const scripts = local.success ? local.data.scripts : Array.isArray(manifest.scripts) ? manifest.scripts : []
+  const scripts = Array.isArray(manifest.scripts) ? manifest.scripts : []
   if (schema !== undefined) {
     validateAgainstServerSchema(schema, scripts, manifest.appId, packageJson.version, manifestPath, issues)
   }
@@ -71,24 +73,42 @@ function validateAgainstServerSchema(
   manifestPath: string,
   issues: Map<string, string>
 ): void {
-  const variants = Array.isArray(schema.oneOf) ? (schema.oneOf as JsonSchema[]) : []
+  if (schema === null || typeof schema !== 'object' || Array.isArray(schema)) {
+    throw new Error('Unsupported Connect script schema: expected a JSON Schema object')
+  }
+  if (!Array.isArray(schema.oneOf) || schema.oneOf.length === 0) {
+    throw new Error('Unsupported Connect script schema: expected a non-empty oneOf array')
+  }
+  const variants = schema.oneOf
   const ajv = new Ajv2020({ allErrors: true, strict: false, verbose: true })
   scripts.forEach((rawScript, index) => {
     if (rawScript === null || typeof rawScript !== 'object' || Array.isArray(rawScript)) return
-    const script = rawScript as Record<string, unknown>
+    const rawRecord = rawScript as Record<string, unknown>
+    const parsed = UnsavedScript.safeParse(rawScript)
+    const script = parsed.success ? parsed.data : rawRecord
     const variant = variants.find((candidate) => {
-      const properties = candidate.properties as Record<string, JsonSchema> | undefined
+      if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) return false
+      const properties = (candidate as JsonSchema).properties as Record<string, JsonSchema> | undefined
       const types = properties?.type?.enum
       return Array.isArray(types) && types.includes(script.type)
     })
-    if (!variant) return
+    if (!variant) {
+      if (parsed.success) {
+        throw new Error(
+          `Unsupported Connect script schema: no oneOf variant matches script type ${JSON.stringify(script.type)}`
+        )
+      }
+      return
+    }
     const validate = ajv.compile({
       ...(typeof schema.$schema === 'string' ? { $schema: schema.$schema } : {}),
       $defs: schema.$defs,
       ...variant,
     })
-    const { entrypoint: _entrypoint, ...rest } = script
-    validate({ ...rest, appId, appVersion, scriptStorage: 'blob' })
+    const payload = parsed.success
+      ? buildScriptPayload(parsed.data, appId as `App.${string}`, appVersion as string)
+      : buildMalformedScriptPayload(rawRecord, appId, appVersion)
+    validate(payload)
     for (const error of validate.errors ?? []) {
       const path = errorPath(error)
       const key = `${index}:${path}`
@@ -187,6 +207,17 @@ function example(path: string, expected: string): string {
   if (path === '.authSchema') return 'For example: "authSchema": {}.'
   if (path === '.configSchema') return 'For example: "configSchema": [{ "name": "region", "type": "string" }].'
   const field = path.match(/\.([^.[\]]+)$/)?.[1] ?? 'field'
-  const value = expected.includes('object') ? '{}' : expected.includes('array') ? '[]' : '"example"'
+  let value = '"example"'
+  if (expected.includes('object')) value = '{}'
+  else if (expected.includes('array')) value = '[]'
   return `For example: "${field}": ${value}.`
+}
+
+function buildMalformedScriptPayload(
+  script: Record<string, unknown>,
+  appId: unknown,
+  appVersion: unknown
+): Record<string, unknown> {
+  const { entrypoint: _entrypoint, ...rest } = script
+  return { ...rest, appId, appVersion, scriptStorage: 'blob' }
 }

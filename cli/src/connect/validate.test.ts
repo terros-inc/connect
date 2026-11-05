@@ -107,6 +107,30 @@ describe.sequential('Connect script validation', () => {
     expect(warning).toHaveBeenCalledOnce()
     expect(warning).toHaveBeenCalledWith(expect.stringContaining('using the CLI schema'))
   })
+
+  it('rejects a fetched schema that cannot validate the script type', async () => {
+    const directory = await integrationDirectory()
+    await writeManifest(directory, {
+      appId: 'App.example',
+      scripts: [
+        {
+          name: 'Example Sync',
+          entrypoint: 'src/outgoing.ts',
+          type: 'outgoing',
+          dataType: 'Account',
+          configSchema: [],
+          authSchema: {},
+          permissions: ['account:list'],
+        },
+      ],
+    })
+    vi.spyOn(process, 'cwd').mockReturnValue(directory)
+
+    await expect(validateConnectScripts({ schema: { oneOf: [] } })).rejects.toThrow(/Unsupported Connect script schema/)
+    await expect(
+      validateConnectScripts({ schema: { oneOf: [{ properties: { type: { enum: ['incoming'] } } }] } })
+    ).rejects.toThrow(/no oneOf variant matches script type "outgoing"/)
+  })
 })
 
 async function integrationDirectory(): Promise<string> {

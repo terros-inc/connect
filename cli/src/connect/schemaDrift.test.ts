@@ -3,6 +3,13 @@ import { CONNECT_SCRIPT_SCHEMA_URL } from './validate'
 
 const run = process.env.RUN_CONNECT_SCHEMA_DRIFT === '1' ? it : it.skip
 
+it('detects drift in schema-valued additionalProperties', () => {
+  const local = scriptSchema({ additionalProperties: { type: 'string' } })
+  const server = scriptSchema({ additionalProperties: { type: 'object' } })
+
+  expect(sharedScriptShapes(local, server)).toEqual(['outgoing.authSchema'])
+})
+
 run('keeps configSchema.json aligned with the server fields the CLI sends', async () => {
   const response = await fetch(CONNECT_SCRIPT_SCHEMA_URL)
   expect(response.ok).toBe(true)
@@ -55,7 +62,40 @@ function normalize(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => key !== 'description' && key !== 'additionalProperties')
+      .filter(
+        ([key, child]) =>
+          key !== 'description' &&
+          (key !== 'additionalProperties' || (child !== null && typeof child === 'object' && !Array.isArray(child)))
+      )
       .map(([key, child]) => [key, normalize(child)])
   )
+}
+
+function scriptSchema(authSchema: Schema): Schema {
+  return {
+    properties: {
+      scripts: {
+        items: {
+          oneOf: [
+            {
+              properties: {
+                type: { enum: ['outgoing'] },
+                authSchema,
+              },
+              required: ['type', 'authSchema'],
+            },
+          ],
+        },
+      },
+    },
+    oneOf: [
+      {
+        properties: {
+          type: { enum: ['outgoing'] },
+          authSchema,
+        },
+        required: ['type', 'authSchema'],
+      },
+    ],
+  }
 }

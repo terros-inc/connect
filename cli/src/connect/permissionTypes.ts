@@ -1,4 +1,4 @@
-// Generated from the server-owned Connect script schema. The scheduled drift test catches server additions/removals.
+// Copied from the server-owned Connect script schema; the scheduled drift test keeps this list in sync.
 export const CONNECT_PERMISSION_TYPES = [
   'account:save',
   'account:add',
