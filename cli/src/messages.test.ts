@@ -86,7 +86,8 @@ Parameters:
 Parameters:
   none
 
-Use "--depth <number>" to control nested object type detail.
+Use "--depth <number>" with help to show more nested object type detail, as in "terros report kpi help --depth 2"; running the command does not accept it.
+Pass an array as one shell-quoted JSON value, as in --ids '["id_1","id_2"]'.
 Use "--inputFile <path>" to send a JSON request body from a file ("-" for stdin); flags override its fields.`
     )
   })
@@ -105,7 +106,8 @@ Parameters:
 Parameters:
   none
 
-Use "--depth <number>" to control nested object type detail.
+Use "--depth <number>" with help to show more nested object type detail, as in "terros garden help --depth 2"; running the command does not accept it.
+Pass an array as one shell-quoted JSON value, as in --ids '["id_1","id_2"]'.
 Use "--inputFile <path>" to send a JSON request body from a file ("-" for stdin); flags override its fields.
 
 Subcommands:

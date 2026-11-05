@@ -25,7 +25,7 @@ export const apiCommands = {
   },
   log: {
     description:
-      "Recent production API requests (app, API key, Connect key, CLI) from the last 7 days, newest first. Some calls aren't logged, such as sign-in, password, token and history calls. New records appear within about 60 s. Requires internal access.",
+      "Recent production API requests (app, API key, Connect key, CLI), newest first, from the last day by default and at most the last 7 days. Some calls aren't logged, such as sign-in, password, token and history calls. New records appear within about 60 s. Requires internal access. Use `terros apiHistory start` instead to filter by user or see the whole query response.",
     parameters: apiLogParameters,
     async run({ params }: { params: ParsedArgs }): Promise<void> {
       const result = await runApiHistoryQuery(buildTerrosClient(), parseApiLogParams(params))

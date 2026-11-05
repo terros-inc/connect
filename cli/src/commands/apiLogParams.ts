@@ -22,7 +22,7 @@ export const apiLogParameters: EndpointParameter[] = [
     name: 'since',
     type: 'string',
     required: false,
-    description: 'Earliest request time (ISO 8601), clipped to the last seven days',
+    description: 'Earliest request time (ISO 8601), defaults to the last day, clipped to the last seven days',
   },
   { name: 'limit', type: 'integer', required: false, description: 'Maximum requests to return, 1-100 (default 25)' },
 ]

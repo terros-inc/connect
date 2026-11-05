@@ -4,6 +4,13 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
+### Fixed: help explains `--depth`, array flags and `terros api log`
+
+Endpoint help now says `--depth` only works with `help` (as in `terros account list help --depth 2`) and shows how to
+pass an array flag as one shell-quoted JSON value, as in `--ids '["id_1","id_2"]'`. `terros api log help` names its
+default `--since` (the last day) and says when to use `terros apiHistory start` instead. No command behaves
+differently.
+
 ### New: `--help` and `-h` work on every command, and help shows an example
 
 `terros <command> [<subcommand> ...] --help` and `-h` now print the same help as a trailing `help` and exit 0, on every
