@@ -4,6 +4,11 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
+### New: Connect manifests can declare custom-field access
+
+String config fields in `terros.json` can now include `customFieldAccess: "read"` or `"write"`. The CLI preserves the
+declaration when it publishes a manifest. Number and mapping config fields reject this key.
+
 ### Fixed: help explains `--depth`, array flags and `terros api log`
 
 Endpoint help now says `--depth` only works with `help` (as in `terros account list help --depth 2`) and shows how to
