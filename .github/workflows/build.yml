@@ -6,6 +6,11 @@ on:
       - main
   pull_request:
     types: [ opened, synchronize, ready_for_review ]
+  schedule:
+    - cron: '17 8 * * *'
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -38,5 +43,12 @@ jobs:
       - name: Test
         run: pnpm -r test
 
+      - name: Check Connect schema drift
+        if: github.event_name == 'schedule'
+        run: RUN_CONNECT_SCHEMA_DRIFT=1 pnpm --filter @terros-inc/cli exec vitest run src/connect/schemaDrift.test.ts
+
       - name: Build
         run: pnpm -r build
+
+      - name: Validate integrations
+        run: pnpm --workspace-concurrency=1 --filter './integrations/*' exec terros connect validate

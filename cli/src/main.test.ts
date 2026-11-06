@@ -1,13 +1,17 @@
 import { buildEndpointInput, getExampleArguments, parseEndpoints, type Endpoint } from '@terros-inc/mcp-core'
 import { TerrosApiError } from '@terros-inc/connect-common'
 import { main, parseArgv } from './main'
-import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints } from './loadEndpoints'
 import { loadInternalSchemaWithStatus } from './crud/internal'
 import { authCommands } from './commands/auth'
 import { clearOpenApiCache } from './cache'
 import { buildTerrosClient } from './api/query'
 
-vi.mock('./loadEndpoints', () => ({ loadEndpoints: vi.fn(), loadEndpointsAfterRefresh: vi.fn() }))
+vi.mock('./loadEndpoints', () => ({
+  loadEndpoints: vi.fn(),
+  loadEndpointsAfterRefresh: vi.fn(),
+  loadPublicEndpoints: vi.fn(),
+}))
 vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
 vi.mock('./crud/internal', () => ({ loadInternalSchemaWithStatus: vi.fn() }))
@@ -31,8 +35,10 @@ const spec = (...paths: string[]): string =>
     components: { schemas: {} },
   })
 
-const schema = (...paths: string[]) =>
+const schema = (...paths: string[]) => {
   vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
+  vi.mocked(loadPublicEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
+}
 const refreshedSchema = (...paths: string[]) =>
   vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
     endpoints: parseEndpoints(spec(...paths)),
@@ -107,6 +113,13 @@ describe('a built-in an endpoint path lands on', () => {
 })
 
 describe('a built-in nothing lands on', () => {
+  it('checks Connect commands against only the public schema', async () => {
+    schema('/garden/bed/list')
+    await main(['connect', 'publish'])
+    expect(loadPublicEndpoints).toHaveBeenCalledOnce()
+    expect(loadEndpoints).not.toHaveBeenCalled()
+  })
+
   it('runs when the schema cannot be loaded at all', async () => {
     vi.mocked(loadEndpoints).mockRejectedValue(new Error('ENOENT: terros.yml'))
     await main(['auth', 'login'])

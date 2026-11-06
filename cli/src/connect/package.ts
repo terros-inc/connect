@@ -4,8 +4,9 @@ import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { build } from 'rolldown'
+import { validateConnectScripts } from './validate'
 import { BUILD_DIR, BUNDLE_NAME, ZIP_NAME } from './constants'
-import { type ConnectConfig, readConnectConfig, type UnsavedScript } from './configSchema'
+import { type ConnectConfig, type UnsavedScript } from './configSchema'
 const execFileAsync = promisify(execFile)
 
 type ScriptBuildOptions = {
@@ -32,7 +33,7 @@ type PackageResult = {
 
 export async function packageScripts(): Promise<PackageResult> {
   const start = Date.now()
-  const config = await readConnectConfig()
+  const config = await validateConnectScripts()
   const { scripts } = config
   const builds = scripts.map((s) => getScriptBuildConfiguration(s))
   await build(builds.map((b) => b.options))

@@ -32,7 +32,7 @@ export type IncomingScript = ScriptBase & {
 
 export type OutgoingScript = ScriptBase & {
   type: 'outgoing'
-  dataType: 'Account' | 'Company' | 'User' | 'Event'
+  dataType: 'Account' | 'Company' | 'User' | 'Event' | 'Screenshot'
 }
 
 export type ScheduledScript = ScriptBase & {

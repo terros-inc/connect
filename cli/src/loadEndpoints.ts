@@ -90,6 +90,10 @@ export function loadEndpoints(): Promise<EndpointGroups> {
   })
 }
 
+export async function loadPublicEndpoints(): Promise<EndpointGroups> {
+  return loadCoreEndpoints({ bundled: async () => (await loadPublicSchema()).schema })
+}
+
 export async function loadEndpointsAfterRefresh(): Promise<{ endpoints: EndpointGroups; schemaStatus: SchemaStatus }> {
   const internal = await loadInternalSchemaWithStatus()
   if (internal.schema !== undefined) {
