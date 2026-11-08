@@ -4,12 +4,12 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
-### New: `terros apikey add` issues a restricted API key
+### New: `terros apikey restricted add` issues a restricted API key
 
-Once the API documents it, `terros apikey add` issues an API key for the acting user, `TERROS_IMPERSONATE` included,
-restricted to `--allowedPermissions` and expiring at `--expiresAt`. A list flag the API requires to be non-empty, such
-as `--allowedPermissions`, now fails before any request when it is empty, from a flag or from `--inputFile`. See
-[Issue an API Key](README.md#issue-an-api-key) for sending the key straight into a secret store.
+Once the API documents it, `terros apikey restricted add` issues an API key for the acting user, `TERROS_IMPERSONATE`
+included, restricted to `--allowedPermissions` and expiring at `--expiresAt`. The API refuses an empty or missing
+permission list, so the command cannot issue an unrestricted key. See [Issue an API Key](README.md#issue-an-api-key)
+for sending the key straight into a secret store.
 
 ### New: Connect manifests can declare custom-field access
 

@@ -65,15 +65,6 @@ export function buildEndpointInput(endpoint: Endpoint, params: ParsedArgs, base:
     setNestedValue(input, toPath(prefix, parameter.name), value)
   }
 
-  // Checked on the merged body, so a short list from `--inputFile` is refused as well as one from a flag.
-  for (const { name, minItems } of parameters) {
-    if (!minItems) continue
-    const value = getNestedValue(input, toPath(prefix, name))
-    if (Array.isArray(value) && value.length < minItems) {
-      throw new Error(`Parameter --${name} needs at least ${minItems} item(s)`)
-    }
-  }
-
   return input
 }
 

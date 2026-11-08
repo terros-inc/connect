@@ -269,12 +269,11 @@ gets `NotFound`, `NotAuthorized` or an empty list.
 
 ## Issue an API Key
 
-`terros apikey add` issues an API key owned by the acting user, so with
-`TERROS_IMPERSONATE` it is that user's key, in their company. The acting user
-needs the `apikey:manage` permission. `--allowedPermissions` and `--expiresAt`
-(UTC milliseconds) are required, and the CLI refuses an empty permission list
-before sending anything, because the API reads an empty list as every
-permission the owner has.
+`terros apikey restricted add` issues an API key owned by the acting user, so
+with `TERROS_IMPERSONATE` it is that user's key, in their company. The acting
+user needs the `apikey:manage` permission. `--allowedPermissions` (at least
+one) and `--expiresAt` (UTC milliseconds) are required, and the API refuses a
+request without them, so the command only issues restricted keys.
 
 The response is the only time the key is returned, and it goes to standard
 output only, never to standard error. Pipe it straight into a secret store
@@ -282,7 +281,7 @@ rather than printing it, for example a key restricted to `company:read` that
 expires in 7 days:
 
 ```sh
-TERROS_IMPERSONATE=U.example terros apikey add \
+TERROS_IMPERSONATE=U.example terros apikey restricted add \
   --allowedPermissions company:read \
   --expiresAt $(( ($(date +%s) + 7 * 24 * 3600) * 1000 )) \
   --description "Load test target" \

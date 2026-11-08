@@ -656,49 +656,4 @@ describe('buildEndpointInput', () => {
       )
     })
   })
-
-  describe('a list with a minimum length', () => {
-    // Shaped like `/apikey/add`, whose API reads an empty permission list as an unrestricted key.
-    const endpoint: Endpoint = {
-      path: '/apikey/add',
-      components: { schemas: {} },
-      properties: {
-        type: 'object',
-        properties: {
-          expiresAt: { type: 'integer' },
-          allowedPermissions: { type: 'array', minItems: 1, items: { type: 'string' } },
-        },
-        required: ['expiresAt', 'allowedPermissions'],
-      },
-    }
-
-    it('refuses an empty list from a flag or the base body', () => {
-      expect(() => buildEndpointInput(endpoint, { _: [], expiresAt: 1, allowedPermissions: '[]' })).toThrow(
-        'Parameter --allowedPermissions needs at least 1 item(s)'
-      )
-      expect(() => buildEndpointInput(endpoint, { _: [] }, { expiresAt: 1, allowedPermissions: [] })).toThrow(
-        '--allowedPermissions'
-      )
-    })
-
-    it('refuses an empty list whose minimum sits beside a $ref', () => {
-      const permissions = { type: 'array', items: { type: 'string' } } as const
-      const referenced: Endpoint = {
-        ...endpoint,
-        components: { schemas: { Permissions: permissions } },
-        properties: {
-          type: 'object',
-          properties: { allowedPermissions: { $ref: '#/components/schemas/Permissions', minItems: 1 } },
-        },
-      }
-      expect(() => buildEndpointInput(referenced, { _: [], allowedPermissions: '[]' })).toThrow('--allowedPermissions')
-    })
-
-    it('sends a list that is long enough', () => {
-      expect(buildEndpointInput(endpoint, { _: [], expiresAt: 1, allowedPermissions: '["company:read"]' })).toEqual({
-        expiresAt: 1,
-        allowedPermissions: ['company:read'],
-      })
-    })
-  })
 })
