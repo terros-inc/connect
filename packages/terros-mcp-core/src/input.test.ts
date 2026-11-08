@@ -681,6 +681,19 @@ describe('buildEndpointInput', () => {
       )
     })
 
+    it('refuses an empty list whose minimum sits beside a $ref', () => {
+      const permissions = { type: 'array', items: { type: 'string' } } as const
+      const referenced: Endpoint = {
+        ...endpoint,
+        components: { schemas: { Permissions: permissions } },
+        properties: {
+          type: 'object',
+          properties: { allowedPermissions: { $ref: '#/components/schemas/Permissions', minItems: 1 } },
+        },
+      }
+      expect(() => buildEndpointInput(referenced, { _: [], allowedPermissions: '[]' })).toThrow('--allowedPermissions')
+    })
+
     it('sends a list that is long enough', () => {
       expect(buildEndpointInput(endpoint, { _: [], expiresAt: 1, allowedPermissions: '["company:read"]' })).toEqual({
         expiresAt: 1,

@@ -171,6 +171,22 @@ function getSchemaDescription(schema: Schema, components: Components): string | 
   return undefined
 }
 
+/** The list minimum along a ref chain: constraints beside a `$ref` and on its target all apply, so the largest wins. */
+function getMinItems(schema: Schema, components: Components): number | undefined {
+  const seen = new Set<string>()
+  let minItems: number | undefined
+  let current: Schema | undefined = schema
+  while (current) {
+    if ('minItems' in current && typeof current.minItems === 'number') {
+      minItems = Math.max(minItems ?? 0, current.minItems)
+    }
+    if (!isRefSchema(current) || seen.has(current.$ref)) break
+    seen.add(current.$ref)
+    current = components.schemas[current.$ref.replace(/^#\/components\/schemas\//, '')]
+  }
+  return minItems
+}
+
 function flattenSchema(schema: Schema, context: FlattenContext): EndpointParameter[] {
   const resolved = resolveSchema(schema, context.components)
   const fields =
@@ -192,7 +208,7 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
   }
 
   const description = getSchemaDescription(schema, context.components)
-  const minItems = 'minItems' in resolved ? resolved.minItems : undefined
+  const minItems = getMinItems(schema, context.components)
   return [
     {
       name: context.path.join('.'),
