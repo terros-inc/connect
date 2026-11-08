@@ -6,6 +6,8 @@ export type EndpointParameter = {
   type: string
   required: boolean
   description?: string
+  /** The shortest list the API accepts, refused before sending: for some lists, such as a key's permissions, empty means "all". */
+  minItems?: number
 }
 
 export type Endpoint = {

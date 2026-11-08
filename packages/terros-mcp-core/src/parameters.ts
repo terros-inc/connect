@@ -192,12 +192,14 @@ function flattenSchema(schema: Schema, context: FlattenContext): EndpointParamet
   }
 
   const description = getSchemaDescription(schema, context.components)
+  const minItems = 'minItems' in resolved ? resolved.minItems : undefined
   return [
     {
       name: context.path.join('.'),
       type: getSchemaType(resolved, context.components, context.depth),
       required: context.required,
       ...(description ? { description } : {}),
+      ...(minItems ? { minItems } : {}),
     },
   ]
 }

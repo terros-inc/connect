@@ -58,6 +58,7 @@ export type AllOfSchema = SchemaBase & {
 export type ArraySchema = SchemaBase & {
   type: 'array'
   items: Schema
+  minItems?: number
 }
 
 export type TupleSchema = SchemaBase & {

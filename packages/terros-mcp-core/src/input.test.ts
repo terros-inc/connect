@@ -656,4 +656,36 @@ describe('buildEndpointInput', () => {
       )
     })
   })
+
+  describe('a list with a minimum length', () => {
+    // Shaped like `/apikey/add`, whose API reads an empty permission list as an unrestricted key.
+    const endpoint: Endpoint = {
+      path: '/apikey/add',
+      components: { schemas: {} },
+      properties: {
+        type: 'object',
+        properties: {
+          expiresAt: { type: 'integer' },
+          allowedPermissions: { type: 'array', minItems: 1, items: { type: 'string' } },
+        },
+        required: ['expiresAt', 'allowedPermissions'],
+      },
+    }
+
+    it('refuses an empty list from a flag or the base body', () => {
+      expect(() => buildEndpointInput(endpoint, { _: [], expiresAt: 1, allowedPermissions: '[]' })).toThrow(
+        'Parameter --allowedPermissions needs at least 1 item(s)'
+      )
+      expect(() => buildEndpointInput(endpoint, { _: [] }, { expiresAt: 1, allowedPermissions: [] })).toThrow(
+        '--allowedPermissions'
+      )
+    })
+
+    it('sends a list that is long enough', () => {
+      expect(buildEndpointInput(endpoint, { _: [], expiresAt: 1, allowedPermissions: '["company:read"]' })).toEqual({
+        expiresAt: 1,
+        allowedPermissions: ['company:read'],
+      })
+    })
+  })
 })

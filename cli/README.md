@@ -267,6 +267,32 @@ endpoints such as entitlements and feature flags; a command that takes
 staff command that is not impersonating prints a hint on standard error when it
 gets `NotFound`, `NotAuthorized` or an empty list.
 
+## Issue an API Key
+
+`terros apikey add` issues an API key owned by the acting user, so with
+`TERROS_IMPERSONATE` it is that user's key, in their company. The acting user
+needs the `apikey:manage` permission. `--allowedPermissions` and `--expiresAt`
+(UTC milliseconds) are required, and the CLI refuses an empty permission list
+before sending anything, because the API reads an empty list as every
+permission the owner has.
+
+The response is the only time the key is returned, and it goes to standard
+output only, never to standard error. Pipe it straight into a secret store
+rather than printing it, for example a key restricted to `company:read` that
+expires in 7 days:
+
+```sh
+TERROS_IMPERSONATE=U.example terros apikey add \
+  --allowedPermissions company:read \
+  --expiresAt $(( ($(date +%s) + 7 * 24 * 3600) * 1000 )) \
+  --description "Load test target" \
+  | jq -r .apiKey \
+  | aws secretsmanager put-secret-value --secret-id <secret name> --secret-string file:///dev/stdin
+```
+
+The command is not offered as a hosted MCP tool, so a key never passes through
+chat.
+
 ## Local Development
 
 Install dependencies:
