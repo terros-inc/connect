@@ -31,6 +31,7 @@ import {
 } from './commandTree'
 import { commandRegistry, getCommandGroup } from './commands'
 import { clearOpenApiCache } from './cache'
+import { signInWithSensitiveScope } from './auth/auth0'
 import { runApiHistoryQuery } from './apiHistory'
 import { buildTerrosClient } from './api/query'
 
@@ -158,7 +159,11 @@ export async function main(argv: string[]): Promise<void> {
       return
     }
   }
-  const client = buildTerrosClient()
+  // The API issues a key only to a token granting sensitive:manage, which the saved login never asks for.
+  const client =
+    endpoint.path === '/apikey/restricted/add'
+      ? buildTerrosClient({ accessToken: await signInWithSensitiveScope() })
+      : buildTerrosClient()
   let response: unknown
   try {
     response =

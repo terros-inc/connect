@@ -1,13 +1,28 @@
 import { afterEach, expect, vi } from 'vitest'
 import open from 'open'
 import { DateTime } from 'luxon'
-import { pollForToken, signInToAuth0 } from './auth0'
+import { pollForToken, signInToAuth0, signInWithSensitiveScope } from './auth0'
 
 vi.mock('open', () => ({ default: vi.fn() }))
 vi.mock('@terros-inc/connect-common/auth', () => ({
   AUTH0_CLIENT_ID: 'client-id',
   AUTH0_DOMAIN: 'https://login.example.test',
 }))
+
+const deviceCode = {
+  device_code: 'device-code',
+  user_code: 'ABCD-EFGH',
+  expires_in: 300,
+  interval: 0,
+  verification_uri: 'https://login.example.test/activate',
+  verification_uri_complete: 'https://login.example.test/activate?user_code=ABCD-EFGH',
+}
+
+/** An unsigned access token with the given scope claim; only its payload is read. */
+function accessToken(scope: string): string {
+  const encode = (value: object): string => Buffer.from(JSON.stringify(value)).toString('base64url')
+  return `${encode({ alg: 'none' })}.${encode({ scope })}.signature`
+}
 
 function tokenError(error: string, error_description?: string): Response {
   return new Response(JSON.stringify({ error, error_description }), { status: 400 })
@@ -21,14 +36,6 @@ afterEach(() => {
 describe('signInToAuth0', () => {
   // Guards against opening or printing the pre-filled link, which lets a phisher's link get approved with one click.
   it('opens and prints the sign-in page without the code and prints the code to type', async () => {
-    const deviceCode = {
-      device_code: 'device-code',
-      user_code: 'ABCD-EFGH',
-      expires_in: 300,
-      interval: 0,
-      verification_uri: 'https://login.example.test/activate',
-      verification_uri_complete: 'https://login.example.test/activate?user_code=ABCD-EFGH',
-    }
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(deviceCode)))
@@ -43,6 +50,54 @@ describe('signInToAuth0', () => {
     expect(output).toContain('ABCD-EFGH')
     expect(output).toContain('https://login.example.test/activate')
     expect(output).not.toContain('user_code=')
+  })
+})
+
+describe('signInWithSensitiveScope', () => {
+  const signIn = (token: Response): ReturnType<typeof vi.fn> => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(deviceCode)))
+      .mockResolvedValueOnce(token)
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  // Guards against a step-up that asks for a refresh token (a lasting elevated login) or prints its prompts to standard
+  // output, where they would corrupt the key piped into a secret store.
+  it('asks only for sensitive:manage and returns the token, keeping standard output clean', async () => {
+    const token = accessToken('openid sensitive:manage')
+    const fetchMock = signIn(new Response(JSON.stringify({ access_token: token })))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(signInWithSensitiveScope()).resolves.toBe(token)
+
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body)).toEqual({ client_id: 'client-id', scope: 'sensitive:manage' })
+    expect(log).not.toHaveBeenCalled()
+    const prompts = error.mock.calls.flat().join('\n')
+    expect(prompts).toContain('ABCD-EFGH')
+    expect(prompts).not.toContain(token)
+  })
+
+  // Auth0 drops a scope the application may not request; the API would then refuse without naming the scope.
+  it.each([['openid'], ['openid sensitive:manager']])(
+    'names the missing scope when the token grants %s',
+    async (scope) => {
+      signIn(new Response(JSON.stringify({ access_token: accessToken(scope) })))
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      await expect(signInWithSensitiveScope()).rejects.toThrow(/^Sign-in did not grant the sensitive:manage scope/)
+    }
+  )
+
+  it('names the scope when the sign-in request is refused', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(tokenError('invalid_scope', 'Scope not allowed')))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(signInWithSensitiveScope()).rejects.toThrow(
+      'Sign-in for the sensitive:manage scope failed: Failed to get OAuth device code: Scope not allowed'
+    )
   })
 })
 

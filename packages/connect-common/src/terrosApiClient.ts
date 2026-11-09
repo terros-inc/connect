@@ -10,6 +10,11 @@ export type TerrosClientConfig = {
   analytics?: TerrosHeaderMetadata
   /** The user to act as; defaults to `TERROS_IMPERSONATE`. An empty string acts as the signed-in user. */
   impersonateUserId?: string
+  /**
+   * A sign-in token to send instead of an API key or the saved login, for one request that needs a scope the saved
+   * login lacks. It is never saved.
+   */
+  accessToken?: string
 }
 
 const PROD_BASE_URL = 'https://api.terros.com'
@@ -65,12 +70,14 @@ export class TerrosApiClient {
     if (this.authStrategy.type === 'apikey') {
       return `${this.authStrategy.authType} ${this.authStrategy.apiKey}`
     }
+    if (this.authStrategy.type === 'bearer') return `Bearer ${this.authStrategy.accessToken}`
     const cliTokens = await getTokens()
     if (cliTokens === null) throw new AuthRequiredError('signed-out')
     return `Bearer ${cliTokens.access_token}`
   }
 
-  private determineAuthStrategy(config: Pick<TerrosClientConfig, 'apiKey' | 'authType'>): AuthStrategy {
+  private determineAuthStrategy(config: Pick<TerrosClientConfig, 'apiKey' | 'authType' | 'accessToken'>): AuthStrategy {
+    if (config.accessToken) return { type: 'bearer', accessToken: config.accessToken }
     const authType = config.authType ?? 'ApiKey'
     if (config.apiKey) return { type: 'apikey', apiKey: config.apiKey, authType }
     const apiKeyFromEnv = readProcessEnv('TERROS_API_KEY')
@@ -93,6 +100,7 @@ type AuthStrategy =
       apiKey: string
       authType: 'ApiKey' | 'ConnectKey'
     }
+  | { type: 'bearer'; accessToken: string }
   | { type: 'oauth' }
 
 function readProcessEnv(key: string): string | undefined {
