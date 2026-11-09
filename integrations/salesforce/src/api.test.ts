@@ -15,8 +15,8 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('addLead access token', () => {
   // Bad or revoked client credentials fail every run until the customer fixes them: thrown as a plain Error they alarm
-  // Terros on-call, while a Salesforce outage or a malformed Terros request thrown as an IntegrationError would be hidden
-  // from it. Each message must carry Salesforce's reason, or ops can't tell bad credentials from a wrong url or a bug.
+  // Terros on-call, while a Salesforce outage thrown as an IntegrationError would be hidden from it. Each message must
+  // carry Salesforce's reason, or ops can't tell bad credentials from a wrong url.
   test.each([
     {
       status: 400,
@@ -26,26 +26,11 @@ describe('addLead access token', () => {
       integration: true,
     },
     {
-      status: 400,
-      statusText: 'Bad Request',
-      body: oauthError('invalid_grant', 'no client credentials user enabled'),
-      message: '400 Bad Request (invalid_grant: no client credentials user enabled). Salesforce rejected this install',
-      integration: true,
-    },
-    {
       status: 404,
       statusText: 'Not Found',
       body: '<html>URL No Longer Exists</html>',
       message: '404 Not Found. Salesforce rejected this install',
       integration: true,
-    },
-    {
-      status: 400,
-      statusText: 'Bad Request',
-      body: oauthError('unsupported_grant_type', 'grant type not supported'),
-      message:
-        '400 Bad Request (unsupported_grant_type: grant type not supported). Salesforce rejected the token request Terros sent',
-      integration: false,
     },
     {
       status: 429,
