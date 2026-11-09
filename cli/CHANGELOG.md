@@ -2,7 +2,7 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
-## Unreleased
+## 3.1.0
 
 ### New: `terros api call` calls an endpoint the API schema does not list
 
@@ -18,9 +18,10 @@ the matching `terros api call` once a refreshed schema still lacks it. See
 Once the API documents it, `terros apikey restricted add` issues an API key for the acting user, `TERROS_IMPERSONATE`
 included, restricted to `--allowedPermissions` and expiring at `--expiresAt`. The API refuses an empty or missing
 permission list, so the command cannot issue an unrestricted key. The API requires the `sensitive:manage` scope for
-it, so the command first asks for a browser sign-in granting that scope, used for this one request and never saved, and
-stops with an error naming the scope if the sign-in does not grant it. See [Issue an API Key](README.md#issue-an-api-key)
-for sending the key straight into a secret store.
+it, which only a fresh sign-in gets, so the command (and `terros apikey add`, should the API document it) first asks
+for a new browser sign-in for that scope and the Terros API. That sign-in is used for this one request and never saved,
+your saved login is left as it was, and the command stops with an error naming the scope if the sign-in does not grant
+it. See [Issue an API Key](README.md#issue-an-api-key) for sending the key straight into a secret store.
 
 ### New: Connect manifests can declare custom-field access
 
