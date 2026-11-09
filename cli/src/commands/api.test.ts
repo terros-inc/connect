@@ -44,7 +44,7 @@ describe('terros api call', () => {
   const accessToken = 'saved-access-token'
   const fetch = vi.fn()
   let log: ReturnType<typeof vi.spyOn>
-  const run = (argv: string[]) => {
+  const run = (argv: string[]): Promise<void> => {
     const params = minimist(argv)
     return apiCommands.call.run({ params, args: params._.map(String) })
   }
