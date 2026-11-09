@@ -14,11 +14,10 @@ it('posts the inline body, its fields overriding the input file', () => {
   writeFileSync(file, JSON.stringify({ accountId: 'A.example', note: 'from file' }))
 
   expect(parse(['/account/note/add', '--inputFile', file, '--body', '{"note":"inline"}'])).toEqual({
-    method: 'POST',
     path: '/account/note/add',
     body: { accountId: 'A.example', note: 'inline' },
   })
-  expect(parse(['user/profile'])).toEqual({ method: 'POST', path: 'user/profile', body: {} })
+  expect(parse(['user/profile'])).toEqual({ path: 'user/profile', body: {} })
 })
 
 // Typed flags would be read as body fields and silently dropped, sending a different request than the one asked for.
@@ -34,12 +33,6 @@ it.each([['--body'], ['--body', '[1]'], ['--body', 'not json'], ['--body', '7']]
     expect(() => parse(['/account/get', ...flag])).toThrow('--body expects a JSON object')
   }
 )
-
-it('sends a GET without a body and refuses a body with it', () => {
-  expect(parse(['/openapi', '--method', 'get'])).toEqual({ method: 'GET', path: '/openapi' })
-  expect(() => parse(['/openapi', '--method', 'GET', '--body', '{}'])).toThrow('A GET request sends no body')
-  expect(() => parse(['/account/get', '--method', 'DELETE'])).toThrow('--method must be GET or POST')
-})
 
 // A full URL is still sent to the configured host, so accepting it would call a different endpoint than the one named.
 it('refuses a URL in place of a path', () => {

@@ -254,8 +254,8 @@ echo '{"accountId":"A.example"}' | terros api call /account/get --inputFile -
 
 It sends a `POST` with the `--body` JSON object, `--inputFile`'s (`-` reads
 standard input), or both, `--body` fields winning; with neither it sends `{}`.
-`--method GET` sends a `GET` with no body. Request fields go in the body, not
-in flags, since without a schema the CLI cannot tell what they are.
+Request fields go in the body, not in flags, since without a schema the CLI
+cannot tell what they are.
 
 The request goes where the other commands' requests go, with the same
 sign-in: the signed-in user (or `TERROS_API_KEY`), acting as

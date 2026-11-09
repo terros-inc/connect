@@ -11,13 +11,12 @@ import { apiCallParameters, parseApiCallParams } from './apiCallParams'
 export const apiCommands = {
   call: {
     description:
-      'Call an API endpoint by its path, including one the API schema does not list yet: `terros api call <path>`, as in `terros api call /account/get --body \'{"accountId":"A.example"}\'`. Sends the request as the signed-in user (or TERROS_API_KEY, acting as TERROS_IMPERSONATE) to the host the other commands use, TERROS_API_ENDPOINT included, prints the JSON response, and exits 1 on an HTTP, network or API error.',
+      'Call an API endpoint by its path, including one the API schema does not list yet, as in `terros api call /account/get --body \'{"accountId":"A.example"}\'`. Sends a POST as the signed-in user (or TERROS_API_KEY, acting as TERROS_IMPERSONATE) to the host the other commands use, TERROS_API_ENDPOINT included, prints the JSON response, and exits 1 on an HTTP, network or API error.',
+    arguments: '<path>',
     parameters: apiCallParameters,
     async run({ params, args }: CommandContext): Promise<void> {
-      const request = parseApiCallParams(params, args)
-      const client = buildTerrosClient()
-      const response =
-        request.method === 'GET' ? await client.get(request.path) : await client.call(request.path, request.body)
+      const { path, body } = parseApiCallParams(params, args)
+      const response = await buildTerrosClient().call(path, body)
       console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
     },
   },

@@ -8,6 +8,8 @@ export type CommandContext = {
 
 export type Subcommand = {
   description: string
+  /** Positional arguments for the usage line, such as `<path>`. */
+  arguments?: string
   parameters?: EndpointParameter[]
   run: (context: CommandContext) => Promise<void> | void
 }

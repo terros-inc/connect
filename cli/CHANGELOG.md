@@ -8,9 +8,9 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 `terros api call <path>` sends one request to any API path, with a JSON body from `--body`, `--inputFile` (`-` for
 standard input) or both, and prints the JSON response. It uses the same sign-in, `TERROS_IMPERSONATE` and
-`TERROS_API_ENDPOINT` as other commands, sends a `POST` unless `--method GET`, and exits 1 on an HTTP, network or API
-error. Before, an endpoint missing from the schema could only be called by scripting `terros auth token`. An unknown
-command now names the matching `terros api call` once a refreshed schema still lacks it. See
+`TERROS_API_ENDPOINT` as other commands, sends a `POST`, and exits 1 on an HTTP, network or API error. Before, an
+endpoint missing from the schema could only be called by scripting `terros auth token`. An unknown command now names
+the matching `terros api call` once a refreshed schema still lacks it. See
 [Call an Unlisted Endpoint](README.md#call-an-unlisted-endpoint).
 
 ### New: `terros apikey restricted add` issues a restricted API key

@@ -96,7 +96,8 @@ export function formatBuiltinHelp(registry: CommandRegistry, words: string[]): s
   }
   if (words.length !== 2 || subcommand === undefined || !Object.hasOwn(group.subcommands, subcommand)) return undefined
   const command = group.subcommands[subcommand] as Subcommand
-  return formatSubcommandParametersHelp(name, subcommand, command.parameters ?? [], command.description)
+  const usage = command.arguments === undefined ? subcommand : `${subcommand} ${command.arguments}`
+  return formatSubcommandParametersHelp(name, usage, command.parameters ?? [], command.description)
 }
 
 /** Match `words` against the endpoint tree, listing built-in commands at the levels they share with it. */
