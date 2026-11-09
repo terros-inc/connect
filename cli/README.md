@@ -240,6 +240,29 @@ terros workflow get --workflowId WF.example > workflow.json
 terros workflow update --inputFile workflow.json --dryRun
 ```
 
+## Call an Unlisted Endpoint
+
+`terros api call` sends one request to an API path, including one the API
+schema does not list (so no command exists for it), and prints the JSON
+response:
+
+```sh
+terros api call /account/get --body '{"accountId":"A.example"}'
+terros api call /account/note/add --inputFile note.json --body '{"note":"Called back"}'
+echo '{"accountId":"A.example"}' | terros api call /account/get --inputFile -
+```
+
+It sends a `POST` with the `--body` JSON object, `--inputFile`'s (`-` reads
+standard input), or both, `--body` fields winning; with neither it sends `{}`.
+Request fields go in the body, not in flags, since without a schema the CLI
+cannot tell what they are.
+
+The request goes where the other commands' requests go, with the same
+sign-in: the signed-in user (or `TERROS_API_KEY`), acting as
+`TERROS_IMPERSONATE` when set, to `TERROS_API_ENDPOINT` or production. Pass a
+path, not a URL. The command exits 1 on an HTTP, network or API error, and
+never prints the access token.
+
 ## Act as Another User
 
 Terros staff can run CLI commands as another user by setting
@@ -355,6 +378,9 @@ run:
 ```sh
 terros api refresh
 ```
+
+To call an endpoint the schema still does not list, use
+[`terros api call`](#call-an-unlisted-endpoint).
 
 If the CLI says to update, install the latest version and retry:
 
