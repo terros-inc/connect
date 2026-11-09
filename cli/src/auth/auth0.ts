@@ -5,10 +5,13 @@ import type { DeviceCodeResponse } from './types'
 
 /** The API refuses to issue an API key unless the sign-in token grants this scope. */
 const SENSITIVE_MANAGE_SCOPE = 'sensitive:manage'
+/** Auth0 issues SENSITIVE_MANAGE_SCOPE only in a token for this API. */
+const API_AUDIENCE = 'https://api.tantalim.com'
 
 export async function signInToAuth0(
   scope = 'offline_access',
-  log: (message: string) => void = console.log
+  log: (message: string) => void = console.log,
+  audience?: string
 ): Promise<TokenResponse> {
   const res = await fetch(`${AUTH0_DOMAIN}/oauth/device/code`, {
     method: 'POST',
@@ -18,6 +21,7 @@ export async function signInToAuth0(
     body: JSON.stringify({
       client_id: AUTH0_CLIENT_ID,
       scope,
+      audience,
     }),
   })
 
@@ -46,16 +50,21 @@ export async function signInToAuth0(
 }
 
 /**
- * Sign in again for a token that grants SENSITIVE_MANAGE_SCOPE, for one request. The saved login asks only for
- * offline_access, so this token is kept in memory and never saved, and without offline_access it gets no refresh token.
+ * Sign in again for a token that grants SENSITIVE_MANAGE_SCOPE, for one request. Auth0 grants that scope only to a
+ * sign-in made in the last few minutes, and a refresh does not add it back, so every such command signs in afresh.
+ * Only the access token is returned: it is kept in memory and never saved, so the saved login in auth.json stays as it
+ * was, and the refresh token Auth0 issues for offline_access is dropped.
  * Prompts go to standard error so standard output carries only the command's response, which is often piped into a
  * secret store.
  */
 export async function signInWithSensitiveScope(): Promise<string> {
-  console.error(`This command needs a fresh sign-in that grants the ${SENSITIVE_MANAGE_SCOPE} scope.`)
+  console.error(
+    `Issuing an API key needs a fresh sign-in that grants the ${SENSITIVE_MANAGE_SCOPE} scope, which your saved ` +
+      'login does not have. It is used for this one request and does not change your saved login.'
+  )
   let tokens: TokenResponse
   try {
-    tokens = await signInToAuth0(SENSITIVE_MANAGE_SCOPE, console.error)
+    tokens = await signInToAuth0(`offline_access ${SENSITIVE_MANAGE_SCOPE}`, console.error, API_AUDIENCE)
   } catch (cause) {
     throw new Error(
       `Sign-in for the ${SENSITIVE_MANAGE_SCOPE} scope failed: ${cause instanceof Error ? cause.message : cause}`,

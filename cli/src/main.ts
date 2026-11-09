@@ -75,6 +75,8 @@ export async function runCli(argv: string[]): Promise<void> {
 
 /** Agents and people type these out of habit; they ask for help wherever they appear, as a trailing `help` word does. */
 const HELP_FLAGS = new Set(['--help', '-h'])
+/** The API paths that issue an API key. */
+const SENSITIVE_PATHS = new Set(['/apikey/add', '/apikey/restricted/add'])
 
 export async function main(argv: string[]): Promise<void> {
   const optionsEnd = argv.includes('--') ? argv.indexOf('--') : argv.length
@@ -160,10 +162,9 @@ export async function main(argv: string[]): Promise<void> {
     }
   }
   // The API issues a key only to a token granting sensitive:manage, which the saved login never asks for.
-  const client =
-    endpoint.path === '/apikey/restricted/add'
-      ? buildTerrosClient({ accessToken: await signInWithSensitiveScope() })
-      : buildTerrosClient()
+  const client = SENSITIVE_PATHS.has(endpoint.path)
+    ? buildTerrosClient({ accessToken: await signInWithSensitiveScope() })
+    : buildTerrosClient()
   let response: unknown
   try {
     response =
