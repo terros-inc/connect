@@ -5,6 +5,7 @@ import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints } from '.
 import { loadInternalSchemaWithStatus } from './crud/internal'
 import { authCommands } from './commands/auth'
 import { clearOpenApiCache } from './cache'
+import { signInWithSensitiveScope } from './auth/auth0'
 import { buildTerrosClient } from './api/query'
 
 vi.mock('./loadEndpoints', () => ({
@@ -14,6 +15,7 @@ vi.mock('./loadEndpoints', () => ({
 }))
 vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
 vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
+vi.mock('./auth/auth0', () => ({ signInWithSensitiveScope: vi.fn() }))
 vi.mock('./crud/internal', () => ({ loadInternalSchemaWithStatus: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
 vi.mock('./commands/connect', () => ({
@@ -167,6 +169,24 @@ describe('an endpoint command', () => {
     expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
       company: { companyId: 'C.example', name: 'Acme Solar' },
     })
+  })
+})
+
+describe('terros apikey restricted add', () => {
+  // Guards against the step-up spreading to other commands (a browser sign-in on every call) or this call going out
+  // with the saved login, which the API refuses for key issuance.
+  it('signs in again for sensitive:manage for this command only and sends that token', async () => {
+    schema('/apikey/restricted/add', '/company/get')
+    vi.mocked(signInWithSensitiveScope).mockResolvedValue('step-up-token')
+
+    await main(['company', 'get'])
+    expect(signInWithSensitiveScope).not.toHaveBeenCalled()
+    expect(buildTerrosClient).toHaveBeenLastCalledWith()
+
+    await main(['apikey', 'restricted', 'add'])
+    expect(signInWithSensitiveScope).toHaveBeenCalledOnce()
+    expect(buildTerrosClient).toHaveBeenLastCalledWith({ accessToken: 'step-up-token' })
+    expect(call).toHaveBeenLastCalledWith('/apikey/restricted/add', expect.anything())
   })
 })
 

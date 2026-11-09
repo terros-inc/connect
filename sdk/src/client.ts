@@ -21,7 +21,7 @@ export class TerrosClient {
   readonly team: TeamClient
   readonly user: UserClient
 
-  constructor(config: TerrosClientConfig = {}) {
+  constructor(config: Omit<TerrosClientConfig, 'accessToken'> = {}) {
     const api = new TerrosApiClient({
       ...config,
       analytics: {

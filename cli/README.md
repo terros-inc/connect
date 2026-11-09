@@ -267,6 +267,40 @@ endpoints such as entitlements and feature flags; a command that takes
 staff command that is not impersonating prints a hint on standard error when it
 gets `NotFound`, `NotAuthorized` or an empty list.
 
+## Issue an API Key
+
+`terros apikey restricted add` issues an API key owned by the acting user, so
+with `TERROS_IMPERSONATE` it is that user's key, in their company. The acting
+user needs the `apikey:manage` permission. `--allowedPermissions` (at least
+one) and `--expiresAt` (UTC milliseconds) are required, and the API refuses a
+request without them, so the command only issues restricted keys.
+
+The API issues a key only to a sign-in that grants the `sensitive:manage`
+scope, which `terros auth login` does not ask for. So the command first asks
+you to sign in again in the browser for `sensitive:manage`, prompting on
+standard error, and uses that sign-in for this one request only: it is not
+saved, it gets no refresh token, and `TERROS_IMPERSONATE` and
+`TERROS_API_ENDPOINT` apply as usual. If the sign-in does not grant
+`sensitive:manage`, the command stops with an error naming the scope and sends
+nothing; the CLI's Auth0 application must be allowed to request it.
+
+The response is the only time the key is returned, and it goes to standard
+output only, never to standard error. Pipe it straight into a secret store
+rather than printing it, for example a key restricted to `company:read` that
+expires in 7 days:
+
+```sh
+TERROS_IMPERSONATE=U.example terros apikey restricted add \
+  --allowedPermissions company:read \
+  --expiresAt $(( ($(date +%s) + 7 * 24 * 3600) * 1000 )) \
+  --description "Load test target" \
+  | jq -r .apiKey \
+  | aws secretsmanager put-secret-value --secret-id <secret name> --secret-string file:///dev/stdin
+```
+
+The command is not offered as a hosted MCP tool, so a key never passes through
+chat.
+
 ## Local Development
 
 Install dependencies:

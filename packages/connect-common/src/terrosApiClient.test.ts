@@ -81,6 +81,27 @@ describe('TerrosApiClient', () => {
     )
   })
 
+  // Guards the CLI's step-up for API-key issuance: losing TERROS_IMPERSONATE would issue the key to the staff member,
+  // losing TERROS_API_ENDPOINT would send it to production, and an API key in the environment must not win.
+  it('sends a one-off access token, keeping the impersonated user and endpoint from the environment', async () => {
+    mockFetch({ type: 'success' })
+    vi.stubEnv('TERROS_API_KEY', 'env-key')
+    vi.stubEnv('TERROS_IMPERSONATE', 'U.example')
+    vi.stubEnv('TERROS_API_ENDPOINT', 'api.staging.example.test')
+    vi.mocked(getTokens).mockClear()
+
+    await new TerrosApiClient({ accessToken: 'step-up-token' }).call('apikey/restricted/add', {})
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.staging.example.test/apikey/restricted/add',
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: 'Bearer step-up-token', impersonate_user_id: 'U.example' }),
+      })
+    )
+    expect(getTokens).not.toHaveBeenCalled()
+    vi.unstubAllEnvs()
+  })
+
   it('includes analytics headers describing the platform and SDK version', async () => {
     mockFetch({ type: 'success', value: 42 })
     const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
