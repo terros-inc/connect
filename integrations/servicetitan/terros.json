@@ -25,7 +25,8 @@
         {
           "name": "serviceTitanJobId",
           "type": "string",
-          "description": "Required. Terros account text custom field ID (CF.*) storing the ServiceTitan job ID."
+          "customFieldAccess": "write",
+          "description": "Required. Terros account text custom field ID (CF.*) storing the ServiceTitan job ID. The install gets read and write access to this field even if it is role-restricted, so the user saving the install must be able to view and edit it."
         },
         {
           "name": "cancelReasonId",

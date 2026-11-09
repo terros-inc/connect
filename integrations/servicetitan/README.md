@@ -22,7 +22,7 @@ Configure the script (IDs arrive as strings; numeric IDs must be positive safe i
 | Field                         | Meaning                                                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | jobTypeId                     | Required numeric ServiceTitan job type ID                                                                           |
-| serviceTitanJobId             | Required Terros **account text custom field** ID, e.g. `CF.servicetitanjob`; must exist and be writable             |
+| serviceTitanJobId             | Required Terros **account text custom field** ID, e.g. `CF.servicetitanjob`; must exist (see grant below)           |
 | cancelReasonId                | Required numeric ServiceTitan cancellation reason ID for closer reassignment; no default                            |
 | customFieldCustomerId         | Optional numeric ServiceTitan customer custom field type ID; stores the Terros account ID and enables deduplication |
 | customFieldLocationId         | Optional numeric ServiceTitan location custom field type ID; stores the Terros account ID                           |
@@ -32,6 +32,8 @@ Configure the script (IDs arrive as strings; numeric IDs must be positive safe i
 | campaignIdCloserGen           | Optional numeric ServiceTitan fallback campaign ID                                                                  |
 | campaignIdUnknown             | Optional numeric ServiceTitan final fallback campaign ID                                                            |
 | teamToBusinessUnitMap         | Optional mapping: ServiceTitan technician team name → numeric ServiceTitan business unit ID                         |
+
+`serviceTitanJobId` declares `customFieldAccess: "write"` in `terros.json`, so saving the install grants the app's key read and write access to that one field for this install and company, even when its view and edit roles are restricted (for example Admin-only). Sales accepts the grant only when the user saving the install can view and edit the field; other users' access is unchanged. Without the grant, sales hides a restricted link from the key and the run would create a duplicate job.
 
 Configure at least one campaign applicable to every owner: Needs_Help uses setterGen if set, otherwise closerGen, otherwise unknown; other statuses use closerGen then unknown. Missing an applicable campaign throws. Unmapped technician teams use the technician's businessUnitId; absence of both throws.
 
