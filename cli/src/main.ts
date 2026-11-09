@@ -264,7 +264,7 @@ function unknownCommandMessage(words: string[], level: CommandLevel, refreshStat
     return `Unknown built-in command: terros ${words.join(' ')}. Check the built-in command names above.`
   }
   if (refreshStatus === 'available') {
-    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`.`
+    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`; to call an endpoint the schema does not list, run \`terros api call /${words.join('/')}\`.`
   }
   return `Unknown command: terros ${words.join(' ')}. The API schema could not be refreshed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
 }

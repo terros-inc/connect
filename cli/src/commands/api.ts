@@ -1,11 +1,26 @@
 import type { ParsedArgs } from 'minimist'
+import { withoutUploadUrls } from '@terros-inc/mcp-core'
 import { loadEndpointsAfterRefresh } from '../loadEndpoints'
 import { clearOpenApiCache } from '../cache'
 import { runApiHistoryQuery } from '../apiHistory'
 import { buildTerrosClient } from '../api/query'
+import type { CommandContext } from './types'
 import { apiLogParameters, parseApiLogParams } from './apiLogParams'
+import { apiCallParameters, parseApiCallParams } from './apiCallParams'
 
 export const apiCommands = {
+  call: {
+    description:
+      'Call an API endpoint by its path, including one the API schema does not list yet: `terros api call <path>`, as in `terros api call /account/get --body \'{"accountId":"A.example"}\'`. Sends the request as the signed-in user (or TERROS_API_KEY, acting as TERROS_IMPERSONATE) to the host the other commands use, TERROS_API_ENDPOINT included, prints the JSON response, and exits 1 on an HTTP, network or API error.',
+    parameters: apiCallParameters,
+    async run({ params, args }: CommandContext): Promise<void> {
+      const request = parseApiCallParams(params, args)
+      const client = buildTerrosClient()
+      const response =
+        request.method === 'GET' ? await client.get(request.path) : await client.call(request.path, request.body)
+      console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
+    },
+  },
   refresh: {
     description:
       'Refresh the cached API schema, so commands for newly added endpoints appear. The CLI also does this when a command is missing.',
