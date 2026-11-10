@@ -2,7 +2,7 @@
   "author": "Terros Inc.",
   "description": "",
   "devDependencies": {
-    "oxfmt": "0.57.0",
+    "oxfmt": "catalog:",
     "oxlint": "catalog:"
   },
   "keywords": [],

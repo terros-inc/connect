@@ -1,5 +1,5 @@
-import type { AuditProps } from '../shared'
 import type { UserId } from '../user'
+import type { AuditProps } from '../shared'
 
 export type CompanyKind = 'customer' | 'sandbox' | 'demo' | 'template' | 'development'
 export type AccessStatus = 'active' | 'suspended'

@@ -1,3 +1,4 @@
+import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
 import {
   type UserListInput,
   type UserListSuccess,
@@ -22,8 +23,6 @@ import {
   type UserManagerInput,
   type UserManagerSuccess,
 } from '../models'
-import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
-
 
 export class UserClient {
   constructor(private readonly api: TerrosApiClient) {}

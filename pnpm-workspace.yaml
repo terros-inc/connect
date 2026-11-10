@@ -21,12 +21,13 @@ catalog:
   luxon: ^3.7.2
   minimist: ^1.2.8
   open: ^11.0.0
+  oxfmt: ^0.75.0
   oxlint: ^1.72.0
   rolldown: ^1.1.5
   tsdown: ^0.22.3
   typescript: ^6.0.3
-  vitest: ^4.1.11
+  vitest: ^4.1.12
   yaml: ^2.9.0
-  zod: ^4.4.3
+  zod: ^4.6.6
 allowBuilds:
   esbuild: true

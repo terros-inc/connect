@@ -8,7 +8,7 @@ export type UnsavedAppVersion = {
   status: 'draft' | 'deployed' | 'deprecated'
   changelog?: string
   permissions?: string[]
-  cache?: {enabled: boolean; ttlSeconds: number}
+  cache?: { enabled: boolean; ttlSeconds: number }
   deployedAt?: number
 }
 

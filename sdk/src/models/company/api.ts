@@ -1,6 +1,6 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { WorkflowId } from '../account'
 import type { RoleData, UnsavedUser, UserId, UserProfileData } from '../user'
+import type { WorkflowId } from '../account'
 import type {
   AccessStatus,
   BillingMethod,

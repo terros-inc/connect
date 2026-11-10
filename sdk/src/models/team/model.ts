@@ -1,7 +1,7 @@
-import type { CustomFieldMap } from '../customFields'
-import type { LatLng } from '../location'
-import type { AuditProps } from '../shared'
 import type { RoleId, TeamId, UserData } from '../user'
+import type { AuditProps } from '../shared'
+import type { LatLng } from '../location'
+import type { CustomFieldMap } from '../customFields'
 
 export type MeetingTime = {
   day: number

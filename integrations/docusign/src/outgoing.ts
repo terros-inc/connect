@@ -147,12 +147,7 @@ function removePayloadPrefix(source: string): string {
   return source
 }
 
-function buildJwt(
-  dsAuthServer: string,
-  dsIntegrationKey: string,
-  dsUserId: string,
-  dsPrivateKey: string
-): string {
+function buildJwt(dsAuthServer: string, dsIntegrationKey: string, dsUserId: string, dsPrivateKey: string): string {
   const b64url = (b: Buffer): string => b.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   const now = Math.floor(Date.now() / 1000)
   const head = b64url(Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })))
