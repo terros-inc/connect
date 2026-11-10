@@ -55,6 +55,21 @@ publish when:
 Run `pnpm check-schema` in `cli` (after `pnpm fetch-openapi` and `pnpm -r build`) to check the live spec before you
 start the workflow.
 
+#### CLI release tracking in Linear
+
+After a successful CLI stage publish, the workflow syncs a Linear release using the version from `cli/package.json`
+and only that version's entry from `cli/CHANGELOG.md` as release notes. This happens **before npm approval**, so a
+Linear release does not mean the package is available to install. The checkout includes full git history so Linear
+can find the released issues, with no path filter that could exclude changes to the CLI's workspace dependencies.
+SDK publishes do not sync to Linear.
+
+Before this sync can work, create a scheduled production release pipeline named **CLI** in Linear under
+**Settings → Releases**, then store its **pipeline access key** (not a personal API key) as `LINEAR_ACCESS_KEY` in
+GitHub's existing `npm` environment. The workflow does not create the pipeline or the secret.
+
+Release-note preparation and Linear sync are non-blocking: a missing changelog entry or a Linear failure leaves the
+npm stage successful. Check those steps in the workflow log; npm approval is still required below.
+
 ### 3. Approve the staged version
 
 When the run succeeds, the version is only **staged**. The end of the publish step's log looks like this:

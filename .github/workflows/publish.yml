@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@739bfe42ca9233c5e6aca07c1a25a9d34aca49b0 # v6
 
@@ -42,5 +44,35 @@ jobs:
         run: pnpm -r build
 
       - name: Publish ${{ inputs.stage }}
+        id: publish
         run: pnpm stage publish --provenance
         working-directory: ${{ inputs.stage }}
+
+      - name: Prepare CLI release notes
+        id: cli-release
+        if: success() && steps.publish.outcome == 'success' && inputs.stage == 'cli'
+        continue-on-error: true
+        run: |
+          node <<'NODE'
+          const { readFileSync, writeFileSync, appendFileSync } = require('node:fs');
+          const { join } = require('node:path');
+          const { version } = JSON.parse(readFileSync('cli/package.json', 'utf8'));
+          const sections = readFileSync('cli/CHANGELOG.md', 'utf8').split(/^## /m);
+          const notes = sections.slice(1).find(section => section.split('\n', 1)[0].trim() === version);
+          if (!notes || !notes.includes('\n') || !notes.slice(notes.indexOf('\n') + 1).trim()) {
+            throw new Error(`Missing CLI changelog entry for ${version}`);
+          }
+          writeFileSync(join(process.env.RUNNER_TEMP, 'cli-release-notes.md'), `## ${notes.trim()}\n`);
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          NODE
+
+      - name: Sync CLI release to Linear
+        if: success() && steps.publish.outcome == 'success' && inputs.stage == 'cli' && steps.cli-release.outcome == 'success'
+        continue-on-error: true
+        uses: linear/linear-release-action@3b634623620454bac33390451a1dd15ba78e3dc4
+        with:
+          access_key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          name: CLI ${{ steps.cli-release.outputs.version }}
+          version: ${{ steps.cli-release.outputs.version }}
+          release_notes: ${{ runner.temp }}/cli-release-notes.md
+          timeout: 300
