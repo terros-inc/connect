@@ -55,6 +55,22 @@ describe('sendAccount', () => {
     expect(jobs.size).toBe(1)
   })
 
+  // An account created from a JobNimbus job has only resident.name, and the job's name was replaced with a placeholder.
+  test("keeps the job's name for an account that has only resident.name", async () => {
+    const existing = { jnid: 'jn-job', external_id: 'Account.example', name: 'Quinn Example' }
+    const { client, jobs } = fakeJobNimbus({ users, jobs: [existing] })
+    const { terros } = fakeTerros()
+
+    await sendAccount(
+      account('Damage Found', { externalLeadId: 'jn-job', resident: { name: 'Quinn Example' } }),
+      config,
+      client,
+      terros
+    )
+
+    expect(jobs.get('jn-job')).toMatchObject({ name: 'Quinn Example' })
+  })
+
   // Without a mapped status, or before the resident's details are in, every early door knock created a nameless job.
   test('creates nothing for an unmapped stage or missing required fields', async () => {
     const { client, calls } = fakeJobNimbus({ users })

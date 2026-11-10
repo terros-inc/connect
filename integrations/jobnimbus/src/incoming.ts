@@ -44,7 +44,8 @@ export async function receiveWebhook(
   }
   const statusName = job.status_name
 
-  const ownerId = job.owners?.[0]?.id || job.sales_rep
+  // Send writes the owner back as sales_rep, so reading another assignee here would replace the job's sales rep.
+  const ownerId = job.sales_rep || job.owners?.[0]?.id
   const ownerEmail = ownerId ? cleanNullValue((await jobNimbus.findUser({ id: ownerId }))?.email) : undefined
 
   const account = {
