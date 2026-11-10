@@ -172,22 +172,25 @@ describe('an endpoint command', () => {
   })
 })
 
-describe('terros apikey restricted add', () => {
+describe('API key issuance', () => {
   // Guards against the step-up spreading to other commands (a browser sign-in on every call) or this call going out
   // with the saved login, which the API refuses for key issuance.
-  it('signs in again for sensitive:manage for this command only and sends that token', async () => {
-    schema('/apikey/restricted/add', '/company/get')
-    vi.mocked(signInWithSensitiveScope).mockResolvedValue('step-up-token')
+  it.each([['/apikey/restricted/add'], ['/apikey/add']])(
+    'signs in again for sensitive:manage for %s only and sends that token',
+    async (path) => {
+      schema(path, '/company/get')
+      vi.mocked(signInWithSensitiveScope).mockClear().mockResolvedValue('step-up-token')
 
-    await main(['company', 'get'])
-    expect(signInWithSensitiveScope).not.toHaveBeenCalled()
-    expect(buildTerrosClient).toHaveBeenLastCalledWith()
+      await main(['company', 'get'])
+      expect(signInWithSensitiveScope).not.toHaveBeenCalled()
+      expect(buildTerrosClient).toHaveBeenLastCalledWith()
 
-    await main(['apikey', 'restricted', 'add'])
-    expect(signInWithSensitiveScope).toHaveBeenCalledOnce()
-    expect(buildTerrosClient).toHaveBeenLastCalledWith({ accessToken: 'step-up-token' })
-    expect(call).toHaveBeenLastCalledWith('/apikey/restricted/add', expect.anything())
-  })
+      await main(path.split('/').slice(1))
+      expect(signInWithSensitiveScope).toHaveBeenCalledOnce()
+      expect(buildTerrosClient).toHaveBeenLastCalledWith({ accessToken: 'step-up-token' })
+      expect(call).toHaveBeenLastCalledWith(path, expect.anything())
+    }
+  )
 })
 
 // minimist alone reads `--longitude -124.5` as the short flags -1, -2 and -4, so a map query failed as unknown flags.

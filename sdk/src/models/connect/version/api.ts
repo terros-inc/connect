@@ -1,6 +1,6 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { AppId } from '../app'
 import type { ScriptData } from '../script'
+import type { AppId } from '../app'
 import type { AppVersionData, UnsavedAppVersion } from './model'
 
 export type VersionGetInput = {

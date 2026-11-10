@@ -1,3 +1,4 @@
+import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
 import {
   type CalendarEventAddInput,
   type CalendarEventAddSuccess,
@@ -19,7 +20,6 @@ import {
   type CalendarTimeslotsInput,
   type CalendarTimeslotsSuccess,
 } from '../models'
-import { type ApiSuccess, type TerrosApiClient } from '@terros-inc/connect-common'
 
 export class CalendarEventClient {
   constructor(private readonly api: TerrosApiClient) {}

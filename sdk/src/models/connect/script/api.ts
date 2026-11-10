@@ -1,5 +1,5 @@
-import type { ScriptData, UnsavedScript } from './model'
 import type { ApiSuccess } from '@terros-inc/connect-common'
+import type { ScriptData, UnsavedScript } from './model'
 
 export type ScriptAddInput = {
   script: UnsavedScript

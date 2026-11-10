@@ -53,13 +53,7 @@ async function getAccessToken(config: SalesforceApiConfig): Promise<string> {
     }),
   })
 
-  if (!response.ok) {
-    const message = `Error getting access token: ${response.status} ${response.statusText}`
-    // A 4xx here is Salesforce rejecting the install's client credentials or connected app, which only the customer
-    // can fix; a timeout, a rate limit or a 5xx may pass on its own.
-    if (isRejectedRequest(response.status)) throw new IntegrationError(message)
-    throw new Error(message)
-  }
+  if (!response.ok) throw await accessTokenError(response)
 
   const data = (await response.json()) as { access_token?: string; expires_in?: number }
   if (!data.access_token) throw new Error('Error getting access token: ' + JSON.stringify(data))
@@ -67,6 +61,40 @@ async function getAccessToken(config: SalesforceApiConfig): Promise<string> {
   const ttlMs = ((data.expires_in ?? 900) - 30) * 1000
   tokenCache.set(config.clientId, { accessToken: data.access_token, expiresAt: Date.now() + ttlMs })
   return data.access_token
+}
+
+// A refusal (a 4xx other than a timeout or rate limit) is about this install's client credentials, url or connected app,
+// which only the customer can fix: Terros sends the same request for every install, so a Terros bug would fail them all
+// at once. Even the codes that sound like a malformed request (invalid_request, unsupported_grant_type) also come back
+// for a missing value or a connected app without the client credentials flow. Salesforce's code is kept in the message
+// to say which. A timeout, a rate limit or a 5xx may pass on its own, so it is not the customer's.
+async function accessTokenError(response: Response): Promise<Error> {
+  const { error, description } = await readOAuthError(response)
+  const reason = [error, description].filter(Boolean).join(': ')
+  const message =
+    `Error getting access token: ${response.status} ${response.statusText}`.trim() + (reason ? ` (${reason})` : '')
+
+  if (!isRejectedRequest(response.status)) return new Error(`${message}. Salesforce did not issue a token; retry later`)
+  return new IntegrationError(
+    `${message}. Salesforce rejected this install's credentials or config: the customer must check the clientId, ` +
+      'clientSecret and url secrets, and that their connected app enables the client credentials flow with a run-as user'
+  )
+}
+
+// Only Salesforce's own error code and description are kept: never the raw body, which on a wrong url can be any page.
+async function readOAuthError(response: Response): Promise<{ error?: string; description?: string }> {
+  try {
+    const body: unknown = JSON.parse(await response.text())
+    if (typeof body !== 'object' || body === null) return {}
+    const { error, error_description } = body as Record<string, unknown>
+    return { error: shortString(error), description: shortString(error_description) }
+  } catch {
+    return {}
+  }
+}
+
+function shortString(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value.slice(0, 200) : undefined
 }
 
 function isRejectedRequest(status: number): boolean {

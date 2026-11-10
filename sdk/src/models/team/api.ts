@@ -1,6 +1,6 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { CompanyId } from '../company'
 import type { TeamId, TinyUser } from '../user'
+import type { CompanyId } from '../company'
 import type { PartialTeamData, TeamData, TeamMemberData, TinyTeam, UnsavedTeam } from './model'
 
 export type TeamListInput = {

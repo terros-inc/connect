@@ -15,7 +15,7 @@ export function getAnalyticsHeaders(override: TerrosHeaderMetadata = {}): Terros
       'Terros-Platform': platform(),
       'Terros-Platform-Version': release(),
       'Terros-Bundle-Identifier': 'com.terros.sdk',
-      ...override
+      ...override,
     }
   } catch {
     return {}

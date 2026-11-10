@@ -75,6 +75,8 @@ export async function runCli(argv: string[]): Promise<void> {
 
 /** Agents and people type these out of habit; they ask for help wherever they appear, as a trailing `help` word does. */
 const HELP_FLAGS = new Set(['--help', '-h'])
+/** The API paths that issue an API key. */
+const SENSITIVE_PATHS = new Set(['/apikey/add', '/apikey/restricted/add'])
 
 export async function main(argv: string[]): Promise<void> {
   const optionsEnd = argv.includes('--') ? argv.indexOf('--') : argv.length
@@ -160,10 +162,9 @@ export async function main(argv: string[]): Promise<void> {
     }
   }
   // The API issues a key only to a token granting sensitive:manage, which the saved login never asks for.
-  const client =
-    endpoint.path === '/apikey/restricted/add'
-      ? buildTerrosClient({ accessToken: await signInWithSensitiveScope() })
-      : buildTerrosClient()
+  const client = SENSITIVE_PATHS.has(endpoint.path)
+    ? buildTerrosClient({ accessToken: await signInWithSensitiveScope() })
+    : buildTerrosClient()
   let response: unknown
   try {
     response =
@@ -264,7 +265,7 @@ function unknownCommandMessage(words: string[], level: CommandLevel, refreshStat
     return `Unknown built-in command: terros ${words.join(' ')}. Check the built-in command names above.`
   }
   if (refreshStatus === 'available') {
-    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`.`
+    return `Unknown command: terros ${words.join(' ')}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`; to call an endpoint the schema does not list, run \`terros api call /${words.join('/')}\`.`
   }
   return `Unknown command: terros ${words.join(' ')}. The API schema could not be refreshed; retry with \`terros api refresh\` or update the CLI with \`npm install -g @terros-inc/cli\`.`
 }

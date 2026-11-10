@@ -11,7 +11,7 @@ To keep the local server while you migrate, start it from CLI 2 instead: npx -y 
 
 export const commandRegistry: CommandRegistry = {
   api: {
-    description: 'Inspect API usage',
+    description: 'Call the API directly and inspect its usage',
     subcommands: apiCommands,
   },
   auth: {

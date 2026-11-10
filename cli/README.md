@@ -240,6 +240,29 @@ terros workflow get --workflowId WF.example > workflow.json
 terros workflow update --inputFile workflow.json --dryRun
 ```
 
+## Call an Unlisted Endpoint
+
+`terros api call` sends one request to an API path, including one the API
+schema does not list (so no command exists for it), and prints the JSON
+response:
+
+```sh
+terros api call /account/get --body '{"accountId":"A.example"}'
+terros api call /account/note/add --inputFile note.json --body '{"note":"Called back"}'
+echo '{"accountId":"A.example"}' | terros api call /account/get --inputFile -
+```
+
+It sends a `POST` with the `--body` JSON object, `--inputFile`'s (`-` reads
+standard input), or both, `--body` fields winning; with neither it sends `{}`.
+Request fields go in the body, not in flags, since without a schema the CLI
+cannot tell what they are.
+
+The request goes where the other commands' requests go, with the same
+sign-in: the signed-in user (or `TERROS_API_KEY`), acting as
+`TERROS_IMPERSONATE` when set, to `TERROS_API_ENDPOINT` or production. Pass a
+path, not a URL. The command exits 1 on an HTTP, network or API error, and
+never prints the access token.
+
 ## Act as Another User
 
 Terros staff can run CLI commands as another user by setting
@@ -276,13 +299,18 @@ one) and `--expiresAt` (UTC milliseconds) are required, and the API refuses a
 request without them, so the command only issues restricted keys.
 
 The API issues a key only to a sign-in that grants the `sensitive:manage`
-scope, which `terros auth login` does not ask for. So the command first asks
-you to sign in again in the browser for `sensitive:manage`, prompting on
-standard error, and uses that sign-in for this one request only: it is not
-saved, it gets no refresh token, and `TERROS_IMPERSONATE` and
+scope, which `terros auth login` does not ask for. Auth0 grants that scope only
+to a sign-in from the last few minutes, and refreshing a sign-in does not add it
+back. So the command first explains why and asks you to sign in again in the
+browser, for `offline_access sensitive:manage` and the Terros API
+(`https://api.tantalim.com`), prompting on standard error. It uses that sign-in
+for this one request only: it is kept in memory, not saved, and your saved login
+from `terros auth login` stays as it was. `TERROS_IMPERSONATE` and
 `TERROS_API_ENDPOINT` apply as usual. If the sign-in does not grant
 `sensitive:manage`, the command stops with an error naming the scope and sends
-nothing; the CLI's Auth0 application must be allowed to request it.
+nothing; the CLI's Auth0 application must be allowed to request it. The API
+also requires `sensitive:manage` for `/apikey/add`, so if that path is ever
+offered as `terros apikey add`, it signs in the same way.
 
 The response is the only time the key is returned, and it goes to standard
 output only, never to standard error. Pipe it straight into a secret store
@@ -355,6 +383,9 @@ run:
 ```sh
 terros api refresh
 ```
+
+To call an endpoint the schema still does not list, use
+[`terros api call`](#call-an-unlisted-endpoint).
 
 If the CLI says to update, install the latest version and retry:
 

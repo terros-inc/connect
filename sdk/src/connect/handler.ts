@@ -30,9 +30,11 @@ type WrappedHandler<Input, Result, ScriptConfig extends ConnectScriptConfig = Re
   input: ConnectExecutionInput<Input, ScriptConfig>
 ) => Promise<Result>
 
-export function wrapConnectHandler<Input, Result = void, ScriptConfig extends ConnectScriptConfig = Record<string, string>>(
-  handler: ConnectHandlerFunction<Input, Result, ScriptConfig>
-): WrappedHandler<Input, Result, ScriptConfig> {
+export function wrapConnectHandler<
+  Input,
+  Result = void,
+  ScriptConfig extends ConnectScriptConfig = Record<string, string>,
+>(handler: ConnectHandlerFunction<Input, Result, ScriptConfig>): WrappedHandler<Input, Result, ScriptConfig> {
   return async (input) => {
     const auth = input.context.config.authorization
     const authType = input.context.config.authType
