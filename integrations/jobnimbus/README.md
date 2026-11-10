@@ -31,7 +31,7 @@ Set `workflowId`, and `requestType`: `update` moves only accounts already linked
 
 ## Webhook authentication
 
-JobNimbus Automation webhooks are not signed, and Connect gives the script only the request body, so the URL is the only thing a sender needs. The Webhook therefore treats an event as a hint: it takes only `jnid` from the body and reads the job back with the install's key, then uses JobNimbus's current status, name, address, owner and linked account (`external_id`), never the body's. A forged event can at most re-apply a real job's current status, which a genuine event would do anyway; in `upsert` mode it can create the Terros account for a real, unlinked job early. A `jnid` the key can't read is logged and ignored.
+JobNimbus Automation webhooks are not signed, and Connect gives the script only the request body, so the URL is the only thing a sender needs. The Webhook therefore treats an event as a hint: it takes only `jnid` from the body and reads the job back with the install's key, then uses JobNimbus's current status, name, address, owner (the job's sales rep, or its first assignee when it has none) and linked account (`external_id`), never the body's. A forged event can at most re-apply a real job's current status, which a genuine event would do anyway; in `upsert` mode it can create the Terros account for a real, unlinked job early. A `jnid` the key can't read is logged and ignored.
 
 ## Primary contact
 

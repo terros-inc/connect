@@ -73,6 +73,20 @@ describe('receiveWebhook', () => {
     expect(upserts).toHaveLength(1)
   })
 
+  // Send writes the owner back as sales_rep, so taking another assignee as owner replaced the job's sales rep.
+  test("takes the account owner from the job's sales rep before its other assignees", async () => {
+    const assignee = { id: 'user-2', email: 'office@example.test' }
+    const { client } = fakeJobNimbus({
+      jobs: [{ ...job, sales_rep: 'user-1', owners: [{ id: 'user-2' }] }],
+      users: [...users, assignee],
+    })
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook({ jnid: 'jn-job' }, config, client, terros)
+
+    expect(upserts[0]).toMatchObject({ account: { owner: { email: 'rep@example.test' } } })
+  })
+
   // Prevents an expired key from looking like an unknown job and silently dropping every real status change.
   test('fails a delivery loudly when JobNimbus rejects the key', async () => {
     const { client } = fakeJobNimbus({ jobs: [job], fail: { 'GET /jobs/jn-job': [{ status: 403 }] } })

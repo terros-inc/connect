@@ -62,7 +62,8 @@ function toJobNimbusJob(
   const lastName = resident.lastName || ''
   const displayName = `${firstName} ${lastName}`.trim()
   return removeUndefinedValues({
-    name: displayName || resident.businessName || `Terros Account ${account.id}`,
+    // An account created from a JobNimbus job has only resident.name, so without it the job's own name was replaced.
+    name: displayName || resident.name || resident.businessName || `Terros Account ${account.id}`,
     description: account.notes?.[0]?.text,
     external_id: account.id,
     address_line1: address?.line1,
