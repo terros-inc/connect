@@ -58,17 +58,17 @@ start the workflow.
 #### CLI release tracking in Linear
 
 After a successful CLI stage publish, the workflow syncs a Linear release using the version from `cli/package.json`
-and only that version's entry from `cli/CHANGELOG.md` as release notes. This happens **before npm approval**, so a
-Linear release does not mean the package is available to install. The checkout includes full git history so Linear
-can find the released issues, with no path filter that could exclude changes to the CLI's workspace dependencies.
-SDK publishes do not sync to Linear.
+and lets Linear autogenerate the release notes. This happens **before npm approval**, so a Linear release does not
+mean the package is available to install. The checkout uses the default shallow depth; the Linear release CLI
+deepens history as needed to find the release baseline. There is no path filter that could exclude changes to the
+CLI's workspace dependencies. SDK publishes do not sync to Linear.
 
 Before this sync can work, create a scheduled production release pipeline named **CLI** in Linear under
 **Settings → Releases**, then store its **pipeline access key** (not a personal API key) as `LINEAR_ACCESS_KEY` in
 GitHub's existing `npm` environment. The workflow does not create the pipeline or the secret.
 
-Release-note preparation and Linear sync are non-blocking: a missing changelog entry or a Linear failure leaves the
-npm stage successful. Check those steps in the workflow log; npm approval is still required below.
+Version reading and Linear sync are non-blocking: a failure in either step leaves the npm stage successful. Check
+those steps in the workflow log; npm approval is still required below.
 
 ### 3. Approve the staged version
 
