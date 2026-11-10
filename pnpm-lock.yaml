@@ -191,9 +191,6 @@ catalogs:
     open:
       specifier: ^11.0.0
       version: 11.0.0
-    oxfmt:
-      specifier: ^0.57.0
-      version: 0.57.0
     oxlint:
       specifier: ^1.72.0
       version: 1.72.0
@@ -221,7 +218,7 @@ importers:
   .:
     devDependencies:
       oxfmt:
-        specifier: 'catalog:'
+        specifier: 0.57.0
         version: 0.57.0
       oxlint:
         specifier: 'catalog:'
