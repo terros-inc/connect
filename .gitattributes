@@ -1,0 +1,4 @@
+# CLI PRs each add an entry to the same changelog section; keep both sides' lines instead of conflicting on rebase.
+# A union merge can drop the blank line between two new entries (`pnpm format` restores it) and keeps both
+# versions of a line that two branches reworded, so read the section after a rebase.
+cli/CHANGELOG.md merge=union
