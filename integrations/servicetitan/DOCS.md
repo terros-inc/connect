@@ -10,7 +10,7 @@ Sends Terros consultation appointments to ServiceTitan. When a consultation is b
    - `clientId`: the OAuth client ID
    - `clientSecret`: the OAuth client secret
    - `tenantId`: your numeric ServiceTitan tenant ID
-3. In Terros, create an account text custom field to hold the ServiceTitan job link.
+3. In Terros, create an account text custom field to hold the ServiceTitan job link. It can be restricted to certain roles, such as Admin: the install is given read and write access to this one field, so the person saving the install must be able to view and edit it.
 4. Fill in the script settings. ServiceTitan IDs are entered as numbers.
 
 | Setting                         | Required | What it does                                                                                      |

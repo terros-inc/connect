@@ -1,3 +1,4 @@
+import manifest from '../terros.json' with { type: 'json' }
 import {
   determineCampaignId,
   parseJobLink,
@@ -384,6 +385,28 @@ it('reads a legacy bare numeric account link and rewrites it with the tenant pre
   expect(await f.run()).toEqual({ kind: 'updated', changes: ['account custom field', 'event sourceId'] })
   expect(f.stWrites()).toEqual([])
   expect(f.account.customFields!['CF.servicetitanjob']).toBe(f.link(job.id))
+})
+
+// Sales hides a role-restricted field from a Connect key unless the install's manifest declares access to it, and a
+// hidden link looks like an unlinked account, so the app would create a duplicate job on every sync.
+it('reads an Admin-only account link through the manifest grant instead of creating a duplicate job', async () => {
+  const f = fixture()
+  await f.run()
+  const job = f.jobs()[0]!
+  const restricted = 'CF.servicetitanjob'
+  const granted = manifest.scripts[0]!.configSchema.filter(
+    (field) => 'customFieldAccess' in field && field.customFieldAccess === 'write'
+  ).map((field) => f.config[field.name as keyof typeof f.config])
+  f.ports.readAccount = async () => {
+    const account = structuredClone(f.account)
+    if (!granted.includes(restricted)) delete account.customFields![restricted]
+    return account
+  }
+  f.event.sourceId = undefined
+  f.fake.calls.length = 0
+  expect(await f.run()).toEqual({ kind: 'updated', changes: ['event sourceId'] })
+  expect(f.stWrites()).toEqual([])
+  expect(f.jobs()).toEqual([job])
 })
 
 // A malformed link used to fall through to creating a new job on every sync.
