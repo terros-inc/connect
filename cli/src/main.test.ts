@@ -46,10 +46,10 @@ const refreshedSchema = (...paths: string[]) =>
     endpoints: parseEndpoints(spec(...paths)),
     schemaStatus: 'available',
   })
-const schemaWithParameter = (path: string, parameter: string) => {
+const schemaWithParameter = (path: string, parameter: string, property: object = { type: 'string' }) => {
   const document = JSON.parse(spec(path))
   document.paths[path].post.requestBody.content['application/json'].schema.properties = {
-    [parameter]: { type: 'string' },
+    [parameter]: property,
   }
   return JSON.stringify(document)
 }
@@ -317,6 +317,75 @@ describe('parseArgv', () => {
       v: true,
       3: true,
     })
+  })
+})
+
+describe('extra words after an array flag', () => {
+  let stderr: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const endpoints = parseEndpoints(
+      schemaWithParameter('/search', 'scopes', { type: 'array', items: { type: 'string' } })
+    )
+    vi.mocked(loadEndpoints).mockResolvedValue(endpoints)
+    vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({ endpoints, schemaStatus: 'available' })
+  })
+
+  afterEach(() => stderr.mockRestore())
+
+  it.each([
+    ['--scopes', 'Calendar', 'Account'],
+    ['--scopes=Calendar', 'Account'],
+    ['--scopes', 'Calendar', 'Account', 'Note', '--size', '5'],
+  ])('suggests one JSON argument instead of an unknown command for %j', async (...args) => {
+    await main(['search', ...args])
+
+    const values = args.includes('Note') ? '["Calendar","Account","Note"]' : '["Calendar","Account"]'
+    expect(stderr).toHaveBeenCalledExactlyOnceWith(`--scopes takes a JSON array; pass --scopes '${values}'`)
+    expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
+    expect(call).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('uses the schema flag name and preserves quotes and numeric-looking words', async () => {
+    vi.mocked(loadEndpoints).mockResolvedValue(
+      parseEndpoints(schemaWithParameter('/garden/bed/list', 'tags', { type: 'array', items: { type: 'string' } }))
+    )
+    await main(['garden', 'bed', 'list', '--tags', '001', 'a"b', "it's"])
+
+    expect(stderr).toHaveBeenCalledExactlyOnceWith(
+      `--tags takes a JSON array; pass --tags '["001","a\\"b","it'\\''s"]'`
+    )
+    expect(call).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+  })
+
+  it.each([
+    ['missing', '--scopes', 'Calendar', 'Account'],
+    ['search', 'missing', '--scopes', 'Calendar', 'Account'],
+    ['search', '--query', 'Calendar', 'Account'],
+    ['search', '--scopes', 'Calendar', '--query', 'example', 'Account'],
+    ['search', '--scopes', '["Calendar"]', 'Account'],
+    ['search', '--', '--scopes', 'Calendar', 'Account'],
+  ])('keeps the unknown-command message when words do not follow an array flag: %j', async (...args) => {
+    await main(args)
+
+    const words = parseArgv(args)._.join(' ')
+    expect(stderr).toHaveBeenCalledExactlyOnceWith(
+      `Unknown command: terros ${words}. The refreshed API schema does not include it; check whether the endpoint is deployed and available to your account. For a manual schema retry, run \`terros api refresh\`; to call an endpoint the schema does not list, run \`terros api call /${words.replaceAll(' ', '/')}\`.`
+    )
+    expect(loadEndpointsAfterRefresh).toHaveBeenCalledOnce()
+    expect(call).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+  })
+
+  it('still sends a JSON array to the endpoint', async () => {
+    await main(['search', '--scopes', '["Calendar","Account"]'])
+
+    expect(call).toHaveBeenCalledWith('/search', { scopes: ['Calendar', 'Account'] })
+    expect(stderr).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
   })
 })
 

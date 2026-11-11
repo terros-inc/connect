@@ -98,6 +98,6 @@ export function formatSubcommandParametersHelp(
 }
 
 /** Quote an argument for a POSIX shell, leaving plain words such as `--size` and `100` bare. */
-function quoteShellArgument(argument: string): string {
+export function quoteShellArgument(argument: string): string {
   return /^[\w.,:@/+=-]+$/.test(argument) ? argument : `'${argument.replaceAll("'", `'\\''`)}'`
 }

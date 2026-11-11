@@ -17,6 +17,7 @@ import {
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
+  quoteShellArgument,
 } from './messages'
 import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
 import { readInputFile } from './inputFile'
@@ -108,9 +109,9 @@ export async function main(argv: string[]): Promise<void> {
     return
   }
 
-  let { level, refreshStatus } = await loadCommandLevelWithRefresh(words)
+  let { level, refreshStatus } = await loadCommandLevelWithRefresh(words, argv)
   if (level.unmatched.length > 0) {
-    console.error(unknownCommandMessage(words, level, refreshStatus))
+    console.error(arrayFlagHint(argv, level) ?? unknownCommandMessage(words, level, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -202,12 +203,15 @@ async function loadCommandLevel(
   return matchCommand(tree, commandRegistry, words)
 }
 
-async function loadCommandLevelWithRefresh(words: string[]): Promise<{
+async function loadCommandLevelWithRefresh(
+  words: string[],
+  argv: string[] = []
+): Promise<{
   level: CommandLevel
   refreshStatus?: SchemaStatus
 }> {
   const level = await loadCommandLevel(words)
-  if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words, level)) return { level }
+  if (level.unmatched.length === 0 || isLikelyBuiltinTypo(words, level) || arrayFlagHint(argv, level)) return { level }
 
   await clearOpenApiCache()
   const refreshed = await loadEndpointsAfterRefresh()
@@ -258,6 +262,27 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   }
 
   console.log(formatLevelHelp(level))
+}
+
+function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined {
+  if (!level.node.endpoint || level.unmatched.length === 0) return undefined
+  const parameters = getEndpointInputParameters(level.node.endpoint)
+  for (const [index, arg] of argv.entries()) {
+    if (arg === '--') break
+    if (!arg.startsWith('--')) continue
+    const [flag, ...assigned] = arg.split('=')
+    const name = flag?.slice(2)
+    if (!parameters.some((parameter) => parameter.name === name && parameter.type.endsWith('[]'))) continue
+    if (parseArgv(argv.slice(0, index))._.length !== level.words.length) continue
+    const values = assigned.length > 0 ? [assigned.join('=')] : []
+    for (const value of argv.slice(index + 1)) {
+      if (value.startsWith('-')) break
+      values.push(value)
+    }
+    if (values.length < 2 || values[0]?.trim().startsWith('[')) continue
+    return `${flag} takes a JSON array; pass ${flag} ${quoteShellArgument(JSON.stringify(values))}`
+  }
+  return undefined
 }
 
 function unknownCommandMessage(words: string[], level: CommandLevel, refreshStatus?: SchemaStatus): string {
