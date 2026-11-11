@@ -320,6 +320,11 @@ function getStringLiteral(type: string): string | undefined {
   }
 }
 
+export function getStringLiteralValues(type: string): string[] | undefined {
+  const values = splitTopLevelUnion(type).map(getStringLiteral)
+  return values.every((value) => value !== undefined) ? values : undefined
+}
+
 function matchesStringLiteral(value: unknown, literal: string): boolean {
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return false
   const text = String(value)
@@ -351,8 +356,6 @@ function parseUnionValue(value: unknown, types: string[], parameterName: string)
     throw new Error(`Parameter --${parameterName} must be one of: ${literals.join(', ')}; got ${formatReceived(value)}`)
   }
 
-  const errors: string[] = []
-
   // Try exact string literals first, so `Warn` matches the literal "Warn" rather than a `string[]` member, then
   // a list or object member when the value already looks like one, then the scalar members in the order the
   // schema lists them, and other lists and objects last.
@@ -362,14 +365,23 @@ function parseUnionValue(value: unknown, types: string[], parameterName: string)
   for (const { itemType } of ranked) {
     try {
       return parseValue(value, itemType, parameterName)
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error))
+    } catch {
+      continue
     }
   }
 
   throw new Error(
-    `Parameter --${parameterName} does not match any supported type: ${types.join(', ')}. ${errors.at(-1)}`
+    `Parameter ${JSON.stringify(parameterName)} does not match any supported type. Expected: ${formatUnionOptions(types)}; got ${formatReceived(value)}`
   )
+}
+
+function formatUnionOptions(types: string[]): string {
+  const literals = types.map(getStringLiteral).filter((value) => value !== undefined)
+  const options = types
+    .filter((type) => getStringLiteral(type) === undefined)
+    .map((type) => (type.startsWith('{') ? `object ${type}` : type))
+  if (literals.length > 0) options.push(`one of: ${literals.join(', ')}`)
+  return options.join('; ')
 }
 
 const SCALAR_TYPES = new Set(['string', 'integer', 'number', 'boolean'])

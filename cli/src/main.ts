@@ -6,6 +6,7 @@ import {
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
   getExampleArguments,
+  getStringLiteralValues,
   type EndpointGroups,
   type CommandNode,
   withoutUploadUrls,
@@ -272,7 +273,8 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
     if (!arg.startsWith('--')) continue
     const [flag, ...assigned] = arg.split('=')
     const name = flag?.slice(2)
-    if (!parameters.some((parameter) => parameter.name === name && parameter.type.endsWith('[]'))) continue
+    const parameter = parameters.find((parameter) => parameter.name === name && parameter.type.endsWith('[]'))
+    if (!parameter) continue
     if (parseArgv(argv.slice(0, index))._.length !== level.words.length) continue
     const values = assigned.length > 0 ? [assigned.join('=')] : []
     for (const value of argv.slice(index + 1)) {
@@ -280,7 +282,14 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
       values.push(value)
     }
     if (values.length < 2 || values[0]?.trim().startsWith('[')) continue
-    return `${flag} takes a JSON array; pass ${flag} ${quoteShellArgument(JSON.stringify(values))}`
+    const hint = `${flag} takes comma-separated values; pass ${flag} ${quoteShellArgument(values.join(','))}`
+    const itemType = parameter.type.slice(0, -2)
+    const allowed = getStringLiteralValues(
+      itemType.startsWith('(') && itemType.endsWith(')') ? itemType.slice(1, -1) : itemType
+    )
+    if (!allowed) return hint
+    const invalid = values.flatMap((value) => value.split(',')).filter((value) => !allowed.includes(value))
+    return `${hint}. Allowed values: ${allowed.join(', ')}${invalid.length > 0 ? `. Invalid values: ${invalid.join(', ')}` : ''}`
   }
   return undefined
 }

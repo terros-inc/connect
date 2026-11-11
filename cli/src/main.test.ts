@@ -37,16 +37,16 @@ const spec = (...paths: string[]): string =>
     components: { schemas: {} },
   })
 
-const schema = (...paths: string[]) => {
+const schema = (...paths: string[]): void => {
   vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
   vi.mocked(loadPublicEndpoints).mockImplementation(async () => parseEndpoints(spec(...paths)))
 }
-const refreshedSchema = (...paths: string[]) =>
+const refreshedSchema = (...paths: string[]): typeof loadEndpointsAfterRefresh =>
   vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({
     endpoints: parseEndpoints(spec(...paths)),
     schemaStatus: 'available',
   })
-const schemaWithParameter = (path: string, parameter: string, property: object = { type: 'string' }) => {
+const schemaWithParameter = (path: string, parameter: string, property: object = { type: 'string' }): string => {
   const document = JSON.parse(spec(path))
   document.paths[path].post.requestBody.content['application/json'].schema.properties = {
     [parameter]: property,
@@ -338,11 +338,11 @@ describe('extra words after an array flag', () => {
     ['--scopes', 'Calendar', 'Account'],
     ['--scopes=Calendar', 'Account'],
     ['--scopes', 'Calendar', 'Account', 'Note', '--size', '5'],
-  ])('suggests one JSON argument instead of an unknown command for %j', async (...args) => {
+  ])('suggests one comma-separated argument instead of an unknown command for %j', async (...args) => {
     await main(['search', ...args])
 
-    const values = args.includes('Note') ? '["Calendar","Account","Note"]' : '["Calendar","Account"]'
-    expect(stderr).toHaveBeenCalledExactlyOnceWith(`--scopes takes a JSON array; pass --scopes '${values}'`)
+    const values = args.includes('Note') ? 'Calendar,Account,Note' : 'Calendar,Account'
+    expect(stderr).toHaveBeenCalledExactlyOnceWith(`--scopes takes comma-separated values; pass --scopes ${values}`)
     expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
     expect(call).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
@@ -355,8 +355,37 @@ describe('extra words after an array flag', () => {
     await main(['garden', 'bed', 'list', '--tags', '001', 'a"b', "it's"])
 
     expect(stderr).toHaveBeenCalledExactlyOnceWith(
-      `--tags takes a JSON array; pass --tags '["001","a\\"b","it'\\''s"]'`
+      `--tags takes comma-separated values; pass --tags '001,a"b,it'\\''s'`
     )
+    expect(call).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+  })
+
+  it.each([
+    [['Calendar', 'Account'], ''],
+    [['Calendar', 'Unknown', 'Other'], '. Invalid values: Unknown, Other'],
+    [['Calendar,Account', 'Unknown'], '. Invalid values: Unknown'],
+  ])('lists enum choices and identifies invalid array items for %j', async (values, invalid) => {
+    const document = JSON.parse(
+      schemaWithParameter('/search', 'scopes', {
+        type: 'array',
+        items: { $ref: '#/components/schemas/Scope' },
+      })
+    )
+    document.components.schemas.Scope = {
+      anyOf: [
+        { type: 'string', const: 'Calendar' },
+        { type: 'string', const: 'Account' },
+      ],
+    }
+    vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
+
+    await main(['search', '--scopes', ...values])
+
+    expect(stderr).toHaveBeenCalledExactlyOnceWith(
+      `--scopes takes comma-separated values; pass --scopes ${values.join(',')}. Allowed values: Calendar, Account${invalid}`
+    )
+    expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
     expect(call).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
   })
@@ -382,6 +411,14 @@ describe('extra words after an array flag', () => {
 
   it('still sends a JSON array to the endpoint', async () => {
     await main(['search', '--scopes', '["Calendar","Account"]'])
+
+    expect(call).toHaveBeenCalledWith('/search', { scopes: ['Calendar', 'Account'] })
+    expect(stderr).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
+  })
+
+  it('sends the suggested comma form as an array', async () => {
+    await main(['search', '--scopes', 'Calendar,Account'])
 
     expect(call).toHaveBeenCalledWith('/search', { scopes: ['Calendar', 'Account'] })
     expect(stderr).not.toHaveBeenCalled()
