@@ -36,6 +36,9 @@ jobs:
       - name: Lint
         run: pnpm lint --quiet
 
+      - name: Check formatting
+        run: pnpm format:check
+
       - name: Download OpenAPI
         run: pnpm fetch-openapi
         working-directory: cli

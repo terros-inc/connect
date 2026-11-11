@@ -10,8 +10,8 @@ TypeScript SDK, CLI and integrations for the Terros Sales platform. pnpm workspa
 ## Setup and commands
 
 - Node 24 (`.nvmrc`). The pnpm version is pinned in `package.json`.
-- Install `pnpm install --frozen-lockfile`; lint `pnpm lint`; format `pnpm format` (oxfmt, config in `.oxfmtrc.json`).
-- Build and test everything: `pnpm -r build`, `pnpm -r test` (CI runs lint, test, then build).
+- Install `pnpm install --frozen-lockfile`; lint `pnpm lint`; format `pnpm format` (oxfmt, config in `.oxfmtrc.json`); CI fails a PR that `pnpm format:check` flags.
+- Build and test everything: `pnpm -r build`, `pnpm -r test` (CI runs lint, a format check, test, then build).
 - One package: `pnpm --filter <package name> test`, or run the script from its directory. `cli`'s `pretest` downloads the OpenAPI document (`pnpm fetch-openapi`, with `curl`) from `https://docs.terros.com/openapi/terros.yml` into the git-ignored `cli/terros.yml` when it is missing, so the first `cli` test run needs network access to docs.terros.com; rerun `pnpm fetch-openapi` there to refresh it.
 - The CLI's API commands are generated at runtime from that document, not from code here. terros-inc/sales generates it from Zod schemas in `packages/openapi` (public paths in `src/paths/index.ts`, built-in command names in `src/cliBuiltins.ts`; signed-in staff get those plus `src/internalPaths.ts` from `GET /openapi`), and `apps/docs` publishes it. A missing or renamed API command is a change there; its `packages/openapi/AGENTS.md` has the rules.
 - There is no root type-check script.
