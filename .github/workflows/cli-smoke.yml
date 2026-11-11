@@ -16,8 +16,7 @@ jobs:
     # Like public-data-trusted.yml, no PR code may run with a secret, including same-repository PRs.
     if: >-
       github.event_name != 'pull_request' &&
-      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
-      vars.EXAMPLE_CLI_SMOKE_API_ENDPOINT != ''
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 1
     outputs:
@@ -26,10 +25,9 @@ jobs:
       - name: Check required environment
         id: configuration
         env:
-          TERROS_API_ENDPOINT: ${{ vars.EXAMPLE_CLI_SMOKE_API_ENDPOINT }}
-          TERROS_API_KEY: ${{ secrets.EXAMPLE_CLI_SMOKE_API_KEY }}
+          INTEG_API_KEY: ${{ secrets.INTEG_API_KEY }}
         run: |
-          if [[ -n "${TERROS_API_ENDPOINT//[[:space:]]/}" && -n "${TERROS_API_KEY//[[:space:]]/}" ]]; then
+          if [[ -n "${INTEG_API_KEY//[[:space:]]/}" ]]; then
             echo 'available=true' >> "$GITHUB_OUTPUT"
           fi
 
@@ -53,6 +51,7 @@ jobs:
       - run: pnpm --filter @terros-inc/cli... build
       - name: Discover backend commands with the built CLI
         env:
-          TERROS_API_ENDPOINT: ${{ vars.EXAMPLE_CLI_SMOKE_API_ENDPOINT }}
-          TERROS_API_KEY: ${{ secrets.EXAMPLE_CLI_SMOKE_API_KEY }}
+          INTEG_STAGE: ${{ vars.INTEG_STAGE }}
+          TERROS_API_ENDPOINT: ${{ vars.TERROS_API_ENDPOINT }}
+          INTEG_API_KEY: ${{ secrets.INTEG_API_KEY }}
         run: pnpm --filter @terros-inc/cli smoke
