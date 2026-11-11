@@ -7,6 +7,7 @@ import {
   getEndpointInputParameters,
   getExampleArguments,
   getStringLiteralValues,
+  matchesStringLiteral,
   type EndpointGroups,
   type CommandNode,
   withoutUploadUrls,
@@ -288,7 +289,9 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
       itemType.startsWith('(') && itemType.endsWith(')') ? itemType.slice(1, -1) : itemType
     )
     if (!allowed) return hint
-    const invalid = values.flatMap((value) => value.split(',')).filter((value) => !allowed.includes(value))
+    const invalid = values
+      .flatMap((value) => value.split(','))
+      .filter((value) => !allowed.some((literal) => matchesStringLiteral(value, literal)))
     return `${hint}. Allowed values: ${allowed.join(', ')}${invalid.length > 0 ? `. Invalid values: ${invalid.join(', ')}` : ''}`
   }
   return undefined

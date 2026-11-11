@@ -325,7 +325,7 @@ export function getStringLiteralValues(type: string): string[] | undefined {
   return values.every((value) => value !== undefined) ? values : undefined
 }
 
-function matchesStringLiteral(value: unknown, literal: string): boolean {
+export function matchesStringLiteral(value: unknown, literal: string): boolean {
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return false
   const text = String(value)
   if (text === literal) return true
