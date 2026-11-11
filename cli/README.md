@@ -359,11 +359,42 @@ pnpm build
 Run the CLI locally:
 
 ```sh
-node dist/index.js help
+node cli.js help
 ```
 
-The published `terros` executable loads the compiled code from `dist/index.js`,
+The published `terros` executable loads the compiled code from `dist/index.mjs`,
 so run `pnpm build` after changing TypeScript files.
+
+### Authenticated discovery smoke check
+
+From the repository root, build and run the smoke check separately from unit tests:
+
+```sh
+pnpm --filter @terros-inc/cli fetch-openapi
+pnpm --filter @terros-inc/cli... build
+pnpm --filter @terros-inc/cli smoke
+```
+
+Supply an authorized API key through `INTEG_API_KEY`; the harness passes it to
+the CLI as `TERROS_API_KEY`. The key must have access to the existing staff-schema
+loader. Without a non-whitespace key, the check prints `SKIP` and exits successfully.
+It defaults to staging. Set `INTEG_STAGE` to select `https://api.<stage>.terros.com`
+(`prod` selects `https://api.terros.com`), or set `TERROS_API_ENDPOINT` to override
+the endpoint. Whitespace-only stage and endpoint values use their defaults.
+
+The check runs the built CLI's `account get --help` in a temporary home directory
+and requires both the backend OpenAPI cache containing `/account/get` and full-path
+command help. Bundled schema fallback cannot pass it. The loader's profile lookup
+is part of discovery; the check does not execute an account command. The temporary
+home is removed afterward, and the check does not use a saved CLI login.
+
+The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
+on default-branch pushes or manual runs of that branch. All PR runs skip it.
+A configuration job checks the `INTEG_API_KEY` repository secret without checking
+out code; a missing or whitespace-only key skips the smoke job. The smoke step
+also accepts the `INTEG_STAGE` and `TERROS_API_ENDPOINT` repository variables.
+Only that step receives the key in the build job. This check does not gate npm
+publishing.
 
 ## Troubleshooting
 
