@@ -1,4 +1,4 @@
-import type { EndpointParameter } from '@terros-inc/mcp-core'
+import { getArrayItemTypes, getStringLiteralValues, type EndpointParameter } from '@terros-inc/mcp-core'
 import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 export const HELP_PARENT_MESSAGE = `
@@ -74,6 +74,15 @@ export function formatSubcommandParametersHelp(
         `    ${'required'.padEnd(labelWidth)}  ${parameter.required ? 'yes' : 'no'}`
       )
       if (parameter.description) lines.push(`    ${'description'.padEnd(labelWidth)}  ${parameter.description}`)
+      const array = getArrayParameterSyntax(parameter.type)
+      if (array) {
+        const examples = array.allowed?.slice(0, 2) ?? ['a', 'b']
+        const syntax = array.structured
+          ? `JSON array (shell-quoted): --${parameter.name} '[...]'`
+          : `Comma-separated (${quoteShellArgument(examples.join(','))}), a shell-quoted JSON array, or a repeated flag (${examples.map((value) => `--${parameter.name} ${quoteShellArgument(value)}`).join(' ')})`
+        lines.push(`    ${'syntax'.padEnd(labelWidth)}  ${syntax}`)
+        if (array.allowed) lines.push(`    ${'allowed'.padEnd(labelWidth)}  ${array.allowed.join(', ')}`)
+      }
     })
   }
 
@@ -100,4 +109,23 @@ export function formatSubcommandParametersHelp(
 /** Quote an argument for a POSIX shell, leaving plain words such as `--size` and `100` bare. */
 export function quoteShellArgument(argument: string): string {
   return /^[\w.,:@/+=-]+$/.test(argument) ? argument : `'${argument.replaceAll("'", `'\\''`)}'`
+}
+
+export function getArrayParameterSyntax(type: string): { structured: boolean; allowed?: string[] } | undefined {
+  const items = getArrayItemTypes(type)
+  if (!items) return undefined
+  return {
+    structured: !items.every(isScalarArrayItem),
+    allowed: getStringLiteralValues(items.join(' | ')),
+  }
+}
+
+function isScalarArrayItem(type: string): boolean {
+  if (['string', 'integer', 'number', 'boolean', 'null'].includes(type)) return true
+  try {
+    const value: unknown = JSON.parse(type)
+    return value === null || ['string', 'number', 'boolean'].includes(typeof value)
+  } catch {
+    return false
+  }
 }

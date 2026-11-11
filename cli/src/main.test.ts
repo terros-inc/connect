@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { buildEndpointInput, getExampleArguments, parseEndpoints, type Endpoint } from '@terros-inc/mcp-core'
 import { TerrosApiError } from '@terros-inc/connect-common'
 import { main, parseArgv } from './main'
@@ -434,6 +435,109 @@ describe('extra words after an array flag', () => {
     expect(stderr).not.toHaveBeenCalled()
     expect(process.exitCode).toBeUndefined()
   })
+
+  it.each([
+    {
+      name: 'string items with shell quoting',
+      items: { type: 'string' },
+      words: ['001', "it's"],
+      expected: ['001', "it's"],
+      suggestion: `--values '001,it'\\''s'`,
+    },
+    {
+      name: 'enum items with an invalid entry',
+      items: { type: 'string', enum: ['Calendar', 'Account'] },
+      words: ['Calendar', 'Unknown', 'Account'],
+      expected: ['Calendar', 'Account'],
+      suggestion: '--values Calendar,Account',
+    },
+    {
+      name: 'coordinate objects with commas inside each item',
+      items: {
+        type: 'object',
+        properties: { latitude: { type: 'number' }, longitude: { type: 'number' } },
+        required: ['latitude', 'longitude'],
+      },
+      words: ['{"latitude":1,"longitude":2}', '{"latitude":3,"longitude":4}'],
+      expected: [
+        { latitude: 1, longitude: 2 },
+        { latitude: 3, longitude: 4 },
+      ],
+      suggestion: `--values '[{"latitude":1,"longitude":2},{"latitude":3,"longitude":4}]'`,
+    },
+    {
+      name: 'nested arrays',
+      items: { type: 'array', items: { type: 'number' } },
+      words: ['[1,2]', '[3,4]'],
+      expected: [
+        [1, 2],
+        [3, 4],
+      ],
+      suggestion: `--values '[[1,2],[3,4]]'`,
+    },
+  ])('replays the suggested correction through the shell and parser for $name', async (example) => {
+    vi.mocked(loadEndpoints).mockResolvedValue(
+      parseEndpoints(schemaWithParameter('/search', 'values', { type: 'array', items: example.items }))
+    )
+    await main(['search', '--values', ...example.words])
+
+    const message = String(stderr.mock.calls[0]?.[0])
+    const suggestion = message.split('; pass ')[1]?.split('. Allowed values:')[0]
+    expect(suggestion).toBe(example.suggestion)
+    expect(call).not.toHaveBeenCalled()
+    const argv = execFileSync('bash', ['-c', `printf '%s\\0' ${suggestion}`], { encoding: 'utf8' })
+      .split('\0')
+      .slice(0, -1)
+
+    process.exitCode = undefined
+    stderr.mockClear()
+    await main(['search', ...argv])
+
+    expect(call).toHaveBeenCalledExactlyOnceWith('/search', { values: example.expected })
+    expect(stderr).not.toHaveBeenCalled()
+    expect(process.exitCode).toBeUndefined()
+  })
+})
+
+it('shows schema-derived array syntax and enum choices beside each array parameter', async () => {
+  const document = JSON.parse(spec('/search'))
+  document.components.schemas.Scope = { type: 'string', enum: ['Calendar', 'Account'] }
+  document.paths['/search'].post.requestBody.content['application/json'].schema = {
+    type: 'object',
+    properties: {
+      scopes: { type: 'array', items: { $ref: '#/components/schemas/Scope' } },
+      tags: { type: 'array', items: { type: 'string' } },
+      searchInput: {
+        type: 'object',
+        properties: {
+          coordinates: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { latitude: { type: 'number' }, longitude: { type: 'number' } },
+            },
+          },
+        },
+      },
+    },
+  }
+  vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
+
+  await main(['search', 'help'])
+
+  const help = String(log.mock.calls[0]?.[0])
+  const scopes = help.split('  --scopes\n')[1]?.split('\n\n')[0]
+  expect(scopes).toContain(
+    'Comma-separated (Calendar,Account), a shell-quoted JSON array, or a repeated flag (--scopes Calendar --scopes Account)'
+  )
+  expect(scopes).toContain('allowed      Calendar, Account')
+  const tags = help.split('  --tags\n')[1]?.split('\n\n')[0]
+  expect(tags).toContain('repeated flag (--tags a --tags b)')
+  expect(tags).not.toContain('allowed')
+  const coordinates = help.split('  --searchInput.coordinates\n')[1]?.split('\n\n')[0]
+  expect(coordinates).toContain("JSON array (shell-quoted): --searchInput.coordinates '[...]'")
+  expect(coordinates).not.toContain('Comma-separated')
+  expect(call).not.toHaveBeenCalled()
 })
 
 it('reports that an endpoint is absent after a successful schema refresh', async () => {

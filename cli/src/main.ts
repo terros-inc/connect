@@ -6,7 +6,6 @@ import {
   DEFAULT_TYPE_DEPTH,
   getEndpointInputParameters,
   getExampleArguments,
-  getStringLiteralValues,
   matchesStringLiteral,
   type EndpointGroups,
   type CommandNode,
@@ -20,6 +19,7 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
   quoteShellArgument,
+  getArrayParameterSyntax,
 } from './messages'
 import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
 import { readInputFile } from './inputFile'
@@ -274,20 +274,29 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
     if (!arg.startsWith('--')) continue
     const [flag, ...assigned] = arg.split('=')
     const name = flag?.slice(2)
-    const parameter = parameters.find((parameter) => parameter.name === name && parameter.type.endsWith('[]'))
+    const parameter = parameters.find((parameter) => parameter.name === name)
     if (!parameter) continue
+    const array = getArrayParameterSyntax(parameter.type)
+    if (!array) continue
     if (parseArgv(argv.slice(0, index))._.length !== level.words.length) continue
     const values = assigned.length > 0 ? [assigned.join('=')] : []
     for (const value of argv.slice(index + 1)) {
       if (value.startsWith('-')) break
       values.push(value)
     }
-    if (values.length < 2 || values[0]?.trim().startsWith('[')) continue
+    if (values.length < 2) continue
+    if (array.structured) {
+      let items: unknown[]
+      try {
+        items = values.map((value) => JSON.parse(value))
+      } catch {
+        return `${flag} takes a shell-quoted JSON array; each item must be valid JSON`
+      }
+      return `${flag} takes a JSON array; pass ${flag} ${quoteShellArgument(JSON.stringify(items))}`
+    }
+    if (values[0]?.trim().startsWith('[')) continue
     const hint = `${flag} takes comma-separated values`
-    const itemType = parameter.type.slice(0, -2)
-    const allowed = getStringLiteralValues(
-      itemType.startsWith('(') && itemType.endsWith(')') ? itemType.slice(1, -1) : itemType
-    )
+    const allowed = array.allowed
     if (!allowed) return `${hint}; pass ${flag} ${quoteShellArgument(values.join(','))}`
     const entries = values.flatMap((value) => value.split(','))
     const invalid = entries.filter((value) => !allowed.some((literal) => matchesStringLiteral(value, literal)))

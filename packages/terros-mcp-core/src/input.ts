@@ -325,6 +325,12 @@ export function getStringLiteralValues(type: string): string[] | undefined {
   return values.every((value) => value !== undefined) ? values : undefined
 }
 
+export function getArrayItemTypes(type: string): string[] | undefined {
+  const members = splitTopLevelUnion(type)
+  if (members.length !== 1 || !type.endsWith('[]')) return undefined
+  return splitTopLevelUnion(unwrapParens(type.slice(0, -2)))
+}
+
 export function matchesStringLiteral(value: unknown, literal: string): boolean {
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return false
   const text = String(value)
