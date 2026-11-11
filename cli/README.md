@@ -303,12 +303,16 @@ scope, which `terros auth login` does not ask for. Auth0 grants that scope only
 to a sign-in from the last few minutes, and refreshing a sign-in does not add it
 back. So the command first explains why and asks you to sign in again in the
 browser, for `offline_access sensitive:manage` and the Terros API
-(`https://api.tantalim.com`), prompting on standard error. It uses that sign-in
+(`https://api.tantalim.com`), prompting on standard error. Because Auth0 approves
+the code from a browser that is still signed in without a new sign-in, the
+command opens the sign-out page (`https://auth.terros.com/v2/logout`) before the
+sign-in page: sign out, then approve the code. It uses that sign-in
 for this one request only: it is kept in memory, not saved, and your saved login
 from `terros auth login` stays as it was. `TERROS_IMPERSONATE` and
 `TERROS_API_ENDPOINT` apply as usual. If the sign-in does not grant
-`sensitive:manage`, the command stops with an error naming the scope and sends
-nothing; the CLI's Auth0 application must be allowed to request it. The API
+`sensitive:manage`, usually because the approval reused an earlier browser
+sign-in, the command stops with an error naming the scope and sends nothing:
+sign out at `https://auth.terros.com/v2/logout` and run it again. The API
 also requires `sensitive:manage` for `/apikey/add`, so if that path is ever
 offered as `terros apikey add`, it signs in the same way.
 

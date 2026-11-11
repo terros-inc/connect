@@ -99,6 +99,23 @@ describe('signInWithSensitiveScope', () => {
     expect(prompts).not.toContain(token)
   })
 
+  // Guards against a step-up approved from a browser still signed in to Terros: Auth0 reuses that older sign-in
+  // without a prompt and leaves sensitive:manage out, so the browser must sign out before the code is approved.
+  it('signs the browser out before opening the sign-in page', async () => {
+    vi.mocked(open).mockClear()
+    signIn(new Response(JSON.stringify({ access_token: accessToken('offline_access sensitive:manage') })))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await signInWithSensitiveScope()
+
+    expect(vi.mocked(open).mock.calls).toEqual([
+      ['https://login.example.test/v2/logout'],
+      ['https://login.example.test/activate'],
+    ])
+    const prompts = error.mock.calls.flat().join('\n')
+    expect(prompts.indexOf('https://login.example.test/v2/logout')).toBeLessThan(prompts.indexOf('ABCD-EFGH'))
+  })
+
   // Guards against the elevated sign-in replacing or downgrading the saved login, or being saved where a later refresh
   // would keep using it without sensitive:manage.
   it('leaves the saved login as it was', async () => {
@@ -122,14 +139,17 @@ describe('signInWithSensitiveScope', () => {
     expect((await getTokens())?.access_token).toBe('saved-token')
   })
 
-  // Auth0 drops a scope the application may not request; the API would then refuse without naming the scope.
+  // Auth0 drops the scope when the approval reused an old browser sign-in; the API would then refuse without naming
+  // the scope, and the user needs to know to sign out and retry.
   it.each([['offline_access'], ['offline_access sensitive:manager']])(
-    'names the missing scope when the token grants %s',
+    'names the missing scope and how to retry when the token grants %s',
     async (scope) => {
       signIn(new Response(JSON.stringify({ access_token: accessToken(scope) })))
       vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      await expect(signInWithSensitiveScope()).rejects.toThrow(/^Sign-in did not grant the sensitive:manage scope/)
+      await expect(signInWithSensitiveScope()).rejects.toThrow(
+        /^Sign-in did not grant the sensitive:manage scope.*Sign out at https:\/\/login\.example\.test\/v2\/logout, then run the command again/
+      )
     }
   )
 

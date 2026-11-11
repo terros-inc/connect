@@ -2,6 +2,16 @@
 
 Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
+## Unreleased
+
+### Fixed: API-key step-up sign-in signs the browser out first
+
+`terros apikey restricted add` now opens the Terros sign-out page (`https://auth.terros.com/v2/logout`) before the
+sign-in page, and tells you to sign out, then approve the code. Before, approving the code in a browser still signed in
+to Terros reused that older sign-in, Auth0 left out `sensitive:manage`, and the command failed. If the scope is still
+missing, the error now says the approval reused an earlier sign-in and to sign out and run the command again, instead
+of blaming the Auth0 application's settings.
+
 ## 3.1.0
 
 ### New: `terros api call` calls an endpoint the API schema does not list
