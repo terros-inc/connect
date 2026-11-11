@@ -6,11 +6,13 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import assert from 'node:assert/strict'
 
-const endpoint = process.env.TERROS_API_ENDPOINT?.trim()
-const apiKey = process.env.TERROS_API_KEY?.trim()
+const stage = process.env.INTEG_STAGE?.trim() || 'staging'
+const endpoint =
+  process.env.TERROS_API_ENDPOINT?.trim() || (stage === 'prod' ? 'https://api.terros.com' : `https://api.${stage}.terros.com`)
+const apiKey = process.env.INTEG_API_KEY?.trim()
 
-if (!endpoint || !apiKey) {
-  console.log('SKIP: TERROS_API_ENDPOINT and TERROS_API_KEY are required for authenticated discovery.')
+if (!apiKey) {
+  console.log('SKIP: INTEG_API_KEY is required for authenticated discovery.')
 } else {
   const home = await mkdtemp(join(tmpdir(), 'terros-smoke-'))
   try {
@@ -25,7 +27,7 @@ if (!endpoint || !apiKey) {
     )
     // A fresh backend schema is required: help alone can succeed using the bundled public schema.
     const cached = JSON.parse(await readFile(join(home, '.config', 'terros', 'openapi.json'), 'utf8'))
-    const schema = JSON.parse(cached.data)
+    const schema = cached.data
     assert.ok(schema.paths['/account/get']?.post)
     assert.match(stdout, /^usage: terros account get \[parameters\]/m)
     console.log('PASS: authenticated backend command discovery (terros account get).')
