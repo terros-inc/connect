@@ -283,16 +283,17 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
       values.push(value)
     }
     if (values.length < 2 || values[0]?.trim().startsWith('[')) continue
-    const hint = `${flag} takes comma-separated values; pass ${flag} ${quoteShellArgument(values.join(','))}`
+    const hint = `${flag} takes comma-separated values`
     const itemType = parameter.type.slice(0, -2)
     const allowed = getStringLiteralValues(
       itemType.startsWith('(') && itemType.endsWith(')') ? itemType.slice(1, -1) : itemType
     )
-    if (!allowed) return hint
-    const invalid = values
-      .flatMap((value) => value.split(','))
-      .filter((value) => !allowed.some((literal) => matchesStringLiteral(value, literal)))
-    return `${hint}. Allowed values: ${allowed.join(', ')}${invalid.length > 0 ? `. Invalid values: ${invalid.join(', ')}` : ''}`
+    if (!allowed) return `${hint}; pass ${flag} ${quoteShellArgument(values.join(','))}`
+    const entries = values.flatMap((value) => value.split(','))
+    const invalid = entries.filter((value) => !allowed.some((literal) => matchesStringLiteral(value, literal)))
+    const valid = entries.filter((value) => !invalid.includes(value))
+    const suggestion = valid.length > 0 ? `; pass ${flag} ${quoteShellArgument(valid.join(','))}` : ''
+    return `${hint}${suggestion}. Allowed values: ${allowed.join(', ')}${invalid.length > 0 ? `. Invalid values: ${invalid.join(', ')}` : ''}`
   }
   return undefined
 }

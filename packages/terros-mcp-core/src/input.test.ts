@@ -389,6 +389,12 @@ describe('buildEndpointInput', () => {
       expect(build({ archived: '"all"' })).toEqual({ archived: 'all' })
       expect(build({ archived: 'false' })).toEqual({ archived: false })
     })
+
+    it('names the flag and offers explicit boolean choices when no union member matches', () => {
+      expect(() => build({ archived: 'maybe' })).toThrow(
+        'Parameter --archived does not match any supported type. Expected: true, false, or all; got maybe'
+      )
+    })
   })
 
   describe('string parameters', () => {
@@ -566,7 +572,7 @@ describe('buildEndpointInput', () => {
       expect(field(schema, 'north,south')).toEqual(['north', 'south'])
       expect(field(schema, '3')).toBe(3)
       expect(() => field(schema, 'east')).toThrow(
-        'Parameter "field" does not match any supported type. Expected: number; ("north" | "south")[]; got east'
+        'Parameter --field does not match any supported type. Expected: number or ("north" | "south")[]; got east'
       )
     })
 
@@ -595,7 +601,7 @@ describe('buildEndpointInput', () => {
         }
 
         expect(() => buildEndpointInput(endpoint, { _: [], field: 'unsupported' })).toThrow(
-          'Parameter "field" does not match any supported type. Expected: number; boolean; ("north" | "south")[]; object { kind: "balanced", window?: number }; object { workflowId: string, stageId: string }; null; one of: Allow, Warn; got unsupported'
+          'Parameter --field does not match any supported type. Expected: number, true, false, Allow, Warn, ("north" | "south")[], object { kind: "balanced", window?: number }, object { workflowId: string, stageId: string }, or null; got unsupported'
         )
       }
     )
@@ -606,7 +612,7 @@ describe('buildEndpointInput', () => {
         items: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['north', 'south'] }] },
       }
       expect(() => field(schema, 'east')).toThrow(
-        'Parameter "field" does not match any supported type. Expected: number; one of: north, south; got east'
+        'Parameter --field does not match any supported type. Expected: number, north, or south; got east'
       )
     })
 

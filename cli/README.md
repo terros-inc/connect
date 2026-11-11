@@ -219,7 +219,8 @@ comma-separated values such as `--ids id_1,id_2`. If you
 pass multiple bare words after an array flag on a recognized API command, the
 CLI suggests comma-separated syntax using that flag and your values instead of
 reporting an unknown command. For enum arrays, the hint lists the schema's allowed
-values and identifies invalid entries. When a value matches no member of a mixed
+values and identifies invalid entries. Suggestions include only valid entries and
+are omitted when none remain. When a value matches no member of a mixed
 union, the error lists all possibilities, including literal choices and object fields.
 
 Pass `null` to clear a nullable parameter, for example `--value null`. `terros preference update` requires

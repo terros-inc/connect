@@ -363,11 +363,12 @@ describe('extra words after an array flag', () => {
 
   it.each([
     [['Calendar', 'Account'], 'Calendar,Account', ''],
-    [['Calendar', 'Unknown', 'Other'], 'Calendar,Unknown,Other', '. Invalid values: Unknown, Other'],
-    [['Calendar,Account', 'Unknown'], 'Calendar,Account,Unknown', '. Invalid values: Unknown'],
+    [['Calendar', 'Unknown', 'Other'], 'Calendar', '. Invalid values: Unknown, Other'],
+    [['Calendar,Account', 'Unknown'], 'Calendar,Account', '. Invalid values: Unknown'],
+    [['Unknown', 'Other'], '', '. Invalid values: Unknown, Other'],
     [['"Calendar"', 'Account'], `'"Calendar",Account'`, ''],
     [['Calendar', '"Account"'], `'Calendar,"Account"'`, ''],
-    [['"Calendar",Account', '"Unknown"'], `'"Calendar",Account,"Unknown"'`, '. Invalid values: "Unknown"'],
+    [['"Calendar",Account', '"Unknown"'], `'"Calendar",Account'`, '. Invalid values: "Unknown"'],
   ])('lists enum choices and identifies invalid array items for %j', async (values, suggestion, invalid) => {
     const document = JSON.parse(
       schemaWithParameter('/search', 'scopes', {
@@ -386,7 +387,7 @@ describe('extra words after an array flag', () => {
     await main(['search', '--scopes', ...values])
 
     expect(stderr).toHaveBeenCalledExactlyOnceWith(
-      `--scopes takes comma-separated values; pass --scopes ${suggestion}. Allowed values: Calendar, Account${invalid}`
+      `--scopes takes comma-separated values${suggestion ? `; pass --scopes ${suggestion}` : ''}. Allowed values: Calendar, Account${invalid}`
     )
     expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
     expect(call).not.toHaveBeenCalled()

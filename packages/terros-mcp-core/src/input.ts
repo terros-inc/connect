@@ -371,17 +371,17 @@ function parseUnionValue(value: unknown, types: string[], parameterName: string)
   }
 
   throw new Error(
-    `Parameter ${JSON.stringify(parameterName)} does not match any supported type. Expected: ${formatUnionOptions(types)}; got ${formatReceived(value)}`
+    `Parameter --${parameterName} does not match any supported type. Expected: ${formatUnionOptions(types)}; got ${formatReceived(value)}`
   )
 }
 
 function formatUnionOptions(types: string[]): string {
-  const literals = types.map(getStringLiteral).filter((value) => value !== undefined)
-  const options = types
-    .filter((type) => getStringLiteral(type) === undefined)
-    .map((type) => (type.startsWith('{') ? `object ${type}` : type))
-  if (literals.length > 0) options.push(`one of: ${literals.join(', ')}`)
-  return options.join('; ')
+  const options = types.flatMap((type) => {
+    if (type === 'boolean') return ['true', 'false']
+    const literal = getStringLiteral(type)
+    return [literal ?? (type.startsWith('{') ? `object ${type}` : type)]
+  })
+  return new Intl.ListFormat('en', { type: 'disjunction' }).format(options)
 }
 
 const SCALAR_TYPES = new Set(['string', 'integer', 'number', 'boolean'])
