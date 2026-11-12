@@ -386,6 +386,8 @@ and requires both the backend OpenAPI cache containing `/account/get` and full-p
 command help. Bundled schema fallback cannot pass it. The loader's profile lookup
 is part of discovery; the check does not execute an account command. The temporary
 home is removed afterward, and the check does not use a saved CLI login.
+Failures print the error message and any CLI stderr with every occurrence of the
+supplied key replaced by `[REDACTED]`, then exit with code 1.
 
 The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
 on default-branch pushes or manual runs of that branch. All PR runs skip it.
