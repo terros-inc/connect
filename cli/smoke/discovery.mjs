@@ -8,7 +8,8 @@ import assert from 'node:assert/strict'
 
 const stage = process.env.INTEG_STAGE?.trim() || 'staging'
 const endpoint =
-  process.env.TERROS_API_ENDPOINT?.trim() || (stage === 'prod' ? 'https://api.terros.com' : `https://api.${stage}.terros.com`)
+  process.env.TERROS_API_ENDPOINT?.trim() ||
+  (stage === 'prod' ? 'https://api.terros.com' : `https://api.${stage}.terros.com`)
 const apiKey = process.env.INTEG_API_KEY?.trim()
 
 if (!apiKey) {
