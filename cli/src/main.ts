@@ -114,8 +114,9 @@ export async function main(argv: string[]): Promise<void> {
   }
 
   let { level, refreshStatus } = await loadCommandLevelWithRefresh(words, argv)
-  if (level.unmatched.length > 0) {
-    console.error(arrayFlagHint(argv, level) ?? unknownCommandMessage(words, level, refreshStatus))
+  const arrayHint = arrayFlagHint(argv, level)
+  if (level.unmatched.length > 0 || arrayHint) {
+    console.error(arrayHint ?? unknownCommandMessage(words, level, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -269,7 +270,7 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
 }
 
 function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined {
-  if (!level.node.endpoint || level.unmatched.length === 0) return undefined
+  if (!level.node.endpoint) return undefined
   const parameters = getEndpointInputParameters(level.node.endpoint)
   for (const [index, arg] of argv.entries()) {
     if (arg === '--') break
