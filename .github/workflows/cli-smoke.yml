@@ -11,47 +11,46 @@ permissions:
   contents: read
 
 jobs:
-  configuration:
-    name: Check smoke configuration
+  smoke:
+    name: Authenticated command discovery
     # Like public-data-trusted.yml, no PR code may run with a secret, including same-repository PRs.
     if: >-
       github.event_name != 'pull_request' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
-    timeout-minutes: 1
-    outputs:
-      available: ${{ steps.configuration.outputs.available }}
-    steps:
-      - name: Check required environment
-        id: configuration
-        env:
-          INTEG_API_KEY: ${{ secrets.INTEG_API_KEY }}
-        run: |
-          if [[ -n "${INTEG_API_KEY//[[:space:]]/}" ]]; then
-            echo 'available=true' >> "$GITHUB_OUTPUT"
-          fi
-
-  smoke:
-    name: Authenticated command discovery
-    needs: configuration
-    if: needs.configuration.outputs.available == 'true'
-    runs-on: ubuntu-latest
+    environment: staging
     timeout-minutes: 10
     steps:
+      - name: Check staging API key
+        id: configuration
+        env:
+          TERROS_API_KEY: ${{ secrets.TERROS_API_KEY }}
+        run: |
+          if [[ -n "${TERROS_API_KEY//[[:space:]]/}" ]]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'SKIP: staging TERROS_API_KEY is unavailable.'
+          fi
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        if: steps.configuration.outputs.available == 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@739bfe42ca9233c5e6aca07c1a25a9d34aca49b0 # v6
+        if: steps.configuration.outputs.available == 'true'
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        if: steps.configuration.outputs.available == 'true'
         with:
           node-version-file: '.nvmrc'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: steps.configuration.outputs.available == 'true'
       - run: pnpm --filter @terros-inc/cli fetch-openapi
+        if: steps.configuration.outputs.available == 'true'
       - run: pnpm --filter @terros-inc/cli... build
+        if: steps.configuration.outputs.available == 'true'
       - name: Discover backend commands with the built CLI
+        if: steps.configuration.outputs.available == 'true'
         env:
-          INTEG_STAGE: ${{ vars.INTEG_STAGE }}
-          TERROS_API_ENDPOINT: ${{ vars.TERROS_API_ENDPOINT }}
-          INTEG_API_KEY: ${{ secrets.INTEG_API_KEY }}
+          TERROS_API_ENDPOINT: https://api.staging.terros.com
+          TERROS_API_KEY: ${{ secrets.TERROS_API_KEY }}
         run: pnpm --filter @terros-inc/cli smoke

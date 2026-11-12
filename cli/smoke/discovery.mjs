@@ -6,17 +6,15 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import assert from 'node:assert/strict'
 
-const stage = process.env.INTEG_STAGE?.trim() || 'staging'
-const endpoint =
-  process.env.TERROS_API_ENDPOINT?.trim() ||
-  (stage === 'prod' ? 'https://api.terros.com' : `https://api.${stage}.terros.com`)
-const apiKey = process.env.INTEG_API_KEY?.trim()
+const endpoint = process.env.TERROS_API_ENDPOINT?.trim()
+const apiKey = process.env.TERROS_API_KEY?.trim()
 
 if (!apiKey) {
-  console.log('SKIP: INTEG_API_KEY is required for authenticated discovery.')
+  console.log('SKIP: TERROS_API_KEY is required for authenticated discovery.')
 } else {
   const home = await mkdtemp(join(tmpdir(), 'terros-smoke-'))
   try {
+    assert.ok(endpoint, 'TERROS_API_ENDPOINT is required')
     const { stdout } = await promisify(execFile)(
       process.execPath,
       [fileURLToPath(new URL('../cli.js', import.meta.url)), 'account', 'get', '--help'],
