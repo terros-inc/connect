@@ -1,4 +1,5 @@
 import { getArrayItemTypes, getStringLiteralValues, type EndpointParameter } from '@terros-inc/mcp-core'
+import minimist from 'minimist'
 import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 export const HELP_PARENT_MESSAGE = `
@@ -115,6 +116,10 @@ export function formatFlagArgument(flag: string, value: string): string {
   return `${flag}${value.startsWith('-') ? '=' : ' '}${quoteShellArgument(value)}`
 }
 
+export function preserveNumericString(value: string): string {
+  return typeof minimist([`--value=${value}`]).value === 'number' ? JSON.stringify(value) : value
+}
+
 export function getArrayParameterSyntax(
   type: string
 ): { structured: boolean; allowed?: string[]; examples: string[] } | undefined {
@@ -151,7 +156,7 @@ function scalarArrayExamples(type: string): string[] {
     default:
       try {
         const value: unknown = JSON.parse(type)
-        return [String(value)]
+        return [typeof value === 'string' ? preserveNumericString(value) : String(value)]
       } catch {
         return []
       }

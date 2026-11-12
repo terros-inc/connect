@@ -20,6 +20,7 @@ import {
   HELP_PARENT_MESSAGE,
   quoteShellArgument,
   formatFlagArgument,
+  preserveNumericString,
   getArrayParameterSyntax,
 } from './messages'
 import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
@@ -302,7 +303,8 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
     const entries = values.flatMap((value) => value.split(','))
     const invalid = entries.filter((value) => !allowed.some((literal) => matchesStringLiteral(value, literal)))
     const valid = entries.filter((value) => !invalid.includes(value))
-    const suggestion = valid.length > 0 ? `; pass ${formatFlagArgument(flag!, valid.join(','))}` : ''
+    const suggestion =
+      valid.length > 0 ? `; pass ${formatFlagArgument(flag!, valid.map(preserveNumericString).join(','))}` : ''
     return `${hint}${suggestion}. Allowed values: ${allowed.join(', ')}${invalid.length > 0 ? `. Invalid values: ${invalid.join(', ')}` : ''}`
   }
   return undefined

@@ -468,6 +468,27 @@ describe('extra words after an array flag', () => {
       suggestion: '--values=-Calendar,Account',
     },
     {
+      name: 'a numeric-looking enum choice after invalid entries are omitted',
+      items: { type: 'string', enum: ['001', 'Account'] },
+      words: ['001', 'Unknown'],
+      expected: ['001'],
+      suggestion: `--values '"001"'`,
+    },
+    {
+      name: 'an already JSON-quoted numeric-looking enum choice',
+      items: { type: 'string', enum: ['001', 'Account'] },
+      words: ['"001"', 'Unknown'],
+      expected: ['001'],
+      suggestion: `--values '"001"'`,
+    },
+    {
+      name: 'numeric-looking enum choices supplied as comma entries',
+      items: { type: 'string', enum: ['001', '1e3'] },
+      words: ['001,1e3', 'Unknown'],
+      expected: ['001', '1e3'],
+      suggestion: `--values '"001","1e3"'`,
+    },
+    {
       name: 'enum items with an invalid entry',
       items: { type: 'string', enum: ['Calendar', 'Account'] },
       words: ['Calendar', 'Unknown', 'Account'],
@@ -577,6 +598,26 @@ it.each([
     name: 'scalar unions',
     items: { anyOf: [{ type: 'number' }, { type: 'boolean' }] },
     expected: [1, 2],
+  },
+  {
+    name: 'numeric-looking string enum choices',
+    items: { type: 'string', enum: ['001', '1e3'] },
+    expected: ['001', '1e3'],
+  },
+  {
+    name: 'negative and hexadecimal string enum choices',
+    items: { type: 'string', enum: ['-001', '0x10'] },
+    expected: ['-001', '0x10'],
+  },
+  {
+    name: 'a single numeric-looking string enum choice',
+    items: { type: 'string', enum: ['001'] },
+    expected: ['001'],
+  },
+  {
+    name: 'numeric-looking and ordinary string enum choices',
+    items: { type: 'string', enum: ['001', 'Account'] },
+    expected: ['001', 'Account'],
   },
   {
     name: 'enum choices beginning with a dash',
