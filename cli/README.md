@@ -214,7 +214,16 @@ terros <command> [<subcommand> ...] --name "Acme Inc." --active true
 
 Parameter values are validated based on the Terros API schema. Supported values
 include strings, numbers, booleans, arrays, and JSON objects. Pass an array as
-one JSON value, quoted for your shell, as in the `--ids` example below.
+one JSON value, quoted for your shell, as in the `--ids` example below. Scalar arrays
+also accept comma-separated values such as `--ids id_1,id_2` or a repeated flag.
+Arrays of objects or other structured values use the JSON-array form. Parameter
+help lists the accepted syntax beside each array and the allowed values for enum arrays. If you
+pass multiple bare words after an array flag on a recognized API command, the
+CLI suggests comma-separated syntax for scalar items or a shell-quoted JSON array for structured items instead of
+reporting an unknown command. For enum arrays, the hint lists the schema's allowed
+values and identifies invalid entries. Suggestions include only valid entries and
+are omitted when none remain. When a value matches no member of a mixed
+union, the error lists all possibilities, including literal choices and object fields.
 
 Pass `null` to clear a nullable parameter, for example `--value null`. `terros preference update` requires
 `--value` (or `value` in `--inputFile`), so clearing a preference always takes an explicit `--value null`.

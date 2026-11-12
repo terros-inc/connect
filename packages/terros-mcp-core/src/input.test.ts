@@ -389,6 +389,12 @@ describe('buildEndpointInput', () => {
       expect(build({ archived: '"all"' })).toEqual({ archived: 'all' })
       expect(build({ archived: 'false' })).toEqual({ archived: false })
     })
+
+    it('names the flag and offers explicit boolean choices when no union member matches', () => {
+      expect(() => build({ archived: 'maybe' })).toThrow(
+        'Parameter --archived does not match any supported type. Expected: true, false, or all; got maybe'
+      )
+    })
   })
 
   describe('string parameters', () => {
@@ -565,7 +571,49 @@ describe('buildEndpointInput', () => {
       } as Endpoint['properties']
       expect(field(schema, 'north,south')).toEqual(['north', 'south'])
       expect(field(schema, '3')).toBe(3)
-      expect(() => field(schema, 'east')).toThrow('does not match any supported type')
+      expect(() => field(schema, 'east')).toThrow(
+        'Parameter --field does not match any supported type. Expected: number or ("north" | "south")[]; got east'
+      )
+    })
+
+    it.each(['oneOf', 'anyOf'] as const)(
+      'lists every mixed %s possibility instead of only the last failure',
+      (keyword) => {
+        const endpoint = endpointWith({
+          [keyword]: [
+            { type: 'number' },
+            { type: 'boolean' },
+            { type: 'string', enum: ['Allow', 'Warn'] },
+            { type: 'array', items: { type: 'string', enum: ['north', 'south'] } },
+            { $ref: '#/components/schemas/Strategy' },
+            {
+              type: 'object',
+              properties: { workflowId: { type: 'string' }, stageId: { type: 'string' } },
+              required: ['workflowId', 'stageId'],
+            },
+            { type: 'null' },
+          ],
+        } as Endpoint['properties'])
+        endpoint.components.schemas.Strategy = {
+          type: 'object',
+          properties: { kind: { type: 'string', const: 'balanced' }, window: { type: 'number' } },
+          required: ['kind'],
+        }
+
+        expect(() => buildEndpointInput(endpoint, { _: [], field: 'unsupported' })).toThrow(
+          'Parameter --field does not match any supported type. Expected: number, true, false, Allow, Warn, ("north" | "south")[], object { kind: "balanced", window?: number }, object { workflowId: string, stageId: string }, or null; got unsupported'
+        )
+      }
+    )
+
+    it('lists choices for a mixed union inside array items', () => {
+      const schema: Endpoint['properties'] = {
+        type: 'array',
+        items: { anyOf: [{ type: 'number' }, { type: 'string', enum: ['north', 'south'] }] },
+      }
+      expect(() => field(schema, 'east')).toThrow(
+        'Parameter --field does not match any supported type. Expected: number, north, or south; got east'
+      )
     })
 
     it('keeps an object whose field is a union whole', () => {

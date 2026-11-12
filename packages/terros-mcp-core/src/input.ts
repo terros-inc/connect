@@ -320,7 +320,18 @@ function getStringLiteral(type: string): string | undefined {
   }
 }
 
-function matchesStringLiteral(value: unknown, literal: string): boolean {
+export function getStringLiteralValues(type: string): string[] | undefined {
+  const values = splitTopLevelUnion(type).map(getStringLiteral)
+  return values.every((value) => value !== undefined) ? values : undefined
+}
+
+export function getArrayItemTypes(type: string): string[] | undefined {
+  const members = splitTopLevelUnion(type)
+  if (members.length !== 1 || !type.endsWith('[]')) return undefined
+  return splitTopLevelUnion(unwrapParens(type.slice(0, -2)))
+}
+
+export function matchesStringLiteral(value: unknown, literal: string): boolean {
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return false
   const text = String(value)
   if (text === literal) return true
@@ -351,8 +362,6 @@ function parseUnionValue(value: unknown, types: string[], parameterName: string)
     throw new Error(`Parameter --${parameterName} must be one of: ${literals.join(', ')}; got ${formatReceived(value)}`)
   }
 
-  const errors: string[] = []
-
   // Try exact string literals first, so `Warn` matches the literal "Warn" rather than a `string[]` member, then
   // a list or object member when the value already looks like one, then the scalar members in the order the
   // schema lists them, and other lists and objects last.
@@ -362,14 +371,23 @@ function parseUnionValue(value: unknown, types: string[], parameterName: string)
   for (const { itemType } of ranked) {
     try {
       return parseValue(value, itemType, parameterName)
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error))
+    } catch {
+      continue
     }
   }
 
   throw new Error(
-    `Parameter --${parameterName} does not match any supported type: ${types.join(', ')}. ${errors.at(-1)}`
+    `Parameter --${parameterName} does not match any supported type. Expected: ${formatUnionOptions(types)}; got ${formatReceived(value)}`
   )
+}
+
+function formatUnionOptions(types: string[]): string {
+  const options = types.flatMap((type) => {
+    if (type === 'boolean') return ['true', 'false']
+    const literal = getStringLiteral(type)
+    return [literal ?? (type.startsWith('{') ? `object ${type}` : type)]
+  })
+  return new Intl.ListFormat('en', { type: 'disjunction' }).format(options)
 }
 
 const SCALAR_TYPES = new Set(['string', 'integer', 'number', 'boolean'])
