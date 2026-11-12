@@ -19,6 +19,7 @@ import {
   formatSubcommandsHelp,
   HELP_PARENT_MESSAGE,
   quoteShellArgument,
+  formatFlagArgument,
   getArrayParameterSyntax,
 } from './messages'
 import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
@@ -281,7 +282,7 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
     if (parseArgv(argv.slice(0, index))._.length !== level.words.length) continue
     const values = assigned.length > 0 ? [assigned.join('=')] : []
     for (const value of argv.slice(index + 1)) {
-      if (value.startsWith('-')) break
+      if (value.startsWith('-') && !NEGATIVE_NUMBER.test(value)) break
       values.push(value)
     }
     if (values.length < 2) continue
@@ -297,11 +298,11 @@ function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined 
     if (values[0]?.trim().startsWith('[')) continue
     const hint = `${flag} takes comma-separated values`
     const allowed = array.allowed
-    if (!allowed) return `${hint}; pass ${flag} ${quoteShellArgument(values.join(','))}`
+    if (!allowed) return `${hint}; pass ${formatFlagArgument(flag!, values.join(','))}`
     const entries = values.flatMap((value) => value.split(','))
     const invalid = entries.filter((value) => !allowed.some((literal) => matchesStringLiteral(value, literal)))
     const valid = entries.filter((value) => !invalid.includes(value))
-    const suggestion = valid.length > 0 ? `; pass ${flag} ${quoteShellArgument(valid.join(','))}` : ''
+    const suggestion = valid.length > 0 ? `; pass ${formatFlagArgument(flag!, valid.join(','))}` : ''
     return `${hint}${suggestion}. Allowed values: ${allowed.join(', ')}${invalid.length > 0 ? `. Invalid values: ${invalid.join(', ')}` : ''}`
   }
   return undefined

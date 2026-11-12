@@ -76,10 +76,10 @@ export function formatSubcommandParametersHelp(
       if (parameter.description) lines.push(`    ${'description'.padEnd(labelWidth)}  ${parameter.description}`)
       const array = getArrayParameterSyntax(parameter.type)
       if (array) {
-        const examples = array.allowed?.slice(0, 2) ?? ['a', 'b']
+        const examples = array.examples
         const syntax = array.structured
           ? `JSON array (shell-quoted): --${parameter.name} '[...]'`
-          : `Comma-separated (${quoteShellArgument(examples.join(','))}), a shell-quoted JSON array, or a repeated flag (${examples.map((value) => `--${parameter.name} ${quoteShellArgument(value)}`).join(' ')})`
+          : `Comma-separated (${quoteShellArgument(examples.join(','))}), a shell-quoted JSON array, or a repeated flag (${examples.map((value) => formatFlagArgument(`--${parameter.name}`, value)).join(' ')})`
         lines.push(`    ${'syntax'.padEnd(labelWidth)}  ${syntax}`)
         if (array.allowed) lines.push(`    ${'allowed'.padEnd(labelWidth)}  ${array.allowed.join(', ')}`)
       }
@@ -111,12 +111,19 @@ export function quoteShellArgument(argument: string): string {
   return /^[\w.,:@/+=-]+$/.test(argument) ? argument : `'${argument.replaceAll("'", `'\\''`)}'`
 }
 
-export function getArrayParameterSyntax(type: string): { structured: boolean; allowed?: string[] } | undefined {
+export function formatFlagArgument(flag: string, value: string): string {
+  return `${flag}${value.startsWith('-') ? '=' : ' '}${quoteShellArgument(value)}`
+}
+
+export function getArrayParameterSyntax(
+  type: string
+): { structured: boolean; allowed?: string[]; examples: string[] } | undefined {
   const items = getArrayItemTypes(type)
   if (!items) return undefined
   return {
     structured: !items.every(isScalarArrayItem),
     allowed: getStringLiteralValues(items.join(' | ')),
+    examples: items.flatMap(scalarArrayExamples).slice(0, 2),
   }
 }
 
@@ -127,5 +134,26 @@ function isScalarArrayItem(type: string): boolean {
     return value === null || ['string', 'number', 'boolean'].includes(typeof value)
   } catch {
     return false
+  }
+}
+
+function scalarArrayExamples(type: string): string[] {
+  switch (type) {
+    case 'string':
+      return ['a', 'b']
+    case 'integer':
+    case 'number':
+      return ['1', '2']
+    case 'boolean':
+      return ['true', 'false']
+    case 'null':
+      return ['null', 'null']
+    default:
+      try {
+        const value: unknown = JSON.parse(type)
+        return [String(value)]
+      } catch {
+        return []
+      }
   }
 }

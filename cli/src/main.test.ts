@@ -445,6 +445,29 @@ describe('extra words after an array flag', () => {
       suggestion: `--values '001,it'\\''s'`,
     },
     {
+      name: 'negative numbers after a separate flag',
+      items: { type: 'number' },
+      words: ['-1', '2'],
+      expected: [-1, 2],
+      suggestion: '--values=-1,2',
+    },
+    {
+      name: 'negative numbers after an assigned flag',
+      items: { type: 'number' },
+      words: ['-1', '-2', '3'],
+      assigned: true,
+      expected: [-1, -2, 3],
+      suggestion: '--values=-1,-2,3',
+    },
+    {
+      name: 'enum choices beginning with a dash',
+      items: { type: 'string', enum: ['-Calendar', 'Account'] },
+      words: ['-Calendar', 'Unknown', 'Account'],
+      assigned: true,
+      expected: ['-Calendar', 'Account'],
+      suggestion: '--values=-Calendar,Account',
+    },
+    {
       name: 'enum items with an invalid entry',
       items: { type: 'string', enum: ['Calendar', 'Account'] },
       words: ['Calendar', 'Unknown', 'Account'],
@@ -479,7 +502,11 @@ describe('extra words after an array flag', () => {
     vi.mocked(loadEndpoints).mockResolvedValue(
       parseEndpoints(schemaWithParameter('/search', 'values', { type: 'array', items: example.items }))
     )
-    await main(['search', '--values', ...example.words])
+    const input =
+      'assigned' in example
+        ? [`--values=${example.words[0]}`, ...example.words.slice(1)]
+        : ['--values', ...example.words]
+    await main(['search', ...input])
 
     const message = String(stderr.mock.calls[0]?.[0])
     const suggestion = message.split('; pass ')[1]?.split('. Allowed values:')[0]
@@ -538,6 +565,46 @@ it('shows schema-derived array syntax and enum choices beside each array paramet
   expect(coordinates).toContain("JSON array (shell-quoted): --searchInput.coordinates '[...]'")
   expect(coordinates).not.toContain('Comma-separated')
   expect(call).not.toHaveBeenCalled()
+})
+
+it.each([
+  { name: 'numbers', items: { type: 'number' }, expected: [1, 2] },
+  { name: 'integers', items: { type: 'integer' }, expected: [1, 2] },
+  { name: 'booleans', items: { type: 'boolean' }, expected: [true, false] },
+  { name: 'nulls', items: { type: 'null' }, expected: [null, null] },
+  { name: 'strings', items: { type: 'string' }, expected: ['a', 'b'] },
+  {
+    name: 'scalar unions',
+    items: { anyOf: [{ type: 'number' }, { type: 'boolean' }] },
+    expected: [1, 2],
+  },
+  {
+    name: 'enum choices beginning with a dash',
+    items: { type: 'string', enum: ['-Calendar', 'Account'] },
+    expected: ['-Calendar', 'Account'],
+  },
+])('help examples replay as valid arrays of $name', async ({ items, expected }) => {
+  vi.mocked(loadEndpoints).mockResolvedValue(
+    parseEndpoints(schemaWithParameter('/search', 'values', { type: 'array', items }))
+  )
+
+  await main(['search', 'help'])
+
+  const help = String(log.mock.calls[0]?.[0])
+  const comma = help.match(/Comma-separated \((.*?)\), a shell-quoted JSON array/)?.[1]
+  const repeated = help.match(/repeated flag \((.*?)\)/)?.[1]
+  expect(comma).toBeDefined()
+  expect(repeated).toBeDefined()
+  for (const suggestion of [`--values=${comma}`, repeated]) {
+    const argv = execFileSync('bash', ['-c', `printf '%s\\0' ${suggestion}`], { encoding: 'utf8' })
+      .split('\0')
+      .slice(0, -1)
+
+    call.mockClear()
+    await main(['search', ...argv])
+
+    expect(call).toHaveBeenCalledExactlyOnceWith('/search', { values: expected })
+  }
 })
 
 it('reports that an endpoint is absent after a successful schema refresh', async () => {
