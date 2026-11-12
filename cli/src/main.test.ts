@@ -642,6 +642,7 @@ it.each([
       .slice(0, -1)
 
     call.mockClear()
+    // oxlint-disable-next-line no-await-in-loop -- Each replay must finish before the shared request mock is cleared.
     await main(['search', ...argv])
 
     expect(call).toHaveBeenCalledExactlyOnceWith('/search', { values: expected })
