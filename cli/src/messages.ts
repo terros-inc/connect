@@ -1,5 +1,5 @@
-import { getArrayItemTypes, getStringLiteralValues, type EndpointParameter } from '@terros-inc/mcp-core'
 import minimist from 'minimist'
+import { getArrayItemTypes, getStringLiteralValues, type EndpointParameter } from '@terros-inc/mcp-core'
 import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 export const HELP_PARENT_MESSAGE = `
