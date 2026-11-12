@@ -359,11 +359,45 @@ pnpm build
 Run the CLI locally:
 
 ```sh
-node dist/index.js help
+node cli.js help
 ```
 
-The published `terros` executable loads the compiled code from `dist/index.js`,
+The published `terros` executable loads the compiled code from `dist/index.mjs`,
 so run `pnpm build` after changing TypeScript files.
+
+### Authenticated discovery smoke check
+
+From the repository root, build and run the smoke check separately from unit tests:
+
+```sh
+pnpm --filter @terros-inc/cli fetch-openapi
+pnpm --filter @terros-inc/cli... build
+pnpm --filter @terros-inc/cli smoke
+```
+
+Supply an authorized staging API key through `TERROS_API_KEY` and set
+`TERROS_API_ENDPOINT` to the staging API base URL. The key must belong to a
+Terros-internal user with access to `/openapi`. Without a non-whitespace key,
+the check prints `SKIP` and exits successfully. With a key, an explicit endpoint
+is required; the harness does not default to production.
+
+The check runs the built CLI's `account get --help` in a temporary home directory
+and requires both the backend OpenAPI cache containing `/account/get` and full-path
+command help. Bundled schema fallback cannot pass it. The loader's profile lookup
+is part of discovery; the check does not execute an account command. The temporary
+home is removed afterward, and the check does not use a saved CLI login.
+Failures print the error message and any CLI stderr with every occurrence of the
+supplied key replaced by `[REDACTED]`, then exit with code 1.
+
+The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
+on default-branch pushes or manual runs of that branch. All PR runs skip it.
+The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
+secret before checking out code, and skips the remaining steps successfully if
+the key is missing or whitespace-only. It fixes the endpoint to the staging API
+and passes the key only to the configuration check and smoke step. An admin must
+create the `staging` environment and its secret using a staging key owned by a
+Terros-internal user. The existing `terros` environment's key is for production
+publishing and must not be reused. This check does not gate npm publishing.
 
 ## Troubleshooting
 
