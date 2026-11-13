@@ -389,12 +389,21 @@ home is removed afterward, and the check does not use a saved CLI login.
 Failures print the error message and any CLI stderr with every occurrence of the
 supplied key replaced by `[REDACTED]`, then exit with code 1.
 
+Run `pnpm --filter @terros-inc/cli smoke:list` for the sibling read-only check.
+It runs the built CLI's internal `company list` command in a temporary home,
+requires exit 0, and parses stdout as JSON with `type: 'success'` and a
+`companies` array (which may be empty). The staging key also needs the internal
+`company:list` permission. It uses the same key and endpoint requirements and
+skip behavior as discovery. It never prints list contents; failures identify
+the failed stage and fully redact errors and CLI stderr because either can
+contain tenant data or the API key. The temporary home is removed afterward.
+
 The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
 on default-branch pushes or manual runs of that branch. All PR runs skip it.
 The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
-and passes the key only to the configuration check and smoke step. An admin must
+and passes the key only to the configuration check and both smoke steps. An admin must
 create the `staging` environment and its secret using a staging key owned by a
 Terros-internal user. The existing `terros` environment's key is for production
 publishing and must not be reused. This check does not gate npm publishing.
