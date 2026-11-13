@@ -54,3 +54,9 @@ jobs:
           TERROS_API_ENDPOINT: https://api.staging.terros.com
           TERROS_API_KEY: ${{ secrets.TERROS_API_KEY }}
         run: pnpm --filter @terros-inc/cli smoke
+      - name: Run a read-only list with the built CLI
+        if: steps.configuration.outputs.available == 'true'
+        env:
+          TERROS_API_ENDPOINT: https://api.staging.terros.com
+          TERROS_API_KEY: ${{ secrets.TERROS_API_KEY }}
+        run: pnpm --filter @terros-inc/cli smoke:list

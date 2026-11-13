@@ -50,3 +50,76 @@ it.each([
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+it.each([
+  {
+    name: 'an empty company list passes without requiring staging tenant records',
+    output: JSON.stringify({ type: 'success', companies: [] }),
+    exitCode: 0,
+    expectedStatus: 0,
+  },
+  {
+    name: 'a populated company list passes without logging records or successful stderr',
+    output: JSON.stringify({ type: 'success', companies: [{ companyId: 'C.example', name: 'Acme Solar' }] }),
+    exitCode: 0,
+    expectedStatus: 0,
+  },
+  {
+    name: 'a nonzero CLI exit fails even when stdout contains a valid list',
+    output: JSON.stringify({ type: 'success', companies: [] }),
+    exitCode: 1,
+    expectedStatus: 1,
+  },
+  {
+    name: 'malformed JSON fails without leaking parser excerpts containing the key or tenant data',
+    output: `Acme Solar C.example ${marker}`,
+    exitCode: 0,
+    expectedStatus: 1,
+  },
+  {
+    name: 'a JSON error response cannot pass as a company list or leak assertion values',
+    output: JSON.stringify({ type: 'error', companies: [], message: `Acme Solar C.example ${marker}` }),
+    exitCode: 0,
+    expectedStatus: 1,
+  },
+  {
+    name: 'a non-array companies field fails instead of accepting any JSON success',
+    output: JSON.stringify({ type: 'success', companies: {} }),
+    exitCode: 0,
+    expectedStatus: 1,
+  },
+])('$name', async ({ output, exitCode, expectedStatus }) => {
+  const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-list-test-'))
+  try {
+    const smoke = join(directory, 'smoke')
+    await mkdir(smoke)
+    await copyFile(new URL('../smoke/list.mjs', import.meta.url), join(smoke, 'list.mjs'))
+    await writeFile(
+      join(directory, 'cli.js'),
+      `
+        const assert = require('node:assert/strict')
+        assert.deepEqual(process.argv.slice(2), ['company', 'list'])
+        assert.ok(process.env.HOME)
+        console.log(${JSON.stringify(output)})
+        console.error('Acme Solar C.example ' + process.env.TERROS_API_KEY)
+        process.exitCode = ${exitCode}
+      `
+    )
+    const result = spawnSync(process.execPath, [join(smoke, 'list.mjs')], {
+      env: { TERROS_API_ENDPOINT: 'https://api.example.test', TERROS_API_KEY: marker },
+      encoding: 'utf8',
+      timeout: 10_000,
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(expectedStatus)
+    expect(result.stdout + result.stderr).not.toContain(marker)
+    expect(result.stdout + result.stderr).not.toContain('Acme Solar')
+    expect(result.stdout + result.stderr).not.toContain('C.example')
+    if (expectedStatus === 1) {
+      expect(result.stderr).toContain('Error: [REDACTED]')
+      expect(result.stderr).toContain('CLI stderr: [REDACTED]')
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
