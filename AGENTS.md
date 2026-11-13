@@ -40,6 +40,26 @@ Don't test simple data objects, pass-throughs, routine wiring, help or message w
 Each nontrivial test should name the realistic bug it prevents. Extend an existing test, or add one behavioral test, rather than a new file of mocks.
 Hide the ugly: a test of simple code only repeats it, so isolate unavoidable complexity and test only that part.
 
+### CLI smoke suite
+
+The smoke suite runs separately from unit tests against the built CLI. Its current check, [cli/smoke/discovery.mjs](cli/smoke/discovery.mjs), runs `terros account get --help` and requires both a freshly cached backend OpenAPI schema containing `/account/get` and full-path command help. Bundled schema fallback cannot pass. Discovery includes the loader's profile lookup; it does not execute an account command.
+
+The [CLI smoke workflow](.github/workflows/cli-smoke.yml) uses the `staging` GitHub environment and its `TERROS_API_KEY` secret, owned by a Terros-internal staging user with access to `/openapi`. It hardcodes `TERROS_API_ENDPOINT: https://api.staging.terros.com`; do not reuse the production publishing key from the `terros` environment. The job runs on default-branch pushes or manual runs of that branch and skips on `pull_request`, so PR code never runs with the secret. The first step, `Check staging API key` (`id: configuration`), checks for a non-whitespace key before checkout. Every remaining step is gated on `steps.configuration.outputs.available == 'true'`; a missing or whitespace-only key skips those steps successfully. Only the configuration check and smoke step receive the key.
+
+To run locally from the repository root after installing dependencies, supply an authorized staging key through the environment (never commit it):
+
+```sh
+pnpm --filter @terros-inc/cli fetch-openapi
+pnpm --filter @terros-inc/cli... build
+export TERROS_API_ENDPOINT=https://api.staging.terros.com
+export TERROS_API_KEY='<authorized-staging-api-key>'
+pnpm --filter @terros-inc/cli smoke
+```
+
+Without a non-whitespace `TERROS_API_KEY`, the script prints `SKIP` and exits successfully. With a key, `TERROS_API_ENDPOINT` is required; the script does not default to production. It uses a temporary `HOME`, ignores saved CLI logins, and removes that directory afterward. Failures exit with code 1 and print the error message and any CLI stderr with every occurrence of the supplied key replaced by `[REDACTED]`.
+
+To add a check, put it in its own script under `cli/smoke/` and give it its own step in `.github/workflows/cli-smoke.yml`, following the discovery check. Gate the step on the same configuration output, set the explicit staging endpoint and key, and invoke the new script separately. Use a fresh temporary `HOME` with cleanup, skip successfully when the key is unset or whitespace-only, and redact the key from error messages and CLI stderr before printing failures. Keep checks separate so a failure identifies which behavior broke; these additional checks do not exist yet.
+
 ## Publishing
 
 - `sdk` and `cli` publish to npm through the manual `publish.yml` workflow. It only stages the version; a `terros-inc` npm org member must approve it on npmjs.com before it is live. See `RELEASING.md`.
