@@ -367,21 +367,23 @@ so run `pnpm build` after changing TypeScript files.
 
 ### CLI smoke checks
 
-From the repository root, build and run the authenticated discovery check separately from unit tests:
+From the repository root, build and run the smoke checks separately from unit tests:
 
 ```sh
 pnpm --filter @terros-inc/cli fetch-openapi
 pnpm --filter @terros-inc/cli... build
 pnpm --filter @terros-inc/cli smoke
+pnpm --filter @terros-inc/cli smoke:user
+pnpm --filter @terros-inc/cli smoke:auth
 ```
 
-Supply an authorized staging API key through `TERROS_API_KEY` and set
+For discovery and authenticated user lookup, supply an authorized staging API key through `TERROS_API_KEY` and set
 `TERROS_API_ENDPOINT` to the staging API base URL. The key must belong to a
 Terros-internal user with access to `/openapi`. Without a non-whitespace key,
-the check prints `SKIP` and exits successfully. With a key, an explicit endpoint
-is required; the harness does not default to production.
+both checks print `SKIP` and exit successfully. With a key, an explicit endpoint
+is required; neither harness defaults to production.
 
-The check runs the built CLI's `account get --help` in a temporary home directory
+The discovery check (`smoke`) runs the built CLI's `account get --help` in a temporary home directory
 and requires both the backend OpenAPI cache containing `/account/get` and full-path
 command help. Bundled schema fallback cannot pass it. The loader's profile lookup
 is part of discovery; the check does not execute an account command. The temporary
@@ -389,13 +391,16 @@ home is removed afterward, and the check does not use a saved CLI login.
 Failures print the error message and any CLI stderr with every occurrence of the
 supplied key replaced by `[REDACTED]`, then exit with code 1.
 
-After building, run the invalid-key check separately:
+The user lookup check (`smoke:user`) runs the built CLI's read-only
+`api call user/profile` with an empty request body. It requires a `success`
+response with `user` and `company` objects containing string `userId` and
+`companyId` fields, respectively, without printing their values or profile data.
+The child receives only a temporary `HOME`, the endpoint and the key, so saved
+credentials, impersonation and debug settings cannot affect the lookup. The
+temporary home is removed afterward. Failures identify the failed stage and
+fully redact error details and any CLI stderr, then exit with code 1.
 
-```sh
-pnpm --filter @terros-inc/cli smoke:auth
-```
-
-Set `TERROS_API_ENDPOINT` explicitly. This check needs no secret: it runs the
+Set `TERROS_API_ENDPOINT` explicitly. The invalid-key check (`smoke:auth`) needs no secret: it runs the
 built CLI's `whoami` with a dummy invalid key in a temporary home directory,
 then removes that directory. It requires a normal non-zero exit, a clear
 authentication error as the last stderr line, and no stack trace on stdout or
@@ -406,13 +411,13 @@ on default-branch pushes or manual runs of that branch. All PR runs skip it.
 The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
-and passes the key only to the configuration check and discovery step. The
-invalid-key step shares the secret-dependent setup and step gates, so it also
-skips without the staging secret even though its script runs independently
+and passes the key only to the configuration check, discovery step and user-lookup
+step. The invalid-key step shares the secret-dependent setup and step gates, so it
+also skips without the staging secret even though its script runs independently
 without one. An admin must create the `staging` environment and its secret using
 a staging key owned by a
 Terros-internal user. The existing `terros` environment's key is for production
-publishing and must not be reused. This check does not gate npm publishing.
+publishing and must not be reused. These checks do not gate npm publishing.
 
 ## Troubleshooting
 
