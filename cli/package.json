@@ -58,6 +58,7 @@
     "pretest": "test -f terros.yml || pnpm fetch-openapi",
     "test": "vitest run",
     "smoke": "node smoke/discovery.mjs",
+    "smoke:auth": "node smoke/auth.mjs",
     "smoke:user": "node smoke/user.mjs",
     "check-schema": "tsdown --config tsdown.prepack.config.ts && node .prepack/prepack.mjs",
     "prepack": "pnpm fetch-openapi && pnpm check-schema && pnpm build",

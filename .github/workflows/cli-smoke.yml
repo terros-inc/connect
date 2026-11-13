@@ -60,3 +60,8 @@ jobs:
           TERROS_API_ENDPOINT: https://api.staging.terros.com
           TERROS_API_KEY: ${{ secrets.TERROS_API_KEY }}
         run: pnpm --filter @terros-inc/cli smoke:user
+      - name: Reject an invalid API key with the built CLI
+        if: steps.configuration.outputs.available == 'true'
+        env:
+          TERROS_API_ENDPOINT: https://api.staging.terros.com
+        run: pnpm --filter @terros-inc/cli smoke:auth

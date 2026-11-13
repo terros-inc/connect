@@ -365,7 +365,7 @@ node cli.js help
 The published `terros` executable loads the compiled code from `dist/index.mjs`,
 so run `pnpm build` after changing TypeScript files.
 
-### Authenticated smoke checks
+### CLI smoke checks
 
 From the repository root, build and run the smoke checks separately from unit tests:
 
@@ -374,12 +374,13 @@ pnpm --filter @terros-inc/cli fetch-openapi
 pnpm --filter @terros-inc/cli... build
 pnpm --filter @terros-inc/cli smoke
 pnpm --filter @terros-inc/cli smoke:user
+pnpm --filter @terros-inc/cli smoke:auth
 ```
 
-Supply an authorized staging API key through `TERROS_API_KEY` and set
+For discovery and authenticated user lookup, supply an authorized staging API key through `TERROS_API_KEY` and set
 `TERROS_API_ENDPOINT` to the staging API base URL. The key must belong to a
 Terros-internal user with access to `/openapi`. Without a non-whitespace key,
-each check prints `SKIP` and exits successfully. With a key, an explicit endpoint
+both checks print `SKIP` and exit successfully. With a key, an explicit endpoint
 is required; neither harness defaults to production.
 
 The discovery check (`smoke`) runs the built CLI's `account get --help` in a temporary home directory
@@ -399,13 +400,22 @@ credentials, impersonation and debug settings cannot affect the lookup. The
 temporary home is removed afterward. Failures identify the failed stage and
 fully redact error details and any CLI stderr, then exit with code 1.
 
+Set `TERROS_API_ENDPOINT` explicitly. The invalid-key check (`smoke:auth`) needs no secret: it runs the
+built CLI's `whoami` with a dummy invalid key in a temporary home directory,
+then removes that directory. It requires a normal non-zero exit, a clear
+authentication error as the last stderr line, and no stack trace on stdout or
+stderr. Failures print the error and CLI stderr with the dummy key redacted.
+
 The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
 on default-branch pushes or manual runs of that branch. All PR runs skip it.
 The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
-and passes the key only to the configuration check and the two smoke steps. An admin must
-create the `staging` environment and its secret using a staging key owned by a
+and passes the key only to the configuration check, discovery step and user-lookup
+step. The invalid-key step shares the secret-dependent setup and step gates, so it
+also skips without the staging secret even though its script runs independently
+without one. An admin must create the `staging` environment and its secret using
+a staging key owned by a
 Terros-internal user. The existing `terros` environment's key is for production
 publishing and must not be reused. These checks do not gate npm publishing.
 
