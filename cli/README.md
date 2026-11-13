@@ -365,9 +365,9 @@ node cli.js help
 The published `terros` executable loads the compiled code from `dist/index.mjs`,
 so run `pnpm build` after changing TypeScript files.
 
-### Authenticated discovery smoke check
+### CLI smoke checks
 
-From the repository root, build and run the smoke check separately from unit tests:
+From the repository root, build and run the authenticated discovery check separately from unit tests:
 
 ```sh
 pnpm --filter @terros-inc/cli fetch-openapi
@@ -389,13 +389,28 @@ home is removed afterward, and the check does not use a saved CLI login.
 Failures print the error message and any CLI stderr with every occurrence of the
 supplied key replaced by `[REDACTED]`, then exit with code 1.
 
+After building, run the invalid-key check separately:
+
+```sh
+pnpm --filter @terros-inc/cli smoke:auth
+```
+
+Set `TERROS_API_ENDPOINT` explicitly. This check needs no secret: it runs the
+built CLI's `whoami` with a dummy invalid key in a temporary home directory,
+then removes that directory. It requires a normal non-zero exit, a clear
+authentication error as the last stderr line, and no stack trace on stdout or
+stderr. Failures print the error and CLI stderr with the dummy key redacted.
+
 The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
 on default-branch pushes or manual runs of that branch. All PR runs skip it.
 The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
-and passes the key only to the configuration check and smoke step. An admin must
-create the `staging` environment and its secret using a staging key owned by a
+and passes the key only to the configuration check and discovery step. The
+invalid-key step shares the secret-dependent setup and step gates, so it also
+skips without the staging secret even though its script runs independently
+without one. An admin must create the `staging` environment and its secret using
+a staging key owned by a
 Terros-internal user. The existing `terros` environment's key is for production
 publishing and must not be reused. This check does not gate npm publishing.
 
