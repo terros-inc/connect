@@ -26,6 +26,7 @@ import {
 import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
 import { readInputFile } from './inputFile'
 import { companyScopeHint, impersonationFlagMessage } from './impersonation'
+import { formatOutput } from './formatOutput'
 import {
   buildCliCommandTree,
   checkBuiltinCollisions,
@@ -185,7 +186,7 @@ export async function main(argv: string[]): Promise<void> {
     process.exitCode = 1
     return
   }
-  console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
+  console.log(formatOutput(withoutUploadUrls(response)))
   const hint = await companyScopeHint({ response })
   if (hint !== undefined) console.error(hint)
 }

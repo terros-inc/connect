@@ -237,7 +237,26 @@ terros <command> [<subcommand> ...] --ids '["id_1","id_2","id_3"]'
 terros <command> [<subcommand> ...] --metadata '{"source":"cli"}'
 ```
 
-Responses are printed as formatted JSON.
+Responses are printed as formatted JSON. Numeric epoch-millisecond fields named
+`timestamp`, `firstAccess`, `lastAccess`, or ending in `At` gain an adjacent
+`<field>Local` sibling by default, including inside arrays and nested objects.
+The sibling contains an ISO-8601 `iso` string with the local UTC offset and a
+`timeZone` name from the caller's system (or `TZ` environment variable):
+
+```json
+{
+  "lastAccess": 1767225600000,
+  "lastAccessLocal": {
+    "iso": "2025-12-31T16:00:00.000-08:00",
+    "timeZone": "America/Los_Angeles"
+  }
+}
+```
+
+This applies to endpoint commands, `terros api call`, and `terros api log`.
+Raw values stay unchanged; existing `<field>Local` fields are preserved.
+Only valid integer timestamps are annotated; strings and nulls stay unchanged.
+Date inputs are unchanged.
 
 To send a large request body, such as a whole workflow, put it in a JSON file
 and pass `--inputFile` (`-` reads standard input). Flags still work alongside
