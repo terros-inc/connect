@@ -228,6 +228,9 @@ test.each(['account/match', 'calendar/event/upsert'])('a failed %s call fails th
 })
 
 test('a rejected target API key fails the run, and a missing one fails it permanently', async () => {
-  await expect(run(copyAccount, accountAdded, { targetApiKey: 'revoked-key-example' })).rejects.toThrow('Unauthorized')
+  await expect(run(copyAccount, accountAdded, { targetApiKey: 'revoked-key-example' })).rejects.toMatchObject({
+    message: 'Invalid or unauthorized API key',
+    status: 401,
+  })
   await expect(run(copyAccount, accountAdded, {})).rejects.toMatchObject({ name: 'PermanentError' })
 })

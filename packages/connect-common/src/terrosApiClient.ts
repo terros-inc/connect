@@ -60,7 +60,13 @@ export class TerrosApiClient {
       if (cause instanceof AuthRequiredError) throw cause
       throw new Error(`Request to ${route} failed: ${cause instanceof Error ? cause.message : cause}`, { cause })
     }
-    if (!response.ok) throw new Error(response.statusText)
+    if (!response.ok) {
+      const message =
+        this.authStrategy.type === 'apikey' && (response.status === 401 || response.status === 403)
+          ? 'Invalid or unauthorized API key'
+          : response.statusText
+      throw Object.assign(new Error(message), { status: response.status })
+    }
     const output: unknown = await response.json()
     if (isResponseError(output)) throw new TerrosApiError(output)
     return output as Success
