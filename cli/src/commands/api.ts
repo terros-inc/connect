@@ -1,6 +1,7 @@
 import type { ParsedArgs } from 'minimist'
 import { withoutUploadUrls } from '@terros-inc/mcp-core'
 import { loadEndpointsAfterRefresh } from '../loadEndpoints'
+import { formatOutput } from '../formatOutput'
 import { clearOpenApiCache } from '../cache'
 import { runApiHistoryQuery } from '../apiHistory'
 import { buildTerrosClient } from '../api/query'
@@ -17,7 +18,7 @@ export const apiCommands = {
     async run({ params, args }: CommandContext): Promise<void> {
       const { path, body } = parseApiCallParams(params, args)
       const response = await buildTerrosClient().call(path, body)
-      console.log(JSON.stringify(withoutUploadUrls(response), null, 2))
+      console.log(formatOutput(withoutUploadUrls(response)))
     },
   },
   refresh: {
@@ -45,7 +46,7 @@ export const apiCommands = {
       const result = await runApiHistoryQuery(buildTerrosClient(), parseApiLogParams(params))
       if (result.sinceClipped)
         console.error(`Requested --since was clipped to the seven-day limit (${result.effectiveSince ?? 'unknown'})`)
-      console.log(JSON.stringify(result.requests ?? [], null, 2))
+      console.log(formatOutput(result.requests ?? []))
     },
   },
 }

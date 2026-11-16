@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { Settings } from 'luxon'
 import { buildEndpointInput, getExampleArguments, parseEndpoints, type Endpoint } from '@terros-inc/mcp-core'
 import { TerrosApiError } from '@terros-inc/connect-common'
 import { main, parseArgv } from './main'
@@ -152,6 +153,32 @@ describe('a built-in nothing lands on', () => {
 })
 
 describe('an endpoint command', () => {
+  it.each([
+    ['user', 'get', '--userId', 'U.example'],
+    ['api', 'call', '/user/get', '--body', '{"userId":"U.example"}'],
+  ])('prints readable lastAccess alongside the raw timestamp via %s %s', async (...args) => {
+    const originalZone = Settings.defaultZone
+    Settings.defaultZone = 'America/Los_Angeles'
+    try {
+      vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(schemaWithParameter('/user/get', 'userId')))
+      call.mockResolvedValue({ user: { userId: 'U.example', lastAccess: 1767225600000 } })
+      await main(args)
+      expect(call).toHaveBeenCalledWith('/user/get', { userId: 'U.example' })
+      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
+        user: {
+          userId: 'U.example',
+          lastAccess: 1767225600000,
+          lastAccessLocal: {
+            iso: '2025-12-31T16:00:00.000-08:00',
+            timeZone: 'America/Los_Angeles',
+          },
+        },
+      })
+    } finally {
+      Settings.defaultZone = originalZone
+    }
+  })
+
   // Staff with company:update get presigned write URLs from company/get; printing them would hand out upload access.
   it('prints the response without presigned upload URLs', async () => {
     schema('/company/get')
