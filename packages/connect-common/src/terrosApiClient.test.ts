@@ -16,6 +16,7 @@ describe('TerrosApiClient', () => {
   function mockFetch(body: unknown, ok = true): void {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok,
+      status: ok ? 200 : 400,
       statusText: 'Bad Request',
       json: () => Promise.resolve(body),
     }) as unknown as typeof fetch
@@ -130,6 +131,36 @@ describe('TerrosApiClient', () => {
     const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
 
     await expect(caller.call('user/get', {})).rejects.toThrow('Bad Request')
+    await expect(caller.call('user/get', {})).rejects.toMatchObject({ status: 400 })
+  })
+
+  it.each([
+    { status: 401, statusText: 'Unauthorized' },
+    { status: 403, statusText: 'Forbidden' },
+    { status: 401, statusText: '' },
+    { status: 403, statusText: '' },
+  ])(
+    'reports an invalid API key for HTTP $status even with reason phrase "$statusText"',
+    async ({ status, statusText }) => {
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status, statusText }))
+      const caller = new TerrosApiClient({ apiKey: 'test-key' })
+
+      await expect(caller.call('user/profile', {})).rejects.toMatchObject({
+        message: 'Invalid or unauthorized API key',
+        status,
+      })
+      await expect(caller.get('openapi')).rejects.toMatchObject({
+        message: 'Invalid or unauthorized API key',
+        status,
+      })
+    }
+  )
+
+  it('does not mislabel a bearer-token permission failure as an invalid API key', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 403, statusText: 'Forbidden' }))
+    const caller = new TerrosApiClient({ accessToken: 'access-token-example' })
+
+    await expect(caller.call('user/profile', {})).rejects.toMatchObject({ message: 'Forbidden', status: 403 })
   })
 
   it('preserves the typed API error for CLI and MCP callers', async () => {

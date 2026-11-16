@@ -52,26 +52,42 @@ it.each([
 })
 
 it.each([
-  { name: 'accepts a clean auth rejection without a staging secret', code: 1, stderr: 'Unauthorized', status: 0 },
-  { name: 'rejects a successful exit even with auth error text', code: 0, stderr: 'Unauthorized', status: 1 },
+  {
+    name: 'accepts a clean auth rejection without a staging secret',
+    code: 1,
+    stderr: 'Invalid or unauthorized API key',
+    status: 0,
+  },
+  {
+    name: 'rejects a successful exit even with auth error text',
+    code: 0,
+    stderr: 'Invalid or unauthorized API key',
+    status: 1,
+  },
+  {
+    name: 'rejects a bare server reason phrase instead of the client contract',
+    code: 1,
+    stderr: 'Forbidden',
+    status: 1,
+  },
   { name: 'rejects an unrelated network failure', code: 1, stderr: 'fetch failed', status: 1 },
   {
     name: 'does not mistake a schema auth warning for the command failure',
     code: 1,
-    stderr: 'Unable to load internal API commands: Unauthorized\nfetch failed',
+    stderr: 'Unable to load internal API commands: Invalid or unauthorized API key\nfetch failed',
     status: 1,
   },
   {
     name: 'rejects a stack trace on stderr and redacts diagnostics',
     code: 1,
-    stderr: 'Unauthorized\n    at request (file:///example.js:1:2)',
+    stderr: 'Invalid or unauthorized API key\n    at request (file:///example.js:1:2)',
     status: 1,
   },
   {
     name: 'rejects a stack trace on stdout',
     code: 1,
-    stderr: 'Unauthorized',
-    stdout: 'Error: Unauthorized\n    at request (file:///example.js:1:2)',
+    stderr: 'Invalid or unauthorized API key',
+    stdout: 'Error: Invalid or unauthorized API key\n    at request (file:///example.js:1:2)',
     status: 1,
   },
 ])('auth smoke $name', async ({ code, stderr, stdout = '', status }) => {
@@ -89,7 +105,7 @@ it.each([
         assert.ok(process.env.HOME)
         assert.notEqual(process.env.HOME, ${JSON.stringify(directory)})
         assert.ok(process.env.TERROS_API_KEY)
-        console.error(${JSON.stringify(stderr)} + ' ' + process.env.TERROS_API_KEY)
+        console.error(process.env.TERROS_API_KEY + '\\n' + ${JSON.stringify(stderr)})
         console.log(${JSON.stringify(stdout)} + process.env.TERROS_API_KEY)
         process.exitCode = ${code}
       `

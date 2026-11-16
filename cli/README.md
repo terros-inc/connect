@@ -422,7 +422,7 @@ fully redact error details and any CLI stderr, then exit with code 1.
 Set `TERROS_API_ENDPOINT` explicitly. The invalid-key check (`smoke:auth`) needs no secret: it runs the
 built CLI's `whoami` with a dummy invalid key in a temporary home directory,
 then removes that directory. It requires a normal non-zero exit, a clear
-authentication error as the last stderr line, and no stack trace on stdout or
+`Invalid or unauthorized API key` message as the last stderr line, and no stack trace on stdout or
 stderr. Failures print the error and CLI stderr with the dummy key redacted.
 
 The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only

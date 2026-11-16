@@ -37,9 +37,9 @@ try {
   }
   assert.notEqual(exitCode, 0, 'CLI must reject an invalid API key')
   assert.doesNotMatch(`${stdout}\n${stderr}`, /^\s+at\s+.+/m, 'CLI must not print a stack trace')
-  assert.match(
+  assert.equal(
     stderr.trim().split('\n').at(-1) ?? '',
-    /\b(?:unauthorized|unauthenticated|invalid (?:api[ -]?)?key|invalid credentials|authentication failed)\b/i,
+    'Invalid or unauthorized API key',
     'CLI must report a clear authentication error'
   )
   console.log('PASS: invalid API key fails cleanly without a stack trace.')
