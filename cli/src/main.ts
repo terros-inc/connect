@@ -174,6 +174,12 @@ export async function main(argv: string[]): Promise<void> {
     : buildTerrosClient()
   let response: unknown
   try {
+    if (endpoint.path === '/user/logins' && 'userId' in input && typeof input.userId === 'string') {
+      if (!/^U[.:]/.test(input.userId)) {
+        const { user } = await client.call<{ user: { userId: string } }>('/user/get', { userId: input.userId })
+        input = { ...input, userId: user.userId }
+      }
+    }
     response =
       endpoint.path === '/apiHistory/start'
         ? await runApiHistoryQuery(client, input)
@@ -252,7 +258,15 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   const endpoint = level.node.endpoint
   if (endpoint) {
     const depth = getHelpDepth(requestedDepth)
-    const parameters = getEndpointInputParameters(endpoint, depth)
+    const parameters = getEndpointInputParameters(endpoint, depth).map((parameter) =>
+      endpoint.path === '/user/logins' && parameter.name === 'userId'
+        ? {
+            ...parameter,
+            description:
+              'User ID, email, account ID, or clientUserId whose sign-in history to return. Defaults to the authenticated user.',
+          }
+        : parameter
+    )
     console.log(
       formatSubcommandParametersHelp(
         level.words.join(' '),
