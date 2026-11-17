@@ -121,13 +121,14 @@ Users with internal access can list a company's recent API requests, newest
 first, from the last seven days:
 
 ```sh
-terros api log --companyId <companyId> [--endpoint /account/add] [--errorsOnly] [--since 2026-01-01T00:00:00Z] [--limit 25]
+terros api log --companyId <companyId> [--endpoint /account/add] [--errorsOnly] [--since 2026-01-01T00:00:00Z] [--until 2026-01-02T00:00:00Z] [--limit 25]
 ```
 
 Each request includes its timestamp, endpoint, user, stored status, latency,
 error type and message, and a redacted, truncated request body. Typed errors
-are stored with status 200, so use `--errorsOnly` to find them. `--since`
-defaults to the last day; if it is older than seven days, the CLI prints the
+are stored with status 200, so use `--errorsOnly` to find them. `--until`
+defaults to now and `--since` to one day before `--until`; pass `--until` to
+read an older window. If `--since` is older than seven days, the CLI prints the
 effective clipped start time. `--limit` takes 1 to 100 and defaults to 25.
 
 `terros api log` runs the `apiHistory start` query, waits for it and prints only
