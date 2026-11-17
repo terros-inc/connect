@@ -175,7 +175,7 @@ export async function main(argv: string[]): Promise<void> {
   let response: unknown
   try {
     if (endpoint.path === '/user/logins' && 'userId' in input && typeof input.userId === 'string') {
-      if (!/^U[.:]/.test(input.userId)) {
+      if (!/^U[.:][^@]*$/.test(input.userId)) {
         const { user } = await client.call<{ user: { userId: string } }>('/user/get', { userId: input.userId })
         input = { ...input, userId: user.userId }
       }

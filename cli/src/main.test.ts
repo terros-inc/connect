@@ -153,25 +153,28 @@ describe('a built-in nothing lands on', () => {
 })
 
 describe('an endpoint command', () => {
-  it.each(['user@example.test', 'Account.example', 'external-user-example'])(
-    'resolves %s through user/get before requesting sign-ins',
-    async (userId) => {
-      const document = JSON.parse(schemaWithParameter('/user/logins', 'userId'))
-      document.paths['/user/logins'].post.requestBody.content['application/json'].schema.properties.page = {
-        type: 'integer',
-      }
-      vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
-      call.mockResolvedValueOnce({ user: { userId: 'U.example' } }).mockResolvedValueOnce({ history: [], page: 2 })
-
-      await main(['user', 'logins', '--userId', userId, '--page', '2'])
-
-      expect(call.mock.calls).toEqual([
-        ['/user/get', { userId }],
-        ['/user/logins', { userId: 'U.example', page: 2 }],
-      ])
-      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ history: [], page: 2 })
+  it.each([
+    'user@example.test',
+    'U.smith@example.com',
+    'U:smith@example.com',
+    'Account.example',
+    'external-user-example',
+  ])('resolves %s through user/get before requesting sign-ins', async (userId) => {
+    const document = JSON.parse(schemaWithParameter('/user/logins', 'userId'))
+    document.paths['/user/logins'].post.requestBody.content['application/json'].schema.properties.page = {
+      type: 'integer',
     }
-  )
+    vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
+    call.mockResolvedValueOnce({ user: { userId: 'U.example' } }).mockResolvedValueOnce({ history: [], page: 2 })
+
+    await main(['user', 'logins', '--userId', userId, '--page', '2'])
+
+    expect(call.mock.calls).toEqual([
+      ['/user/get', { userId }],
+      ['/user/logins', { userId: 'U.example', page: 2 }],
+    ])
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ history: [], page: 2 })
+  })
 
   it.each([undefined, 'U.example', 'U:example'])(
     'keeps sign-in lookup without user/get for userId %s',
