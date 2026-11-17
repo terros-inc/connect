@@ -394,13 +394,14 @@ pnpm --filter @terros-inc/cli... build
 pnpm --filter @terros-inc/cli smoke
 pnpm --filter @terros-inc/cli smoke:user
 pnpm --filter @terros-inc/cli smoke:auth
+pnpm --filter @terros-inc/cli smoke:list
 ```
 
-For discovery and authenticated user lookup, supply an authorized staging API key through `TERROS_API_KEY` and set
+For discovery, authenticated user lookup and the read-only list, supply an authorized staging API key through `TERROS_API_KEY` and set
 `TERROS_API_ENDPOINT` to the staging API base URL. The key must belong to a
 Terros-internal user with access to `/openapi`. Without a non-whitespace key,
-both checks print `SKIP` and exit successfully. With a key, an explicit endpoint
-is required; neither harness defaults to production.
+each check prints `SKIP` and exits successfully. With a key, an explicit endpoint
+is required; none of the harnesses default to production.
 
 The discovery check (`smoke`) runs the built CLI's `account get --help` in a temporary home directory
 and requires both the backend OpenAPI cache containing `/account/get` and full-path
@@ -425,13 +426,22 @@ then removes that directory. It requires a normal non-zero exit, a clear
 `Invalid or unauthorized API key` message as the last stderr line, and no stack trace on stdout or
 stderr. Failures print the error and CLI stderr with the dummy key redacted.
 
+Run `pnpm --filter @terros-inc/cli smoke:list` for the sibling read-only check.
+It runs the built CLI's internal `company list` command in a temporary home,
+requires exit 0, and parses stdout as JSON with `type: 'success'` and a
+`companies` array (which may be empty). The staging key also needs the internal
+`company:list` permission. It uses the same key and endpoint requirements and
+skip behavior as discovery. It never prints list contents; failures identify
+the failed stage and fully redact errors and CLI stderr because either can
+contain tenant data or the API key. The temporary home is removed afterward.
+
 The separate [CLI smoke workflow](../.github/workflows/cli-smoke.yml) runs only
 on default-branch pushes or manual runs of that branch. All PR runs skip it.
 The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
-and passes the key only to the configuration check, discovery step and user-lookup
-step. The invalid-key step shares the secret-dependent setup and step gates, so it
+and passes the key only to the configuration check, discovery step, user-lookup
+step and read-only list step. The invalid-key step shares the secret-dependent setup and step gates, so it
 also skips without the staging secret even though its script runs independently
 without one. An admin must create the `staging` environment and its secret using
 a staging key owned by a
