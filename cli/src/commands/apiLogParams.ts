@@ -6,6 +6,7 @@ export type ApiLogInput = {
   endpoint?: string
   errorsOnly?: boolean
   since?: string
+  until?: string
   limit?: number
 }
 
@@ -22,7 +23,14 @@ export const apiLogParameters: EndpointParameter[] = [
     name: 'since',
     type: 'string',
     required: false,
-    description: 'Earliest request time (ISO 8601), defaults to the last day, clipped to the last seven days',
+    description: 'Earliest request time (ISO 8601), defaults to one day before --until, clipped to the last seven days',
+  },
+  {
+    name: 'until',
+    type: 'string',
+    required: false,
+    description:
+      'Latest request time (ISO 8601), defaults to now; must be after --since and within the last seven days',
   },
   { name: 'limit', type: 'integer', required: false, description: 'Maximum requests to return, 1-100 (default 25)' },
 ]
@@ -39,6 +47,7 @@ export function parseApiLogParams(params: ParsedArgs): ApiLogInput {
     endpoint: optionalString(params.endpoint, 'endpoint'),
     errorsOnly: optionalBoolean(params.errorsOnly),
     since: optionalString(params.since, 'since'),
+    until: optionalString(params.until, 'until'),
     limit: optionalInteger(params.limit, 'limit'),
   }
 }

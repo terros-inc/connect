@@ -17,6 +17,8 @@ it('parses the log filters', () => {
       '--errorsOnly',
       '--since',
       '2026-10-01T00:00:00Z',
+      '--until',
+      '2026-10-01T06:00:00Z',
       '--limit',
       '50',
     ])
@@ -25,6 +27,7 @@ it('parses the log filters', () => {
     endpoint: '/account/add',
     errorsOnly: true,
     since: '2026-10-01T00:00:00Z',
+    until: '2026-10-01T06:00:00Z',
     limit: 50,
   })
 })
@@ -32,4 +35,5 @@ it('parses the log filters', () => {
 it('rejects unknown and malformed flags', () => {
   expect(() => parse(['--companyId', 'C:example', '--apiKey', 'x'])).toThrow('--apiKey')
   expect(() => parse(['--companyId', 'C:example', '--status', '503'])).toThrow('--status')
+  expect(() => parse(['--companyId', 'C:example', '--until', ''])).toThrow('--until must be a non-empty string')
 })
