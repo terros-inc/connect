@@ -153,6 +153,47 @@ describe('a built-in nothing lands on', () => {
 })
 
 describe('an endpoint command', () => {
+  it.each(['user@example.test', 'Account.example', 'external-user-example'])(
+    'resolves %s through user/get before requesting sign-ins',
+    async (userId) => {
+      const document = JSON.parse(schemaWithParameter('/user/logins', 'userId'))
+      document.paths['/user/logins'].post.requestBody.content['application/json'].schema.properties.page = {
+        type: 'integer',
+      }
+      vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
+      call.mockResolvedValueOnce({ user: { userId: 'U.example' } }).mockResolvedValueOnce({ history: [], page: 2 })
+
+      await main(['user', 'logins', '--userId', userId, '--page', '2'])
+
+      expect(call.mock.calls).toEqual([
+        ['/user/get', { userId }],
+        ['/user/logins', { userId: 'U.example', page: 2 }],
+      ])
+      expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ history: [], page: 2 })
+    }
+  )
+
+  it.each([undefined, 'U.example', 'U:example'])(
+    'keeps sign-in lookup without user/get for userId %s',
+    async (userId) => {
+      vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(schemaWithParameter('/user/logins', 'userId')))
+
+      await main(['user', 'logins', ...(userId === undefined ? [] : ['--userId', userId])])
+
+      expect(call.mock.calls).toEqual([['/user/logins', userId === undefined ? {} : { userId }]])
+    }
+  )
+
+  it('does not request sign-ins for the current user when identifier resolution fails', async () => {
+    vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(schemaWithParameter('/user/logins', 'userId')))
+    call.mockRejectedValueOnce(new Error('User not found'))
+
+    await expect(main(['user', 'logins', '--userId', 'user@example.test'])).rejects.toThrow('User not found')
+
+    expect(call.mock.calls).toEqual([['/user/get', { userId: 'user@example.test' }]])
+    expect(log).not.toHaveBeenCalled()
+  })
+
   it.each([
     ['user', 'get', '--userId', 'U.example'],
     ['api', 'call', '/user/get', '--body', '{"userId":"U.example"}'],
