@@ -1,5 +1,6 @@
-import type { AccountId } from '@terros-inc/sdk'
+import type { AccountId, AccountWebhookData } from '@terros-inc/sdk'
 import { findTarget, LIMITS, syncResults, type SyncConfig } from './sync.ts'
+import { sendAccount } from './send.ts'
 import { getLeadLeadRow, jobStatusChangeRow, salesAppointmentRow } from './fixtures.ts'
 import { fakeLeadPerfection, fakeTerros } from './fakeLeadPerfection.ts'
 
@@ -63,7 +64,7 @@ function scenario(requestType?: string) {
       location: { postal1: '27519' } as never,
       resident: { phone: '555-555-0103' },
     },
-    { accountId: 'Account.linked', sourceId: '1004', ...inStage('S.customer') },
+    { accountId: 'Account.linked', sourceId: 'leadperfection:1004', ...inStage('S.customer') },
   ])
   const run = () => syncResults({ ...config, requestType }, lp.client, terros.terros, now)
   const getLeadCalls = () => lp.calls.filter((call) => call.url.endsWith('/GetLead')).map((call) => call.form.cst_id)
@@ -100,11 +101,13 @@ describe('LeadPerfection Sync', () => {
     expect(stageOf(store, 'Account.examplePhone')).toBe('S.resched')
     expect(stageOf(store, 'Account.linked')).toBe('S.jobDone')
     expect(store.get('Account.exampleSent' as AccountId)).toMatchObject({
-      sourceId: '1001',
+      sourceId: 'leadperfection:1001',
       sourceStatus: 'Complete',
       lastActionDate: Date.parse('2026-11-12T05:00:00Z'), // the contract date, midnight in New York
     })
-    expect(store.get('Account.exampleSent2' as AccountId)?.sourceId).toBe('1002')
+    expect(store.get('Account.exampleSent2' as AccountId)?.sourceId).toBe('leadperfection:1002')
+    // Its customer has no inbound lead ID, so the link marks it as sent.
+    expect(store.get('Account.examplePhone' as AccountId)?.externalLeadId).toBe('leadperfection:1003')
     expect(store.size).toBe(4)
     // 1004 was linked already and 1006 has no mapped status, so neither costs a GetLead call.
     expect(getLeadCalls()).toEqual(['1001', '1002', '1003', '1005'])
@@ -129,7 +132,7 @@ describe('LeadPerfection Sync', () => {
 
     expect(store.get('Account.exampleCreated1' as AccountId)).toMatchObject({
       workflowStageId: 'S.customer',
-      sourceId: '1005',
+      sourceId: 'leadperfection:1005',
       accountSource: 'LeadPerfection',
       resident: { firstName: 'Pat', lastName: 'Example' },
       location: { line1: '100 Example Way', locality: 'Springfield', countrySubd: 'NC', postal1: '27519' },
@@ -175,6 +178,49 @@ describe('LeadPerfection Sync', () => {
 
     expect(stageOf(store, 'Account.exampleSent')).toBe('S.customer')
     expect(stageOf(store, 'Account.exampleSent2')).toBe('S.leadSet')
+  })
+
+  // A move fires Send; without an externalLeadId it would add the customer to LeadPerfection a second time.
+  it('moves an account into a send stage without Send adding it to LeadPerfection again', async () => {
+    const lp = fakeLeadPerfection({
+      appointments: [appointment(1003, 'Set', { Phone: '(555)555-0103', zip: '27519' })],
+      leads: { '1003': [lead('', '2903')] },
+    })
+    const { store, terros } = fakeTerros([
+      {
+        accountId: 'Account.examplePhone',
+        ...inStage('S.prospect'),
+        location: { postal1: '27519' } as never,
+        resident: { firstName: 'Pat', lastName: 'Example', phone: '555-555-0103' },
+      },
+    ])
+
+    await syncResults(config, lp.client, terros, now)
+    expect(store.get('Account.examplePhone' as AccountId)).toMatchObject({
+      workflowStageId: 'S.leadSet',
+      externalLeadId: '2903',
+    })
+
+    const send = fakeLeadPerfection()
+    const webhook: AccountWebhookData = {
+      id: 'Account.examplePhone',
+      createdAt: '2026-11-18T15:00:00Z',
+      updatedAt: '2026-11-18T15:00:00Z',
+      workflowState: { workflowId: 'WF.example', stageId: 'S.leadSet', stageName: 'Lead (Set)' },
+      resident: { firstName: 'Pat', lastName: 'Example', phone: '5555550103' },
+    }
+    await sendAccount(webhook, { sendStageIds: 'S.leadSet', srs_id: '56' }, send.client, terros)
+    expect(send.added).toEqual([])
+  })
+
+  // account/match finds a sourceId among every system's accounts, so a bare customer ID could move another's.
+  it("does not match another system's account that has the customer ID as its sourceId", async () => {
+    const lp = fakeLeadPerfection({ appointments: [appointment(1001, 'Sale')], leads: { '1001': [lead('', '')] } })
+    const { writes, terros } = fakeTerros([{ accountId: 'Account.other', sourceId: '1001', ...inStage('S.leadSet') }])
+
+    await syncResults(config, lp.client, terros, now)
+
+    expect(writes).toEqual([])
   })
 
   it('matches no account when two share the phone number', async () => {

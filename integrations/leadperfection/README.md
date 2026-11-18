@@ -62,16 +62,16 @@ An account in one of `sendStageIds` with no `externalLeadId` becomes one LeadPer
 | `pro_id`                                  | Owner's Terros external user ID, when it is a number (the rep's LeadPerfection employee ID) |
 | `sender`, `srs_id`, `productID`, `brn_id` | Install config                                                                              |
 
-The account is never sent twice: once its `externalLeadId` is saved, and for accounts Sync created from LeadPerfection, Send skips it. Changes after the first send are not sent.
+The account is never sent twice: once it has an `externalLeadId`, Send skips it. Sync sets one on every account it links to or creates from a LeadPerfection customer (the customer's inbound lead ID, or `leadperfection:` and the customer ID when it has none), so Sync moving an account into a send stage does not send it back. Changes after the first send are not sent.
 
 ## Matching
 
 Sync looks for each LeadPerfection customer's Terros account in this order, and never by name alone:
 
-1. An account an earlier run linked: Sync saves the LeadPerfection customer ID as the account's `sourceId` when it first matches it, unless the account already has a `sourceId` from another system.
+1. An account an earlier run linked: Sync saves `leadperfection:` and the LeadPerfection customer ID, such as `leadperfection:1001`, as the account's `sourceId` when it first matches it, unless the account already has a `sourceId` from another system. The prefix keeps another system's account with the same number from matching.
 2. The `lognumber` Send put on the lead, which is the Terros account ID.
 3. The LeadPerfection lead ID Send saved as `externalLeadId`.
-4. The phone number, among accounts at the customer's ZIP code. Two or more accounts with that phone match nothing.
+4. The phone number, among up to 1,000 accounts at the customer's ZIP code. Two or more accounts with that phone match nothing.
 
 Steps 2 and 3 read the customer's leads with `GetLead`. A customer with no match is skipped with `requestType: update`; with `upsert`, Sync creates a Terros account for it (name, address, phone and email from LeadPerfection), linked by its customer ID.
 
@@ -87,7 +87,7 @@ Each run reads the last `lookbackDays` days again, since LeadPerfection has no w
 
 ## Limits
 
-LeadPerfection allows 60 API calls a minute, and a script run has a minute. One Sync run makes at most 5 `GetJobStatusChanges` pages of 100, one `GetSalesApptDetailDateRange` and 40 `GetLead` lookups, and stops taking new customers after 45 seconds. What is left waits for the next run, which reads the same window again. Customers already linked cost no `GetLead` call.
+LeadPerfection allows 60 API calls a minute, and a script run has a minute. One Sync run makes at most 5 `GetJobStatusChanges` pages of 100, one `GetSalesApptDetailDateRange` and 40 `GetLead` lookups, and stops taking new customers 45 seconds after it starts. It reads job status changes newest first, so in a window with more than 500 it reads the newest 500 and skips the older ones, which earlier runs normally read while they were newer. Customers left over from lookups or time wait for the next run, which reads the same window again. Customers already linked cost no `GetLead` call.
 
 ## Not covered yet
 

@@ -131,27 +131,29 @@ export class LeadPerfectionClient {
     return reply.id
   }
 
-  // StartIndex is a page number, not a record offset. Reads at most maxPages pages; complete is false when more
-  // pages may remain.
+  // StartIndex is a page number, not a record offset. Reads the newest maxPages pages at most and returns them
+  // oldest page first; complete is false when older pages may remain.
   async getJobStatusChanges(
     startdate: string,
     enddate: string,
     pageSize: number,
     maxPages: number
   ): Promise<{ rows: JobStatusChange[]; complete: boolean }> {
-    const rows: JobStatusChange[] = []
+    const pages: JobStatusChange[][] = []
     for (let page = 1; page <= maxPages; page++) {
       const batch = await this.call<JobStatusChange[]>('/api/Customers/GetJobStatusChanges', {
         startdate,
         enddate,
-        sortorder: 3, // status date ascending, so a later row of the same job is its newer status
+        // Status date descending, so the pages this reads are the newest when the window holds more. The sandbox
+        // picks each page's rows by status date but returns them in job ID order.
+        sortorder: 4,
         PageSize: pageSize,
         StartIndex: page,
       })
-      rows.push(...batch)
-      if (batch.length < pageSize) return { rows, complete: true }
+      pages.push(batch)
+      if (batch.length < pageSize) return { rows: pages.reverse().flat(), complete: true }
     }
-    return { rows, complete: false }
+    return { rows: pages.reverse().flat(), complete: false }
   }
 
   // Not paged: the whole range comes back at once.

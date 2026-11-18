@@ -30,8 +30,9 @@ export type SyncConfig = {
 type Terros = Pick<TerrosClient, 'account'>
 type LeadPerfection = Pick<LeadPerfectionClient, 'getJobStatusChanges' | 'getSalesAppointments' | 'getLeadLinks'>
 
-// LeadPerfection allows 60 calls a minute and a script run has 60 seconds, so one run stays well under both: the
-// rest of a busy window waits for the next run, which reads the same overlapping window again.
+// LeadPerfection allows 60 calls a minute and a script run has 60 seconds, so one run stays well under both. Job
+// pages are read newest first, so a busy window loses only its oldest changes; customers left over from lookups or
+// time wait for the next run, which reads the same overlapping window again.
 export const LIMITS = { jobPageSize: 100, jobPages: 5, leadLookups: 40, runMs: 45_000 }
 
 export const handler = wrapConnectHandler<unknown, void, SyncConfig>(async (input, client) => {
@@ -67,6 +68,7 @@ export async function syncResults(
   terros: Terros,
   now = Date.now()
 ): Promise<void> {
+  const startedAt = Date.now()
   const workflowId = config.workflowId?.trim() as WorkflowId | undefined
   if (!workflowId) throw new IntegrationError('workflowId is required: the Terros workflow these stages belong to')
   if (!Object.keys({ ...config.resultStages, ...config.jobStatusStages }).length) {
@@ -91,12 +93,13 @@ export async function syncResults(
     LIMITS.jobPageSize,
     LIMITS.jobPages
   )
-  if (!jobs.complete) console.log(`More than ${jobs.rows.length} job status changes; the rest wait for the next run`)
+  if (!jobs.complete) {
+    console.log(`Read the newest ${jobs.rows.length} job status changes; older ones in the window are not read`)
+  }
 
   const customers = collectCustomers(appointments, jobs.rows)
   console.log(`LeadPerfection ${start}-${end}: ${customers.length} customers with appointment results or job changes`)
 
-  const startedAt = Date.now()
   const lookups = { remaining: LIMITS.leadLookups }
   let failed = 0
   for (const customer of rotate(customers, now)) {
@@ -141,7 +144,8 @@ export function collectCustomers(appointments: SalesAppointment[], jobs: JobStat
     return created
   }
 
-  // Rows come sorted by status date, so a later row of a customer is newer.
+  // Pages come oldest first, so a customer's row on a later page is newer. Within a page LeadPerfection orders rows
+  // by job ID, so of two jobs of one customer on the same page, the later job's status wins.
   for (const job of jobs) {
     if (!job.cst_id) continue
     Object.assign(customer(String(job.cst_id).trim()), {
@@ -226,26 +230,32 @@ async function syncCustomer(
   const lastActionDate = fromLeadPerfectionDate(target.date, zone) ?? Date.now()
   const stage = { workflowId, workflowTarget: target.stageId, sourceStatus: target.sourceStatus, lastActionDate }
 
-  const account = await findAccount(customer, context, leadPerfection, terros)
-  if (account === 'deferred') {
+  const match = await findAccount(customer, context, leadPerfection, terros)
+  if (match === 'deferred') {
     console.log(`LeadPerfection customer ${customer.cstId} waits for the next run: out of lead lookups`)
     return
   }
 
-  if (account) {
-    const inStage = account.workflowId === workflowId && account.workflowStageId === target.stageId
-    // sourceId links the customer for later runs without a GetLead call. One set by another system is kept.
-    const link = account.sourceId ? undefined : customer.cstId
-    if (inStage && !link) {
-      console.log(`Account ${account.accountId} is already in stage ${target.stageId}`)
+  if (match) {
+    const { account: matched, leadId } = match
+    const inStage = matched.workflowId === workflowId && matched.workflowStageId === target.stageId
+    const link = defined({
+      // Links the customer for later runs without a GetLead call. One set by another system is kept.
+      sourceId: matched.sourceId ? undefined : toSourceId(customer.cstId),
+      // Moving the account fires Send, which skips an account with an externalLeadId: without one, a move into a
+      // send stage would add the customer to LeadPerfection a second time.
+      externalLeadId: matched.externalLeadId ? undefined : (leadId ?? toSourceId(customer.cstId)),
+    })
+    if (inStage && !Object.keys(link).length) {
+      console.log(`Account ${matched.accountId} is already in stage ${target.stageId}`)
       return
     }
     await terros.account.upsert({
       requestType: 'update',
-      account: { accountId: account.accountId, ...(inStage ? {} : stage), ...(link ? { sourceId: link } : {}) },
+      account: { accountId: matched.accountId, ...(inStage ? {} : stage), ...link },
     })
     console.log(
-      `Account ${account.accountId}: ${inStage ? 'linked to' : `moved to ${target.stageId} by`} ` +
+      `Account ${matched.accountId}: ${inStage ? 'linked to' : `moved to ${target.stageId} by`} ` +
         `LeadPerfection customer ${customer.cstId} (${target.sourceStatus})`
     )
     return
@@ -259,7 +269,8 @@ async function syncCustomer(
     requestType: 'upsert',
     account: {
       ...stage,
-      sourceId: customer.cstId,
+      sourceId: toSourceId(customer.cstId),
+      externalLeadId: toSourceId(customer.cstId),
       accountSource: LEADPERFECTION_SOURCE,
       resident: defined({
         firstName: customer.firstName,
@@ -278,6 +289,15 @@ async function syncCustomer(
   console.log(`Account ${result.account?.accountId} created from LeadPerfection customer ${customer.cstId}`)
 }
 
+// account/match finds a sourceId among every system's accounts in the company, and other systems use plain numbers
+// too, so the customer ID alone could name another system's account.
+function toSourceId(cstId: string): string {
+  return `leadperfection:${cstId}`
+}
+
+// The matched account, with the customer's inbound lead ID when GetLead returned one.
+type Match = { account: AccountData; leadId?: string }
+
 // Match order: an account an earlier run linked (sourceId), then the lognumber Send put on the lead (the Terros
 // account ID), then the inbound lead ID Send saved as externalLeadId, then the phone number. Never the name.
 async function findAccount(
@@ -285,24 +305,27 @@ async function findAccount(
   context: SyncContext,
   leadPerfection: LeadPerfection,
   terros: Terros
-): Promise<AccountData | undefined | 'deferred'> {
-  const linked = await terros.account.match({ sourceId: customer.cstId })
-  if (linked.account) return linked.account
+): Promise<Match | undefined | 'deferred'> {
+  const linked = await terros.account.match({ sourceId: toSourceId(customer.cstId) })
+  if (linked.account) return { account: linked.account }
 
   // Neither feed carries lognumber or the inbound lead ID; only GetLead does, one customer per call.
   if (context.lookups.remaining <= 0) return 'deferred'
   context.lookups.remaining--
   const leads = await leadPerfection.getLeadLinks(customer.cstId)
+  const leadIds = leads.map((lead) => clean(lead.in1_id)).filter((id) => id !== undefined)
 
-  for (const accountId of leads.map(toAccountId).filter((id) => id !== undefined)) {
-    const { account } = await terros.account.match({ accountId })
-    if (account) return account
+  for (const lead of leads) {
+    const accountId = toAccountId(lead)
+    const account = accountId && (await terros.account.match({ accountId })).account
+    if (account) return { account, leadId: clean(lead.in1_id) }
   }
-  for (const externalLeadId of leads.map((lead) => clean(lead.in1_id)).filter((id) => id !== undefined)) {
+  for (const externalLeadId of leadIds) {
     const { account } = await terros.account.match({ externalLeadId })
-    if (account) return account
+    if (account) return { account }
   }
-  return findByPhone(customer, terros)
+  const account = await findByPhone(customer, terros)
+  return account && { account, leadId: leadIds[0] }
 }
 
 // Terros cannot search accounts by phone, so this lists the accounts at the customer's ZIP code and compares
@@ -311,7 +334,7 @@ async function findByPhone(customer: Customer, terros: Terros): Promise<AccountD
   const phone = phoneDigits(customer.phone)
   const zip = customer.zip?.slice(0, 5)
   if (!phone || !zip) return undefined
-  const { accounts } = await terros.account.list({ searchInput: { zipCodes: [zip] }, size: 100 })
+  const { accounts } = await terros.account.list({ searchInput: { zipCodes: [zip] }, size: 1000 })
   const matches = accounts.filter((account) => phoneDigits(account.resident?.phone) === phone)
   if (matches.length > 1) {
     console.log(`LeadPerfection customer ${customer.cstId}: ${matches.length} accounts share its phone; none matched`)
