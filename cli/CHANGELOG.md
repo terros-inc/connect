@@ -4,6 +4,12 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
+### Fixed: help for an endpoint with a nullable field no longer fails
+
+Help for an endpoint whose request has a field the API schema types as a list, such as `type: [string, "null"]`, now
+lists it as `string | null`. Before, help stopped with `type.slice(...).trim is not a function`, as
+`terros connect app update help` did for `--avatarUrl`.
+
 ### Fixed: API-key step-up sign-in signs the browser out first
 
 `terros apikey restricted add` now opens the Terros sign-out page (`https://auth.terros.com/v2/logout`) before the

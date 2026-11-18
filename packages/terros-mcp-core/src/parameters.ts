@@ -64,6 +64,7 @@ function getSchemaType(schema: Schema, components: Components, depth = DEFAULT_T
   if ('const' in schema) return JSON.stringify(schema.const)
 
   if ('type' in schema) {
+    if (Array.isArray(schema.type)) return [...new Set(schema.type)].join(' | ')
     if (schema.type === 'array') {
       if ('prefixItems' in schema) {
         return `[${schema.prefixItems.map((item) => getSchemaType(item, components, depth)).join(', ')}]`

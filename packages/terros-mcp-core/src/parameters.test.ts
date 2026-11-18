@@ -166,4 +166,16 @@ describe('getEndpointParameters', () => {
       { name: 'values', type: '(string | number)[]', required: false },
     ])
   })
+
+  // A list of types reached help as an array, and `connect app update help` threw instead of printing.
+  it('formats an OpenAPI 3.1 list of types as a union', () => {
+    const schema: Schema = {
+      type: 'object',
+      properties: { avatarUrl: { type: ['string', 'null'] } },
+    }
+
+    expect(getEndpointParameters(schema, { schemas: {} })).toEqual([
+      { name: 'avatarUrl', type: 'string | null', required: false },
+    ])
+  })
 })

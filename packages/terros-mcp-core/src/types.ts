@@ -65,6 +65,11 @@ export type TupleSchema = SchemaBase & {
   prefixItems: Schema[]
 }
 
+/** OpenAPI 3.1 writes a nullable scalar as a list of types, such as `type: ['string', 'null']`. */
+export type TypeListSchema = SchemaBase & {
+  type: ('string' | 'integer' | 'number' | 'boolean' | 'null')[]
+}
+
 export type Schema =
   | RefSchema
   | StringSchema
@@ -77,6 +82,7 @@ export type Schema =
   | AllOfSchema
   | ArraySchema
   | TupleSchema
+  | TypeListSchema
 
 export type OpenAPISchema = {
   /**
