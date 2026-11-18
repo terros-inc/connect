@@ -187,7 +187,7 @@ export async function main(argv: string[]): Promise<void> {
     }
     // Read endpoints will soon return upload URLs only when asked, so an upload always asks.
     if (upload && getEndpointInputParameters(endpoint).some(({ name }) => name === INCLUDE_UPLOAD_URLS)) {
-      input = { [INCLUDE_UPLOAD_URLS]: true, ...input }
+      input = { ...input, [INCLUDE_UPLOAD_URLS]: true }
     }
     response =
       endpoint.path === '/apiHistory/start'

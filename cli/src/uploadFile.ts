@@ -49,6 +49,8 @@ export async function uploadToResponse(response: unknown, upload: UploadFile): P
     method: 'PUT',
     body: new Uint8Array(upload.body),
     headers: { 'Content-Type': upload.contentType },
+    // A redirect would resend the file to wherever it points; a presigned upload URL never redirects.
+    redirect: 'error',
   }).catch(() => undefined)
   if (!result?.ok) {
     const reason = result ? `HTTP ${result.status}` : 'a network error'

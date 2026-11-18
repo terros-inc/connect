@@ -281,6 +281,7 @@ describe('--uploadFile', () => {
       method: 'PUT',
       body: new Uint8Array(image),
       headers: { 'Content-Type': 'image/png' },
+      redirect: 'error',
     })
     expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ type: 'success', app: { appId: 'App.example' } })
     expect(stderr).toHaveBeenCalledWith(`Uploaded ${path} to uploadAvatarUrl`)
@@ -302,14 +303,24 @@ describe('--uploadFile', () => {
     expect(printed()).not.toContain('uploads.example.test')
   })
 
-  it('asks a read endpoint for its upload URLs', async () => {
+  it('asks a read endpoint for its upload URLs, even over --includeUploadUrls false', async () => {
     fetch.mockResolvedValue(new Response(null, { status: 200 }))
     const document = JSON.parse(schemaWithParameter('/connect/app/get', 'appId'))
     document.paths['/connect/app/get'].post.requestBody.content[
       'application/json'
     ].schema.properties.includeUploadUrls = { type: 'boolean' }
     vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
-    await main(['connect', 'app', 'get', '--appId', 'App.example', '--uploadFile', `uploadAvatarUrl=${path}`])
+    await main([
+      'connect',
+      'app',
+      'get',
+      '--appId',
+      'App.example',
+      '--includeUploadUrls',
+      'false',
+      '--uploadFile',
+      `uploadAvatarUrl=${path}`,
+    ])
 
     expect(call).toHaveBeenCalledWith('/connect/app/get', { includeUploadUrls: true, appId: 'App.example' })
   })
