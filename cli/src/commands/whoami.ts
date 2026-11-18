@@ -1,4 +1,5 @@
 import { getPreferredName, type UserProfileSuccess } from '@terros-inc/sdk'
+import { resolveEnvironment } from '@terros-inc/connect-common'
 import { buildTerrosClient } from '../api/query'
 
 export const whoamiCommand = {
@@ -22,12 +23,15 @@ export function formatWhoami(profile: UserProfileSuccess, realProfile?: UserProf
   const name = getPreferredName(profile.user)
   // The API ignores an impersonation header naming the signed-in user, so compare the users it answered with.
   const impersonating = realProfile !== undefined && realProfile.user.userId !== profile.user.userId
+  const environment = resolveEnvironment()
   const lines = [
     `${toHandle(name, profile.user.userId)}@${toHandle(profile.company.name, profile.company.companyId)}`,
     `user:          ${describe(profile.user.userId, name)}`,
     `company:       ${describe(profile.company.companyId, profile.company.name)}`,
     `impersonating: ${impersonating ? 'yes' : 'no'}`,
   ]
+  // Production prints nothing extra, so customers see the same output as before.
+  if (environment.name !== 'prod') lines.push(`environment:   ${environment.name} (${environment.baseUrl})`)
   if (impersonating) {
     lines.push(
       `real-user:     ${describe(realProfile.user.userId, getPreferredName(realProfile.user))}`,

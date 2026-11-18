@@ -7,13 +7,6 @@ import type { DeviceCodeResponse } from './types'
 const SENSITIVE_MANAGE_SCOPE = 'sensitive:manage'
 /** Auth0 issues SENSITIVE_MANAGE_SCOPE only in a token for this API. */
 const API_AUDIENCE = 'https://api.tantalim.com'
-/**
- * Ends the browser's Auth0 session. Auth0 approves a device code from an existing session without asking the user to
- * sign in, and that older sign-in is too old for SENSITIVE_MANAGE_SCOPE. The device-code request has no documented
- * parameter that forces a new sign-in, so the user must sign out first.
- */
-const LOGOUT_URL = `${AUTH0_DOMAIN}/v2/logout`
-
 export async function signInToAuth0(
   scope = 'offline_access',
   log: (message: string) => void = console.log,
@@ -68,17 +61,6 @@ export async function signInWithSensitiveScope(): Promise<string> {
     `Issuing an API key needs a fresh sign-in that grants the ${SENSITIVE_MANAGE_SCOPE} scope, which your saved ` +
       'login does not have. It is used for this one request and does not change your saved login.'
   )
-  // Opened before the sign-in page so the session is gone by the time the user has typed the code.
-  console.error(
-    'Sign out of Terros in your browser first, then approve the code below: approving it from a browser that is ' +
-      `still signed in reuses that older sign-in, which does not grant ${SENSITIVE_MANAGE_SCOPE}.`
-  )
-  try {
-    await open(LOGOUT_URL)
-    console.error(`If your browser did not open the sign-out page, visit ${LOGOUT_URL} before you approve the code.\n`)
-  } catch {
-    console.error(`Visit ${LOGOUT_URL} in your browser to sign out before you approve the code.\n`)
-  }
   let tokens: TokenResponse
   try {
     tokens = await signInToAuth0(`offline_access ${SENSITIVE_MANAGE_SCOPE}`, console.error, API_AUDIENCE)
@@ -93,8 +75,7 @@ export async function signInWithSensitiveScope(): Promise<string> {
   if (!grantedScopes(tokens.access_token).includes(SENSITIVE_MANAGE_SCOPE)) {
     throw new Error(
       `Sign-in did not grant the ${SENSITIVE_MANAGE_SCOPE} scope, which this command needs, because the approval ` +
-        `reused an earlier sign-in in your browser. Sign out at ${LOGOUT_URL}, then run the command again and sign ` +
-        'in when you approve the new code.'
+        'reused an earlier sign-in in your browser. Run the command again with a recent sign-in.'
     )
   }
   return tokens.access_token

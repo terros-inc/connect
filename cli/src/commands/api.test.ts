@@ -36,3 +36,22 @@ it('does not report success when the schema could not be refreshed', async () =>
   error.mockRestore()
   log.mockRestore()
 })
+
+it.each([
+  ['staging', '[staging] '],
+  ['prod', ''],
+])('labels refresh failures in %s', async (environment, prefix) => {
+  vi.stubEnv('TERROS_ENV', environment)
+  vi.stubEnv('TERROS_API_ENDPOINT', '')
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  vi.mocked(loadEndpointsAfterRefresh).mockResolvedValue({ endpoints: {}, schemaStatus: 'failed' })
+  try {
+    await apiCommands.refresh.run()
+    expect(error.mock.calls[0]?.[0]).toMatch(
+      new RegExp(`^${prefix.replace(/[\[\]]/g, '\\$&')}The API schema could not be refreshed`)
+    )
+  } finally {
+    error.mockRestore()
+    vi.unstubAllEnvs()
+  }
+})

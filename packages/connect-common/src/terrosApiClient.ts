@@ -1,6 +1,7 @@
 import { getTokens } from './oauth/tokens.ts'
 import { AuthRequiredError } from './oauth/auth0.ts'
 import { type ApiRoute, isResponseError, TerrosApiError } from './models.ts'
+import { environmentApiKey, resolveEnvironment } from './environment.ts'
 import { getAnalyticsHeaders, type TerrosHeaderMetadata } from './analytics.ts'
 
 export type TerrosClientConfig = {
@@ -17,18 +18,21 @@ export type TerrosClientConfig = {
   accessToken?: string
 }
 
-const PROD_BASE_URL = 'https://api.terros.com'
-
 export class TerrosApiClient {
   private readonly baseUrl: string
+  private readonly stateDir: string
   private readonly authStrategy: AuthStrategy
   private readonly analytics: Record<string, string | undefined>
   private readonly impersonateUserId: string | undefined
 
   constructor(config: TerrosClientConfig = {}) {
-    this.baseUrl = this.determineBaseUrl(config)
+    const environment = config.baseUrl
+      ? resolveEnvironment({ TERROS_API_ENDPOINT: config.baseUrl })
+      : resolveEnvironment()
+    this.baseUrl = environment.baseUrl
+    this.stateDir = environment.stateDir
     this.analytics = getAnalyticsHeaders(config.analytics)
-    this.authStrategy = this.determineAuthStrategy(config)
+    this.authStrategy = this.determineAuthStrategy(config, environment)
     this.impersonateUserId = config.impersonateUserId ?? readProcessEnv('TERROS_IMPERSONATE')
   }
 
@@ -77,26 +81,21 @@ export class TerrosApiClient {
       return `${this.authStrategy.authType} ${this.authStrategy.apiKey}`
     }
     if (this.authStrategy.type === 'bearer') return `Bearer ${this.authStrategy.accessToken}`
-    const cliTokens = await getTokens()
+    const cliTokens = await getTokens(this.stateDir)
     if (cliTokens === null) throw new AuthRequiredError('signed-out')
     return `Bearer ${cliTokens.access_token}`
   }
 
-  private determineAuthStrategy(config: Pick<TerrosClientConfig, 'apiKey' | 'authType' | 'accessToken'>): AuthStrategy {
+  private determineAuthStrategy(
+    config: Pick<TerrosClientConfig, 'apiKey' | 'authType' | 'accessToken'>,
+    environment: ReturnType<typeof resolveEnvironment>
+  ): AuthStrategy {
     if (config.accessToken) return { type: 'bearer', accessToken: config.accessToken }
     const authType = config.authType ?? 'ApiKey'
     if (config.apiKey) return { type: 'apikey', apiKey: config.apiKey, authType }
-    const apiKeyFromEnv = readProcessEnv('TERROS_API_KEY')
+    const apiKeyFromEnv = environmentApiKey(environment)
     if (apiKeyFromEnv) return { type: 'apikey', apiKey: apiKeyFromEnv, authType }
     return { type: 'oauth' }
-  }
-
-  private determineBaseUrl(config: Pick<TerrosClientConfig, 'baseUrl'>): string {
-    if (config.baseUrl) return config.baseUrl
-    const envEndpoint = readProcessEnv('TERROS_API_ENDPOINT')
-    if (!envEndpoint) return PROD_BASE_URL
-    if (/^https?:\/\//i.test(envEndpoint)) return envEndpoint
-    return `https://${envEndpoint}`
   }
 }
 

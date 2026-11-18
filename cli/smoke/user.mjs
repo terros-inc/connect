@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import assert from 'node:assert/strict'
+import { environmentApiKeyVariable, resolveEnvironment } from '../../packages/connect-common/src/environment.ts'
 
 const endpoint = process.env.TERROS_API_ENDPOINT?.trim()
 const apiKey = process.env.TERROS_API_KEY?.trim()
@@ -23,7 +24,11 @@ if (!apiKey) {
       process.execPath,
       [fileURLToPath(new URL('../cli.js', import.meta.url)), 'api', 'call', 'user/profile'],
       {
-        env: { HOME: home, TERROS_API_ENDPOINT: endpoint, TERROS_API_KEY: apiKey },
+        env: {
+          HOME: home,
+          TERROS_API_ENDPOINT: endpoint,
+          [environmentApiKeyVariable(resolveEnvironment({ TERROS_API_ENDPOINT: endpoint }))]: apiKey,
+        },
         timeout: 30_000,
         maxBuffer: 1024 * 1024,
       }

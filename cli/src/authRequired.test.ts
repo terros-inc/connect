@@ -19,8 +19,10 @@ const fetchMock = vi.fn(async (url: string | URL) => {
   if (hostname === 'docs.terros.com') return new Response('', { status: 503 })
   throw new Error(`Unexpected request to ${url}`)
 })
-const auth0Calls = () => fetchMock.mock.calls.filter(([url]) => new URL(url).hostname === 'auth.terros.com')
-const apiCalls = () => fetchMock.mock.calls.filter(([url]) => new URL(url).hostname === 'api.terros.com')
+const auth0Calls = (): [string | URL][] =>
+  fetchMock.mock.calls.filter(([url]) => new URL(url).hostname === 'auth.terros.com')
+const apiCalls = (): [string | URL][] =>
+  fetchMock.mock.calls.filter(([url]) => new URL(url).hostname === 'api.terros.com')
 const expiredMessage = new AuthRequiredError('expired').message
 
 async function saveExpiredLogin(): Promise<void> {
@@ -51,6 +53,7 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', fetchMock)
   vi.stubEnv('TERROS_API_KEY', '')
   vi.stubEnv('TERROS_API_ENDPOINT', '')
+  vi.stubEnv('TERROS_ENV', '')
   vi.stubEnv('TERROS_IMPERSONATE', '')
   vi.stubEnv('TERROS_DEBUG', '')
   home.path = await mkdtemp(join(tmpdir(), 'terros-auth-'))
@@ -107,4 +110,56 @@ it('lists commands without a schema warning when the saved session has expired',
   expect(stderr).toEqual([])
   expect(stdout).toContain('whoami')
   expect(process.exitCode).toBeUndefined()
+})
+
+// --help and --version are local, so they must not touch the network whatever environment is selected.
+it('answers --version for a selected environment without any request', async () => {
+  vi.stubEnv('TERROS_API_KEY', 'some-key')
+  const { stdout } = await run('--env', 'staging', '--version')
+  expect(stdout).toMatch(/^\d+\.\d+\.\d+/)
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+// Staff-only is enforced by isolation: a customer's production login never reaches staging, so staging cannot be used
+// with it and the CLI asks for a sign-in against that environment instead.
+it('sends nothing to staging when only a production login is saved', async () => {
+  await mkdir(join(home.path, '.config', 'terros'), { recursive: true })
+  await writeFile(
+    join(home.path, '.config', 'terros', 'auth.json'),
+    JSON.stringify({ access_token: 'production-token', expires_at: Date.now() + 3600000 })
+  )
+  const { stderr } = await run('--env', 'staging', 'api', 'call', '/user/profile')
+  expect(process.exitCode).toBe(1)
+  expect(stderr.join(' ')).toContain('[staging]')
+  expect(stderr.join(' ')).toMatch(/not signed in|sign in/i)
+  expect(fetchMock.mock.calls.map(([url]) => new URL(url).hostname)).not.toContain('api.staging.terros.com')
+  expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('production-token')
+})
+
+it('uses the staging login saved by `--env staging auth login` for staging requests only', async () => {
+  const stagingDir = join(home.path, '.config', 'terros', 'env', 'staging')
+  await mkdir(stagingDir, { recursive: true })
+  await writeFile(
+    join(stagingDir, 'auth.json'),
+    JSON.stringify({ access_token: 'staging-token', expires_at: Date.now() + 3600000 })
+  )
+  const requests = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ type: 'success' }))
+  vi.stubGlobal('fetch', requests)
+  await run('--env', 'staging', 'api', 'call', '/user/profile')
+  const calls = requests.mock.calls.filter(([url]) => new URL(url).hostname.startsWith('api.'))
+  expect(calls.length).toBeGreaterThan(0)
+  for (const [url, init] of calls) {
+    expect(new URL(url).hostname).toBe('api.staging.terros.com')
+    expect(init.headers).toMatchObject({ authorization: 'Bearer staging-token' })
+  }
+})
+
+// Without a host allow-list a staff API key or login could be pointed at, and logged by, any server.
+it('refuses a custom endpoint host before sending a credential', async () => {
+  vi.stubEnv('TERROS_API_KEY', 'some-key')
+  vi.stubEnv('TERROS_API_ENDPOINT', 'https://collector.example.test')
+  const { stderr } = await run('api', 'call', '/user/profile')
+  expect(process.exitCode).toBe(1)
+  expect(stderr.join(' ')).toMatch(/Unsupported API host/)
+  expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('some-key')
 })

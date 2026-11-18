@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { TerrosApiClient } from '../terrosApiClient.ts'
 import type { TokenResponse } from './types.ts'
 import { AuthRequiredError, refreshTokens } from './auth0.ts'
 import { getTokens, saveTokens } from './index.ts'
@@ -30,14 +31,14 @@ const rotated: TokenResponse = {
 }
 const expired = JSON.stringify({ access_token: 'old-token', refresh_token: 'refresh-token-example', expires_at: 0 })
 
-const configDir = () => join(home.dir, '.config', 'terros')
-const authFile = () => join(configDir(), 'auth.json')
-const lockFile = () => `${authFile()}.lock`
-const writeAuth = async (content: string) => {
+const configDir = (): string => join(home.dir, '.config', 'terros')
+const authFile = (): string => join(configDir(), 'auth.json')
+const lockFile = (): string => `${authFile()}.lock`
+const writeAuth = async (content: string): Promise<void> => {
   await mkdir(configDir(), { recursive: true })
   await writeFile(authFile(), content)
 }
-const readAuth = async () => JSON.parse(await readFile(authFile(), 'utf-8'))
+const readAuth = async (): Promise<unknown> => JSON.parse(await readFile(authFile(), 'utf-8'))
 
 beforeEach(async () => {
   vi.mocked(refreshTokens).mockReset()
@@ -86,7 +87,7 @@ describe('getTokens', () => {
     const anHourAgo = new Date(Date.now() - 3600000)
     await utimes(lockFile(), anHourAgo, anHourAgo)
     const tokens = getTokens()
-    const lockReads = () => vi.mocked(readFile).mock.calls.filter(([path]) => path === lockFile()).length
+    const lockReads = (): number => vi.mocked(readFile).mock.calls.filter(([path]) => path === lockFile()).length
     await vi.waitFor(() => expect(lockReads()).toBeGreaterThan(2))
     expect(await readFile(lockFile(), 'utf-8')).toBe(holder)
 
@@ -169,7 +170,7 @@ describe('getTokens', () => {
   // Guards against resending a refresh token Auth0 rejected, against an Auth0 outage being remembered so a long-running
   // process can't recover once it clears, and against a new login staying blocked after an earlier session was rejected.
   it('never resends a rejected refresh token but retries other failures and new logins', async () => {
-    const login = (refreshToken: string) => JSON.stringify({ refresh_token: refreshToken, expires_at: 0 })
+    const login = (refreshToken: string): string => JSON.stringify({ refresh_token: refreshToken, expires_at: 0 })
     await writeAuth(login('outage-refresh-token'))
     vi.mocked(refreshTokens).mockRejectedValue(new Error('Unable to refresh the Terros session'))
     await expect(getTokens()).rejects.toThrow('Unable to refresh the Terros session')
@@ -198,5 +199,78 @@ describe('saveTokens', () => {
     expect((await stat(configDir())).mode & 0o777).toBe(0o700)
     expect((await stat(authFile())).mode & 0o777).toBe(0o600)
     expect(await readdir(configDir())).toEqual(['auth.json'])
+  })
+
+  it('keeps concurrent refreshes for different backends separate', async () => {
+    vi.stubEnv('TERROS_API_ENDPOINT', '')
+    vi.stubEnv('TERROS_ENV', 'prod')
+    await writeAuth(JSON.stringify({ access_token: 'old-prod', refresh_token: 'prod-refresh', expires_at: 0 }))
+    const stagingDir = join(configDir(), 'env', 'staging')
+    await mkdir(stagingDir, { recursive: true })
+    await writeFile(
+      join(stagingDir, 'auth.json'),
+      JSON.stringify({ access_token: 'old-stage', refresh_token: 'stage-refresh', expires_at: 0 })
+    )
+    vi.mocked(refreshTokens).mockImplementation(async (token) => ({ ...rotated, access_token: `new-${token}` }))
+    try {
+      const [prod, staging] = await Promise.all([getTokens(configDir()), getTokens(stagingDir)])
+      expect(prod?.access_token).toBe('new-prod-refresh')
+      expect(staging?.access_token).toBe('new-stage-refresh')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('uses the explicit client backend for saved credentials in both directions', async () => {
+    vi.stubEnv('TERROS_API_KEY', '')
+    vi.stubEnv('TERROS_API_ENDPOINT', '')
+    vi.stubEnv('TERROS_ENV', 'prod')
+    await saveTokens({ ...rotated, access_token: 'prod-token' })
+    vi.stubEnv('TERROS_ENV', 'staging')
+    await saveTokens({ ...rotated, access_token: 'staging-token' })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({}),
+    } as Response)
+    try {
+      await new TerrosApiClient({ baseUrl: 'https://api.terros.com' }).get('user/profile')
+      vi.stubEnv('TERROS_ENV', 'prod')
+      await new TerrosApiClient({ baseUrl: 'https://api.staging.terros.com' }).get('user/profile')
+      expect(
+        fetchSpy.mock.calls.map(([url, init]) => [url, (init?.headers as Record<string, string>).authorization])
+      ).toEqual([
+        ['https://api.terros.com/user/profile', 'Bearer prod-token'],
+        ['https://api.staging.terros.com/user/profile', 'Bearer staging-token'],
+      ])
+    } finally {
+      fetchSpy.mockRestore()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('does not send a production login to an overridden staging endpoint', async () => {
+    await writeAuth(JSON.stringify({ access_token: 'prod-token', expires_at: Date.now() + 3600000 }))
+    vi.stubEnv('TERROS_ENV', '')
+    vi.stubEnv('TERROS_API_KEY', '')
+    vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.staging.terros.com')
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    try {
+      await expect(new TerrosApiClient().get('user/profile')).rejects.toThrow(AuthRequiredError)
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  // The staging sign-in must live apart from production's, or a command would send one environment's token to the other.
+  it('keeps a staging login out of the production auth file', async () => {
+    await writeAuth(JSON.stringify({ access_token: 'prod-token', expires_at: Date.now() + 3600000 }))
+    vi.stubEnv('TERROS_ENV', 'staging')
+    await saveTokens({ ...rotated, access_token: 'staging-token' })
+    expect((await getTokens())?.access_token).toBe('staging-token')
+    vi.stubEnv('TERROS_ENV', '')
+    expect((await getTokens())?.access_token).toBe('prod-token')
+    expect(await readdir(join(configDir(), 'env'))).toEqual(['staging'])
   })
 })

@@ -15,6 +15,7 @@ import {
 } from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
 import { readUploadFile, UPLOAD_FILE_FLAG, uploadToResponse } from './uploadFile'
+import { reportError } from './reportError'
 import {
   formatCommandsHelp,
   formatCommandUsage,
@@ -26,7 +27,13 @@ import {
   preserveNumericString,
   getArrayParameterSyntax,
 } from './messages'
-import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, type SchemaStatus } from './loadEndpoints'
+import {
+  loadEndpoints,
+  loadEndpointsAfterRefresh,
+  loadPublicEndpoints,
+  loadOfflineEndpoints,
+  type SchemaStatus,
+} from './loadEndpoints'
 import { readInputFile } from './inputFile'
 import { companyScopeHint, impersonationFlagMessage } from './impersonation'
 import { formatOutput } from './formatOutput'
@@ -74,11 +81,18 @@ export function parseArgv(argv: string[]): minimist.ParsedArgs {
  * for debugging, so only `TERROS_DEBUG=1` prints the whole error.
  */
 export async function runCli(argv: string[]): Promise<void> {
+  // Held until the error is reported, so a failure is labelled with the environment it ran against.
+  let restore = (): void => {}
   try {
-    await main(argv)
+    const scope = applyEnvFlag(argv)
+    restore = scope.restore
+    await main(scope.argv)
   } catch (error) {
-    console.error(process.env.TERROS_DEBUG === '1' || !(error instanceof Error) ? error : error.message)
+    if (process.env.TERROS_DEBUG === '1' || !(error instanceof Error)) reportError(error)
+    else reportError(error.message)
     process.exitCode = 1
+  } finally {
+    restore()
   }
 }
 
@@ -88,9 +102,51 @@ const HELP_FLAGS = new Set(['--help', '-h'])
 const SENSITIVE_PATHS = new Set(['/apikey/add', '/apikey/restricted/add'])
 const INCLUDE_UPLOAD_URLS = 'includeUploadUrls'
 
-export async function main(argv: string[]): Promise<void> {
+/**
+ * Moves `--env <name>` (staff only, deliberately absent from help) into TERROS_ENV, because the sign-in and schema
+ * storage read the environment before any command parses its flags, and so the flag cannot clash with an API field.
+ */
+function applyEnvFlag(argv: string[]): { argv: string[]; restore: () => void } {
+  const previous = process.env.TERROS_ENV
+  const restore = (): void => {
+    if (previous === undefined) delete process.env.TERROS_ENV
+    else process.env.TERROS_ENV = previous
+  }
+  const rest: string[] = []
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--') {
+      rest.push(...argv.slice(i))
+      break
+    }
+    if (arg !== '--env' && !arg.startsWith('--env=')) {
+      rest.push(arg)
+      continue
+    }
+    const value = arg === '--env' ? argv[++i] : arg.slice('--env='.length)
+    if (!value || value.startsWith('--')) {
+      restore()
+      throw new Error('--env needs a value: prod, staging, or a developer stack name.')
+    }
+    process.env.TERROS_ENV = value
+  }
+  return { argv: rest, restore }
+}
+
+export async function main(args: string[]): Promise<void> {
+  const scope = applyEnvFlag(args)
+  try {
+    await run(scope.argv)
+  } finally {
+    // main is exported and may run again in this process; the next call must not inherit this call's --env.
+    scope.restore()
+  }
+}
+
+async function run(argv: string[]): Promise<void> {
   const optionsEnd = argv.includes('--') ? argv.indexOf('--') : argv.length
   const helpFlag = argv.slice(0, optionsEnd).some((arg) => HELP_FLAGS.has(arg))
+  const versionFlag = argv.slice(0, optionsEnd).some((arg) => arg === '--version' || arg === '-v')
   const params = parseArgv(argv.filter((arg, index) => index >= optionsEnd || !HELP_FLAGS.has(arg)))
   const words = params._.map(String)
   // Help is checked before any command runs, so `--help` can never start one (such as an interactive sign-in).
@@ -99,12 +155,12 @@ export async function main(argv: string[]): Promise<void> {
     return
   }
 
-  if (words.length === 0) {
-    if (params.v === true || params.version === true) {
-      console.log(packageJson.version)
-      return
-    }
+  if (versionFlag || params.v === true || params.version === true) {
+    console.log(packageJson.version)
+    return
+  }
 
+  if (words.length === 0) {
     console.log(HELP_PARENT_MESSAGE)
     return
   }
@@ -121,7 +177,7 @@ export async function main(argv: string[]): Promise<void> {
   let { level, refreshStatus } = await loadCommandLevelWithRefresh(words, argv)
   const arrayHint = arrayFlagHint(argv, level)
   if (level.unmatched.length > 0 || arrayHint) {
-    console.error(arrayHint ?? unknownCommandMessage(words, level, refreshStatus))
+    reportError(arrayHint ?? unknownCommandMessage(words, level, refreshStatus))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return
@@ -142,12 +198,12 @@ export async function main(argv: string[]): Promise<void> {
     if (!(error instanceof UnknownParameterError)) throw error
     const impersonationMessage = impersonationFlagMessage(error.parameters)
     if (impersonationMessage !== undefined) {
-      console.error(impersonationMessage)
+      reportError(impersonationMessage)
       process.exitCode = 1
       return
     }
     if (refreshStatus !== undefined) {
-      console.error(unknownParameterMessage(error, refreshStatus))
+      reportError(unknownParameterMessage(error, refreshStatus))
       process.exitCode = 1
       return
     }
@@ -157,7 +213,7 @@ export async function main(argv: string[]): Promise<void> {
     refreshStatus = refreshed.schemaStatus
     level = await loadCommandLevel(words, Promise.resolve(refreshed.endpoints))
     if (level.unmatched.length > 0 || !level.node.endpoint) {
-      console.error(unknownCommandMessage(words, level, refreshStatus))
+      reportError(unknownCommandMessage(words, level, refreshStatus))
       console.log(formatLevelHelp(level))
       process.exitCode = 1
       return
@@ -168,7 +224,7 @@ export async function main(argv: string[]): Promise<void> {
       input = buildEndpointInput(endpoint, flags, base)
     } catch (retryError) {
       if (!(retryError instanceof UnknownParameterError)) throw retryError
-      console.error(unknownParameterMessage(retryError, refreshStatus))
+      reportError(unknownParameterMessage(retryError, refreshStatus))
       process.exitCode = 1
       return
     }
@@ -196,7 +252,7 @@ export async function main(argv: string[]): Promise<void> {
   } catch (error) {
     const hint = await companyScopeHint({ error })
     if (hint === undefined) throw error
-    console.error(error instanceof Error ? error.message : error)
+    reportError(error instanceof Error ? error.message : error)
     console.error(hint)
     process.exitCode = 1
     return
@@ -220,7 +276,7 @@ async function loadCommandLevel(
     // A colliding schema is different: listing the group from an empty tree would hide the collision.
     const [name] = words
     if (error instanceof CommandCollisionError || name === undefined || !getCommandGroup(name)) throw error
-    console.error(error instanceof Error ? error.message : error)
+    reportError(error instanceof Error ? error.message : error)
     tree = { children: new Map() }
   }
   return matchCommand(tree, commandRegistry, words)
@@ -253,14 +309,14 @@ function formatLevelHelp(level: CommandLevel): string {
 async function showHelp(words: string[], requestedDepth: unknown): Promise<void> {
   const builtinHelp = formatBuiltinHelp(commandRegistry, words)
   if (builtinHelp !== undefined) {
-    await checkBuiltinCollisions(words[0] === 'connect' ? loadPublicEndpoints : loadEndpoints, commandRegistry, words)
+    await checkBuiltinCollisions(loadOfflineEndpoints, commandRegistry, words)
     console.log(builtinHelp)
     return
   }
 
-  const { level, refreshStatus } = await loadCommandLevelWithRefresh(words)
+  const level = await loadCommandLevel(words, loadOfflineEndpoints())
   if (level.unmatched.length > 0) {
-    console.error(unknownCommandMessage(words, level, refreshStatus))
+    reportError(unknownCommandMessage(words, level))
     console.log(formatLevelHelp(level))
     process.exitCode = 1
     return

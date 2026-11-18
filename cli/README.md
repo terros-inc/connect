@@ -195,7 +195,8 @@ terros <command> [<subcommand> ...] help
 ```
 
 `--help` and `-h` anywhere on the line print the same help and never run the
-command.
+command. Help and `--version` make no network calls; help uses a matching cached
+schema when available, or the cached or bundled public schema otherwise.
 
 Use `--depth` with `help` to show additional nested object type detail. The
 default depth is one layer. It only changes help output: running a command with
@@ -307,9 +308,44 @@ cannot tell what they are.
 
 The request goes where the other commands' requests go, with the same
 sign-in: the signed-in user (or `TERROS_API_KEY`), acting as
-`TERROS_IMPERSONATE` when set, to `TERROS_API_ENDPOINT` or production. Pass a
+`TERROS_IMPERSONATE` when set, to the selected backend. Pass a
 path, not a URL. The command exits 1 on an HTTP, network or API error, and
 never prints the access token.
+
+## Pick the Backend Environment (Terros Staff)
+
+Terros staff can point the CLI at another backend with `--env <name>` on any
+command, or `TERROS_ENV=<name>` in the environment (the flag wins). The names
+match the mobile apps' environment picker: `prod` (the default), `staging`
+(`https://api.staging.terros.com`), or a developer's own stack such as `alex`
+(`https://api.alex.terros.com`).
+
+Each environment uses only its own credentials. Sign in to a backend with
+`terros --env <name> auth login`, or set `TERROS_API_KEY_STAGE_STAGING` for staging
+(`TERROS_API_KEY_STAGE_<NAME>` for other stacks, uppercased with hyphens changed to underscores).
+Production uses `TERROS_API_KEY`; localhost uses `TERROS_API_KEY_PORT_<PORT>` (port 80 when omitted).
+Sign-in uses the same Terros identity for every environment; the selected environment determines where the resulting
+login is stored and sent. A production login or key is never sent to staging or a developer
+stack: if only a production sign-in is saved, a staging command asks you to sign
+in for staging first. Staging only issues accounts to Terros staff, which is
+what keeps the option staff-only; the CLI does no staff check of its own.
+
+```sh
+terros --env staging auth login
+terros --env staging whoami
+TERROS_ENV=staging terros account get --accountId A.example
+terros whoami                 # back on production, still signed in there
+```
+
+Each non-production environment keeps its own sign-in and cached API schema
+under `~/.config/terros/env/<name>/` (localhost uses `localhost/port-<port>`). Production keeps `~/.config/terros/`, so nothing
+changes for customers who never set the option. `terros whoami` prints an
+`environment:` line, and errors start with `[<name>]`, whenever the backend is
+not production. `TERROS_API_ENDPOINT` also selects a backend and its separate
+sign-in and schema cache, but only `https://api.terros.com`,
+`https://api.<stage>.terros.com` and `http://localhost` are accepted; any other
+host is refused so that no credential can be sent to it. If both options are set,
+they must select the same backend.
 
 ## Act as Another User
 
@@ -351,16 +387,13 @@ scope, which `terros auth login` does not ask for. Auth0 grants that scope only
 to a sign-in from the last few minutes, and refreshing a sign-in does not add it
 back. So the command first explains why and asks you to sign in again in the
 browser, for `offline_access sensitive:manage` and the Terros API
-(`https://api.tantalim.com`), prompting on standard error. Because Auth0 approves
-the code from a browser that is still signed in without a new sign-in, the
-command opens the sign-out page (`https://auth.terros.com/v2/logout`) before the
-sign-in page: sign out, then approve the code. It uses that sign-in
+(`https://api.tantalim.com`), prompting on standard error. It uses that sign-in
 for this one request only: it is kept in memory, not saved, and your saved login
 from `terros auth login` stays as it was. `TERROS_IMPERSONATE` and
 `TERROS_API_ENDPOINT` apply as usual. If the sign-in does not grant
 `sensitive:manage`, usually because the approval reused an earlier browser
 sign-in, the command stops with an error naming the scope and sends nothing:
-sign out at `https://auth.terros.com/v2/logout` and run it again. The API
+run it again with a recent sign-in. The API
 also requires `sensitive:manage` for `/apikey/add`, so if that path is ever
 offered as `terros apikey add`, it signs in the same way.
 
@@ -406,6 +439,10 @@ so run `pnpm build` after changing TypeScript files.
 
 ### CLI smoke checks
 
+The staging checks use a staging key and the staging endpoint; the CLI sends that
+key only to staging. Discovery reads the schema cache from the staging
+environment's own directory.
+
 From the repository root, build and run the smoke checks separately from unit tests:
 
 ```sh
@@ -423,9 +460,9 @@ Terros-internal user with access to `/openapi`. Without a non-whitespace key,
 each check prints `SKIP` and exits successfully. With a key, an explicit endpoint
 is required; none of the harnesses default to production.
 
-The discovery check (`smoke`) runs the built CLI's `account get --help` in a temporary home directory
+The discovery check (`smoke`) runs the built CLI's `api refresh`, then `account get --help`, in a temporary home directory
 and requires both the backend OpenAPI cache containing `/account/get` and full-path
-command help. Bundled schema fallback cannot pass it. The loader's profile lookup
+command help. Bundled schema fallback cannot pass it. The refresh's profile lookup
 is part of discovery; the check does not execute an account command. The temporary
 home is removed afterward, and the check does not use a saved CLI login.
 Failures print the error message and any CLI stderr with every occurrence of the

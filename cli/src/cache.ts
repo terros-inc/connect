@@ -1,13 +1,13 @@
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { resolveEnvironment } from '@terros-inc/connect-common'
 
 const CACHE_TTL = 24 * 60 * 60 * 1000
 type CacheName = 'profile' | 'openapi' | 'public-openapi'
 
 function cacheDirectory(): string {
-  return join(homedir(), '.config', 'terros')
+  return resolveEnvironment().stateDir
 }
 
 /** `expires: false` is for a cache whose caller tracks freshness itself, so no clock change can discard it. */

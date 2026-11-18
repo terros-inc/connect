@@ -22,6 +22,7 @@ it.each([
       fs.writeFileSync(path.join(directory, 'openapi.json'), JSON.stringify({
         data: { paths: { '/account/get': { post: {} } } }
       }))
+      if (process.argv[2] === 'api') process.exit(0)
       console.log('Changed help: ' + process.env.TERROS_API_KEY)
       console.error('Schema warning: ' + process.env.TERROS_API_KEY)
     `,
@@ -31,12 +32,18 @@ it.each([
 ])('$name', async ({ cli, message, diagnostic }) => {
   const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-diagnostics-'))
   try {
-    const smoke = join(directory, 'smoke')
-    await mkdir(smoke)
+    const smoke = join(directory, 'cli', 'smoke')
+    await mkdir(smoke, { recursive: true })
+    const shared = join(directory, 'packages', 'connect-common', 'src')
+    await mkdir(shared, { recursive: true })
+    await copyFile(
+      new URL('../../packages/connect-common/src/environment.ts', import.meta.url),
+      join(shared, 'environment.ts')
+    )
     await copyFile(new URL('../smoke/discovery.mjs', import.meta.url), join(smoke, 'discovery.mjs'))
-    await writeFile(join(directory, 'cli.js'), cli)
+    await writeFile(join(directory, 'cli', 'cli.js'), cli)
     const result = spawnSync(process.execPath, [join(smoke, 'discovery.mjs')], {
-      env: { TERROS_API_ENDPOINT: 'https://api.example.test', TERROS_API_KEY: marker },
+      env: { TERROS_API_ENDPOINT: 'https://api.terros.com', TERROS_API_KEY: marker },
       encoding: 'utf8',
       timeout: 10_000,
     })
@@ -93,15 +100,21 @@ it.each([
 ])('auth smoke $name', async ({ code, stderr, stdout = '', status }) => {
   const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-auth-test-'))
   try {
-    const smoke = join(directory, 'smoke')
-    await mkdir(smoke)
+    const smoke = join(directory, 'cli', 'smoke')
+    await mkdir(smoke, { recursive: true })
+    const shared = join(directory, 'packages', 'connect-common', 'src')
+    await mkdir(shared, { recursive: true })
+    await copyFile(
+      new URL('../../packages/connect-common/src/environment.ts', import.meta.url),
+      join(shared, 'environment.ts')
+    )
     await copyFile(new URL('../smoke/auth.mjs', import.meta.url), join(smoke, 'auth.mjs'))
     await writeFile(
-      join(directory, 'cli.js'),
+      join(directory, 'cli', 'cli.js'),
       `
         const assert = require('node:assert/strict')
         assert.deepEqual(process.argv.slice(2), ['whoami'])
-        assert.equal(process.env.TERROS_API_ENDPOINT, 'https://api.example.test')
+        assert.equal(process.env.TERROS_API_ENDPOINT, 'https://api.terros.com')
         assert.ok(process.env.HOME)
         assert.notEqual(process.env.HOME, ${JSON.stringify(directory)})
         assert.ok(process.env.TERROS_API_KEY)
@@ -111,7 +124,7 @@ it.each([
       `
     )
     const result = spawnSync(process.execPath, [join(smoke, 'auth.mjs')], {
-      env: { TERROS_API_ENDPOINT: 'https://api.example.test' },
+      env: { TERROS_API_ENDPOINT: 'https://api.terros.com' },
       encoding: 'utf8',
       timeout: 10_000,
     })
@@ -149,11 +162,17 @@ it.each([
   const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-user-'))
   const privateData = `${marker} user@example.test U.example C.example Example Person`
   try {
-    const smoke = join(directory, 'smoke')
-    await mkdir(smoke)
+    const smoke = join(directory, 'cli', 'smoke')
+    await mkdir(smoke, { recursive: true })
+    const shared = join(directory, 'packages', 'connect-common', 'src')
+    await mkdir(shared, { recursive: true })
+    await copyFile(
+      new URL('../../packages/connect-common/src/environment.ts', import.meta.url),
+      join(shared, 'environment.ts')
+    )
     await copyFile(new URL('../smoke/user.mjs', import.meta.url), join(smoke, 'user.mjs'))
     await writeFile(
-      join(directory, 'cli.js'),
+      join(directory, 'cli', 'cli.js'),
       `
         const assert = require('node:assert/strict')
         const fs = require('node:fs')
@@ -176,7 +195,7 @@ it.each([
     )
     const result = spawnSync(process.execPath, [join(smoke, 'user.mjs')], {
       env: {
-        TERROS_API_ENDPOINT: 'https://api.example.test',
+        TERROS_API_ENDPOINT: 'https://api.terros.com',
         TERROS_API_KEY: key,
         TERROS_IMPERSONATE: 'U.example',
         TERROS_DEBUG: '1',
@@ -243,11 +262,17 @@ it.each([
 ])('$name', async ({ output, exitCode, expectedStatus }) => {
   const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-list-test-'))
   try {
-    const smoke = join(directory, 'smoke')
-    await mkdir(smoke)
+    const smoke = join(directory, 'cli', 'smoke')
+    await mkdir(smoke, { recursive: true })
+    const shared = join(directory, 'packages', 'connect-common', 'src')
+    await mkdir(shared, { recursive: true })
+    await copyFile(
+      new URL('../../packages/connect-common/src/environment.ts', import.meta.url),
+      join(shared, 'environment.ts')
+    )
     await copyFile(new URL('../smoke/list.mjs', import.meta.url), join(smoke, 'list.mjs'))
     await writeFile(
-      join(directory, 'cli.js'),
+      join(directory, 'cli', 'cli.js'),
       `
         const assert = require('node:assert/strict')
         assert.deepEqual(process.argv.slice(2), ['company', 'list'])
@@ -258,7 +283,7 @@ it.each([
       `
     )
     const result = spawnSync(process.execPath, [join(smoke, 'list.mjs')], {
-      env: { TERROS_API_ENDPOINT: 'https://api.example.test', TERROS_API_KEY: marker },
+      env: { TERROS_API_ENDPOINT: 'https://api.terros.com', TERROS_API_KEY: marker },
       encoding: 'utf8',
       timeout: 10_000,
     })
@@ -271,6 +296,42 @@ it.each([
       expect(result.stderr).toContain('Error: [REDACTED]')
       expect(result.stderr).toContain('CLI stderr: [REDACTED]')
     }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it.each([
+  ['http://localhost:3000', 'TERROS_API_KEY_PORT_3000'],
+  ['https://api.localhost-3000.terros.com', 'TERROS_API_KEY_STAGE_LOCALHOST_3000'],
+  ['https://api.port-3000.terros.com', 'TERROS_API_KEY_STAGE_PORT_3000'],
+])('user smoke passes the credential for %s to the selected backend', async (endpoint, variable) => {
+  const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-key-'))
+  try {
+    const smoke = join(directory, 'cli', 'smoke')
+    const shared = join(directory, 'packages', 'connect-common', 'src')
+    await mkdir(smoke, { recursive: true })
+    await mkdir(shared, { recursive: true })
+    await copyFile(new URL('../smoke/user.mjs', import.meta.url), join(smoke, 'user.mjs'))
+    await copyFile(
+      new URL('../../packages/connect-common/src/environment.ts', import.meta.url),
+      join(shared, 'environment.ts')
+    )
+    await writeFile(
+      join(directory, 'cli', 'cli.js'),
+      `
+      const assert = require('node:assert/strict')
+      assert.equal(process.env[${JSON.stringify(variable)}], ${JSON.stringify(marker)})
+      console.log(JSON.stringify({ type: 'success', user: { userId: 'U.example' }, company: { companyId: 'C.example' } }))
+    `
+    )
+    const result = spawnSync(process.execPath, [join(smoke, 'user.mjs')], {
+      env: { TERROS_API_ENDPOINT: endpoint, TERROS_API_KEY: marker },
+      encoding: 'utf8',
+      timeout: 10_000,
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('PASS:')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
