@@ -20,6 +20,7 @@ on:
           - docusign
           - gohighlevel
           - jobnimbus
+          - leadperfection
           - salesforce
           - servicetitan
           - terros-mirror
