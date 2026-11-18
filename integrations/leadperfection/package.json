@@ -1,0 +1,26 @@
+{
+  "author": "Terros",
+  "dependencies": {
+    "@terros-inc/sdk": "workspace:",
+    "luxon": "catalog:"
+  },
+  "description": "LeadPerfection lead and appointment result integration",
+  "devDependencies": {
+    "@terros-inc/cli": "workspace:",
+    "@types/luxon": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "name": "@terros-inc/connect-leadperfection",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "publish": "terros connect publish"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}
