@@ -52,13 +52,13 @@ To run locally from the repository root after installing dependencies, supply an
 pnpm --filter @terros-inc/cli fetch-openapi
 pnpm --filter @terros-inc/cli... build
 export TERROS_API_ENDPOINT=https://api.staging.terros.com
-export TERROS_API_KEY='<authorized-staging-api-key>'
+export TERROS_API_KEY_STAGE_STAGING='<authorized-staging-api-key>'
 pnpm --filter @terros-inc/cli smoke
 pnpm --filter @terros-inc/cli smoke:user
 pnpm --filter @terros-inc/cli smoke:auth
 ```
 
-Without a non-whitespace `TERROS_API_KEY`, discovery and user lookup print `SKIP` and exit successfully. With a key, `TERROS_API_ENDPOINT` is required; neither script defaults to production. The invalid-key script requires an explicit endpoint but runs independently without the staging secret. All three use a temporary `HOME`, ignore saved CLI logins, and remove that directory afterward. Failures exit with code 1. Discovery and invalid-key failures print the error message and any CLI stderr with every occurrence of the key replaced by `[REDACTED]`; user-lookup failures fully redact error details and CLI stderr to avoid exposing profile data.
+Without a non-whitespace `TERROS_API_KEY_STAGE_STAGING` (the scripts read the selected environment's key variable, never the generic `TERROS_API_KEY`), discovery and user lookup print `SKIP` and exit successfully. With a key, `TERROS_API_ENDPOINT` is required; neither script defaults to production. The invalid-key script requires an explicit endpoint but runs independently without the staging secret. All three use a temporary `HOME`, ignore saved CLI logins, and remove that directory afterward. Failures exit with code 1. Discovery and invalid-key failures print the error message and any CLI stderr with every occurrence of the key replaced by `[REDACTED]`; user-lookup failures fully redact error details and CLI stderr to avoid exposing profile data.
 
 To add a check, put it in its own script under `cli/smoke/` and give it its own step in `.github/workflows/cli-smoke.yml`, following the existing sibling checks. Gate the step on the same configuration output, set the explicit staging endpoint and supply the staging key only if the check needs it, and invoke the new script separately. Use a fresh temporary `HOME` with cleanup, skip authenticated checks successfully when the key is unset or whitespace-only, and redact the key from error messages and CLI stderr before printing failures. Keep checks separate so a failure identifies which behavior broke.
 

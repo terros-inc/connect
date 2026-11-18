@@ -320,24 +320,24 @@ match the mobile apps' environment picker: `prod` (the default), `staging`
 (`https://api.staging.terros.com`), or a developer's own stack such as `alex`
 (`https://api.alex.terros.com`).
 
-Each environment uses only its own credentials. Sign in to a backend with
-`terros --env <name> auth login`, or set `TERROS_API_KEY_STAGE_STAGING` for staging
-(`TERROS_API_KEY_STAGE_<NAME>` for other stacks, uppercased with hyphens changed to underscores).
-Production uses `TERROS_API_KEY`; localhost uses `TERROS_API_KEY_PORT_<PORT>` (port 80 when omitted).
-Sign-in uses the same Terros identity for every environment; the selected environment determines where the resulting
-login is stored and sent. A production login or key is never sent to staging or a developer
-stack: if only a production sign-in is saved, a staging command asks you to sign
-in for staging first. Staging only issues accounts to Terros staff, which is
-what keeps the option staff-only; the CLI does no staff check of its own.
+Non-production environments are API-key only. Staging and developer stacks
+share production's Auth0 tenant, so an interactive sign-in for them would be a
+production credential; `terros --env <name> auth login` therefore refuses, and a
+saved production login is never sent to a non-production host. Set the key issued
+by that backend in `TERROS_API_KEY_STAGE_<NAME>` (`TERROS_API_KEY_STAGE_STAGING`
+for staging; name upper-cased, hyphens as underscores), or
+`TERROS_API_KEY_PORT_<port>` for `http://localhost:<port>`. Production keeps
+`TERROS_API_KEY`, which is never used off production. Staff-only access comes
+from the backend: the CLI does no staff check of its own, and a non-production
+backend only has accounts and keys for the people it was set up for.
 
 ```sh
-terros --env staging auth login
-terros --env staging whoami
-TERROS_ENV=staging terros account get --accountId A.example
-terros whoami                 # back on production, still signed in there
+TERROS_API_KEY_STAGE_STAGING=<staging key> terros --env staging whoami
+TERROS_ENV=staging TERROS_API_KEY_STAGE_STAGING=<staging key> terros account get --accountId A.example
+terros whoami                 # production, with its own sign-in
 ```
 
-Each non-production environment keeps its own sign-in and cached API schema
+Each non-production environment keeps its own cached API schema
 under `~/.config/terros/env/<name>/` (localhost uses `localhost/port-<port>`). Production keeps `~/.config/terros/`, so nothing
 changes for customers who never set the option. `terros whoami` prints an
 `environment:` line, and errors start with `[<name>]`, whenever the backend is
@@ -442,8 +442,9 @@ so run `pnpm build` after changing TypeScript files.
 
 ### CLI smoke checks
 
-The staging checks use a staging key and the staging endpoint; the CLI sends that
-key only to staging. Discovery reads the schema cache from the staging
+The staging checks read the key from the selected environment's own variable
+(`TERROS_API_KEY_STAGE_STAGING` for staging) and never the generic
+`TERROS_API_KEY`; the CLI sends that key only to staging. Discovery reads the schema cache from the staging
 environment's own directory.
 
 From the repository root, build and run the smoke checks separately from unit tests:
@@ -457,7 +458,7 @@ pnpm --filter @terros-inc/cli smoke:auth
 pnpm --filter @terros-inc/cli smoke:list
 ```
 
-For discovery, authenticated user lookup and the read-only list, supply an authorized staging API key through `TERROS_API_KEY` and set
+For discovery, authenticated user lookup and the read-only list, supply an authorized staging API key through `TERROS_API_KEY_STAGE_STAGING` and set
 `TERROS_API_ENDPOINT` to the staging API base URL. The key must belong to a
 Terros-internal user with access to `/openapi`. Without a non-whitespace key,
 each check prints `SKIP` and exits successfully. With a key, an explicit endpoint
