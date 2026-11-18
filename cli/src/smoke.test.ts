@@ -326,12 +326,39 @@ it.each([
     `
     )
     const result = spawnSync(process.execPath, [join(smoke, 'user.mjs')], {
-      env: { TERROS_API_ENDPOINT: endpoint, TERROS_API_KEY: marker },
+      env: { TERROS_API_ENDPOINT: endpoint, [variable]: marker },
       encoding: 'utf8',
       timeout: 10_000,
     })
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('PASS:')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+// A generic production key left in the shell must never be forwarded to a non-production backend by the smoke wrappers.
+it('user smoke skips instead of forwarding the generic key to staging', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'terros-smoke-generic-'))
+  try {
+    const smoke = join(directory, 'cli', 'smoke')
+    const shared = join(directory, 'packages', 'connect-common', 'src')
+    await mkdir(smoke, { recursive: true })
+    await mkdir(shared, { recursive: true })
+    await copyFile(new URL('../smoke/user.mjs', import.meta.url), join(smoke, 'user.mjs'))
+    await copyFile(
+      new URL('../../packages/connect-common/src/environment.ts', import.meta.url),
+      join(shared, 'environment.ts')
+    )
+    await writeFile(join(directory, 'cli', 'cli.js'), `process.exit(7)`)
+    const result = spawnSync(process.execPath, [join(smoke, 'user.mjs')], {
+      env: { TERROS_API_ENDPOINT: 'https://api.staging.terros.com', TERROS_API_KEY: marker },
+      encoding: 'utf8',
+      timeout: 10_000,
+    })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('SKIP: TERROS_API_KEY_STAGE_STAGING')
+    expect(result.stdout + result.stderr).not.toContain(marker)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

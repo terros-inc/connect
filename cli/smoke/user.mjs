@@ -8,10 +8,13 @@ import assert from 'node:assert/strict'
 import { environmentApiKeyVariable, resolveEnvironment } from '../../packages/connect-common/src/environment.ts'
 
 const endpoint = process.env.TERROS_API_ENDPOINT?.trim()
-const apiKey = process.env.TERROS_API_KEY?.trim()
+// Only the key variable of the selected environment is read: the generic TERROS_API_KEY is a production key and
+// must never be forwarded to staging.
+const keyVariable = environmentApiKeyVariable(resolveEnvironment({ TERROS_API_ENDPOINT: endpoint }))
+const apiKey = process.env[keyVariable]?.trim()
 
 if (!apiKey) {
-  console.log('SKIP: TERROS_API_KEY is required for authenticated user lookup.')
+  console.log(`SKIP: ${keyVariable} is required for authenticated user lookup.`)
 } else {
   let home
   let stderr = ''

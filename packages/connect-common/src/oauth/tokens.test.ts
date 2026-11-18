@@ -221,27 +221,20 @@ describe('saveTokens', () => {
     }
   })
 
-  it('uses the explicit client backend for saved credentials in both directions', async () => {
+  // Staging shares production's Auth0 tenant, so a staging "sign-in" would be a production credential: only an API key
+  // is accepted there, and a saved production login is never attached to a non-production host.
+  it('refuses a saved sign-in for a non-production client and sends nothing', async () => {
+    await writeAuth(JSON.stringify({ access_token: 'prod-token', expires_at: Date.now() + 3600000 }))
     vi.stubEnv('TERROS_API_KEY', '')
     vi.stubEnv('TERROS_API_ENDPOINT', '')
     vi.stubEnv('TERROS_ENV', 'prod')
-    await saveTokens({ ...rotated, access_token: 'prod-token' })
-    vi.stubEnv('TERROS_ENV', 'staging')
-    await saveTokens({ ...rotated, access_token: 'staging-token' })
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    } as Response)
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({}) } as Response)
     try {
       await new TerrosApiClient({ baseUrl: 'https://api.terros.com' }).get('user/profile')
-      vi.stubEnv('TERROS_ENV', 'prod')
-      await new TerrosApiClient({ baseUrl: 'https://api.staging.terros.com' }).get('user/profile')
-      expect(
-        fetchSpy.mock.calls.map(([url, init]) => [url, (init?.headers as Record<string, string>).authorization])
-      ).toEqual([
-        ['https://api.terros.com/user/profile', 'Bearer prod-token'],
-        ['https://api.staging.terros.com/user/profile', 'Bearer staging-token'],
-      ])
+      await expect(
+        new TerrosApiClient({ baseUrl: 'https://api.staging.terros.com' }).get('user/profile')
+      ).rejects.toThrow(/TERROS_API_KEY_STAGE_STAGING/)
+      expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['https://api.terros.com/user/profile'])
     } finally {
       fetchSpy.mockRestore()
       vi.unstubAllEnvs()
@@ -255,7 +248,7 @@ describe('saveTokens', () => {
     vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.staging.terros.com')
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     try {
-      await expect(new TerrosApiClient().get('user/profile')).rejects.toThrow(AuthRequiredError)
+      await expect(new TerrosApiClient().get('user/profile')).rejects.toThrow(/TERROS_API_KEY_STAGE_STAGING/)
       expect(fetchSpy).not.toHaveBeenCalled()
     } finally {
       fetchSpy.mockRestore()

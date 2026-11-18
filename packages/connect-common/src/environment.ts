@@ -21,6 +21,9 @@ const STACK_HOST = /^api\.([a-z][a-z0-9-]*)\.terros\.com$/
  */
 export function resolveEnvironment(env: NodeJS.ProcessEnv = process.env): TerrosEnvironment {
   const selected = env.TERROS_ENV?.trim().toLowerCase()
+  // A whitespace-only value is a mistake, not "unset": falling through would run the command against production.
+  if (env.TERROS_ENV && !selected)
+    throw new Error('TERROS_ENV (or --env) is blank. Use prod, staging, or a stack name.')
   if (selected && !STAGE_NAME.test(selected)) {
     throw new Error(`Unknown environment "${selected}". Use prod, staging, or a developer stack name such as "alex".`)
   }
@@ -85,4 +88,10 @@ export function environmentApiKey(
   env: NodeJS.ProcessEnv = process.env
 ): string | undefined {
   return env[environmentApiKeyVariable(environment)]
+}
+
+/** Non-production environments have no Auth0 tenant of their own, so a production sign-in must never stand in for one. */
+export function interactiveSignInRefusal(environment: TerrosEnvironment): string | undefined {
+  if (environment.name === 'prod') return undefined
+  return `Interactive sign-in is only available for production, because ${environment.name} has no sign-in of its own and a production sign-in would be a production credential. Use an API key: set ${environmentApiKeyVariable(environment)}.`
 }

@@ -120,8 +120,8 @@ it('answers --version for a selected environment without any request', async () 
   expect(fetchMock).not.toHaveBeenCalled()
 })
 
-// Staff-only is enforced by isolation: a customer's production login never reaches staging, so staging cannot be used
-// with it and the CLI asks for a sign-in against that environment instead.
+// Staging shares production's Auth0 tenant, so a staging "sign-in" would be a production credential. Non-production
+// environments are API-key only, and a saved production login is never attached to them.
 it('sends nothing to staging when only a production login is saved', async () => {
   await mkdir(join(home.path, '.config', 'terros'), { recursive: true })
   await writeFile(
@@ -131,18 +131,21 @@ it('sends nothing to staging when only a production login is saved', async () =>
   const { stderr } = await run('--env', 'staging', 'api', 'call', '/user/profile')
   expect(process.exitCode).toBe(1)
   expect(stderr.join(' ')).toContain('[staging]')
-  expect(stderr.join(' ')).toMatch(/not signed in|sign in/i)
+  expect(stderr.join(' ')).toContain('TERROS_API_KEY_STAGE_STAGING')
   expect(fetchMock.mock.calls.map(([url]) => new URL(url).hostname)).not.toContain('api.staging.terros.com')
   expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('production-token')
 })
 
-it('uses the staging login saved by `--env staging auth login` for staging requests only', async () => {
-  const stagingDir = join(home.path, '.config', 'terros', 'env', 'staging')
-  await mkdir(stagingDir, { recursive: true })
-  await writeFile(
-    join(stagingDir, 'auth.json'),
-    JSON.stringify({ access_token: 'staging-token', expires_at: Date.now() + 3600000 })
-  )
+it('refuses an interactive sign-in for staging before contacting the identity provider', async () => {
+  const { stderr } = await run('--env', 'staging', 'auth', 'login')
+  expect(process.exitCode).toBe(1)
+  expect(stderr.join(' ')).toContain('TERROS_API_KEY_STAGE_STAGING')
+  expect(auth0Calls()).toEqual([])
+})
+
+it('sends only the staging key to staging, never the production key', async () => {
+  vi.stubEnv('TERROS_API_KEY', 'production-key')
+  vi.stubEnv('TERROS_API_KEY_STAGE_STAGING', 'staging-key')
   const requests = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ type: 'success' }))
   vi.stubGlobal('fetch', requests)
   await run('--env', 'staging', 'api', 'call', '/user/profile')
@@ -150,8 +153,18 @@ it('uses the staging login saved by `--env staging auth login` for staging reque
   expect(calls.length).toBeGreaterThan(0)
   for (const [url, init] of calls) {
     expect(new URL(url).hostname).toBe('api.staging.terros.com')
-    expect(init.headers).toMatchObject({ authorization: 'Bearer staging-token' })
+    expect(init.headers).toMatchObject({ authorization: 'ApiKey staging-key' })
   }
+})
+
+// A blank flag value from a script must not replace the selection or fall through to production.
+it.each(['', ' '])('rejects a blank --env %j before any request', async (blank) => {
+  vi.stubEnv('TERROS_ENV', 'staging')
+  vi.stubEnv('TERROS_API_KEY', 'production-key')
+  const { stderr } = await run('--env', blank, 'api', 'call', '/user/profile')
+  expect(process.exitCode).toBe(1)
+  expect(stderr.join(' ')).toMatch(/--env needs a value/)
+  expect(fetchMock).not.toHaveBeenCalled()
 })
 
 // Without a host allow-list a staff API key or login could be pointed at, and logged by, any server.

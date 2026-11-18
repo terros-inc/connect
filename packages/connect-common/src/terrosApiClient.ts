@@ -1,7 +1,7 @@
 import { getTokens } from './oauth/tokens.ts'
 import { AuthRequiredError } from './oauth/auth0.ts'
 import { type ApiRoute, isResponseError, TerrosApiError } from './models.ts'
-import { environmentApiKey, resolveEnvironment } from './environment.ts'
+import { environmentApiKey, interactiveSignInRefusal, resolveEnvironment } from './environment.ts'
 import { getAnalyticsHeaders, type TerrosHeaderMetadata } from './analytics.ts'
 
 export type TerrosClientConfig = {
@@ -21,6 +21,7 @@ export type TerrosClientConfig = {
 export class TerrosApiClient {
   private readonly baseUrl: string
   private readonly stateDir: string
+  private readonly signInRefusal: string | undefined
   private readonly authStrategy: AuthStrategy
   private readonly analytics: Record<string, string | undefined>
   private readonly impersonateUserId: string | undefined
@@ -31,6 +32,7 @@ export class TerrosApiClient {
       : resolveEnvironment()
     this.baseUrl = environment.baseUrl
     this.stateDir = environment.stateDir
+    this.signInRefusal = interactiveSignInRefusal(environment)
     this.analytics = getAnalyticsHeaders(config.analytics)
     this.authStrategy = this.determineAuthStrategy(config, environment)
     this.impersonateUserId = config.impersonateUserId ?? readProcessEnv('TERROS_IMPERSONATE')
@@ -81,6 +83,7 @@ export class TerrosApiClient {
       return `${this.authStrategy.authType} ${this.authStrategy.apiKey}`
     }
     if (this.authStrategy.type === 'bearer') return `Bearer ${this.authStrategy.accessToken}`
+    if (this.signInRefusal) throw new Error(this.signInRefusal)
     const cliTokens = await getTokens(this.stateDir)
     if (cliTokens === null) throw new AuthRequiredError('signed-out')
     return `Bearer ${cliTokens.access_token}`

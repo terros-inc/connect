@@ -13,6 +13,7 @@ import {
   UPLOAD_URL_KEYS,
   withoutUploadUrls,
 } from '@terros-inc/mcp-core'
+import { interactiveSignInRefusal, resolveEnvironment } from '@terros-inc/connect-common'
 import packageJson from '../package.json'
 import { readUploadFile, UPLOAD_FILE_FLAG, uploadToResponse } from './uploadFile'
 import { reportError } from './reportError'
@@ -124,7 +125,7 @@ function applyEnvFlag(argv: string[]): { argv: string[]; restore: () => void } {
       continue
     }
     const value = arg === '--env' ? argv[++i] : arg.slice('--env='.length)
-    if (!value || value.startsWith('--')) {
+    if (!value?.trim() || value.startsWith('--')) {
       restore()
       throw new Error('--env needs a value: prod, staging, or a developer stack name.')
     }
@@ -231,7 +232,7 @@ async function run(argv: string[]): Promise<void> {
   }
   // The API issues a key only to a token granting sensitive:manage, which the saved login never asks for.
   const client = SENSITIVE_PATHS.has(endpoint.path)
-    ? buildTerrosClient({ accessToken: await signInWithSensitiveScope() })
+    ? buildTerrosClient({ accessToken: await signInWithSensitiveScopeForEnvironment() })
     : buildTerrosClient()
   let response: unknown
   try {
@@ -262,6 +263,12 @@ async function run(argv: string[]): Promise<void> {
   if (upload) console.error(`Uploaded ${upload.path} to ${upload.field}`)
   const hint = await companyScopeHint({ response })
   if (hint !== undefined) console.error(hint)
+}
+
+async function signInWithSensitiveScopeForEnvironment(): Promise<string> {
+  const refusal = interactiveSignInRefusal(resolveEnvironment())
+  if (refusal) throw new Error(refusal)
+  return await signInWithSensitiveScope()
 }
 
 async function loadCommandLevel(
