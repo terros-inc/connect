@@ -144,12 +144,14 @@ describe('GetJobStatusChanges paging', () => {
     expect(complete).toBe(true)
   })
 
-  it('stops at the page limit and says more may remain', async () => {
+  // Ascending order would read the same oldest pages on every run and never reach the newest changes.
+  it('stops at the page limit with the newest changes, oldest first', async () => {
     const lp = fakeLeadPerfection({ jobs })
 
     const { rows, complete } = await lp.client.getJobStatusChanges('11/16/2026', '11/19/2026', 100, 2)
 
-    expect(rows).toHaveLength(200)
+    expect(lp.calls[1]?.form.sortorder).toBe('4')
+    expect(rows.map((row) => row.job_id)).toEqual(jobs.slice(50).map((job) => job.job_id))
     expect(complete).toBe(false)
   })
 })

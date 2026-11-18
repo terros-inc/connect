@@ -27,6 +27,7 @@ export function fakeLeadPerfection(
     secrets?: LeadPerfectionSecrets
     // Credentials LeadPerfection accepts, where they differ from the ones the client sends.
     accepts?: Partial<LeadPerfectionSecrets>
+    // Oldest status change first.
     jobs?: object[]
     appointments?: object[]
     leads?: Record<string, object[]>
@@ -84,7 +85,13 @@ export function fakeLeadPerfection(
       case '/api/Customers/GetJobStatusChanges': {
         const size = Number(form.PageSize)
         const page = Number(form.StartIndex)
-        return reply(200, (options.jobs ?? []).slice((page - 1) * size, page * size))
+        // sortorder 4 is status date descending; like the sandbox, a page's rows come back in job ID order.
+        const jobs = form.sortorder === '4' ? [...(options.jobs ?? [])].reverse() : (options.jobs ?? [])
+        const rows = jobs.slice((page - 1) * size, page * size) as { job_id?: string }[]
+        return reply(
+          200,
+          rows.sort((a, b) => Number(a.job_id) - Number(b.job_id))
+        )
       }
       case '/api/SalesApi/GetSalesApptDetailDateRange':
         return reply(200, options.appointments ?? [])
