@@ -7,6 +7,10 @@ Typescript SDK & API client interface for the Terros Sales platform.
 - Node.js 24 or newer
 - A Terros API key with access to the platform
 
+## Backend Host and Keys
+
+The SDK client accepts a `baseUrl` only on `https://api.terros.com`, `https://api.<stage>.terros.com` or `http://localhost[:port]`, with no path prefix, port (except on localhost), credentials or query. Anything else throws when the client is constructed, so a key is never sent to another host. When no key is passed, production reads `TERROS_API_KEY` and any other environment reads `TERROS_API_KEY_STAGE_<NAME>` (name upper-cased, hyphens as underscores; `TERROS_API_KEY_PORT_<port>` for localhost).
+
 ## PermanentError
 
 Throw `PermanentError` from a Connect script when the same input cannot succeed on a later run: bad config, a missing location, an invalid link, or a non-retryable 4xx. The Node.js Lambda runtime reports that thrown error as a `FunctionError` with `errorType` `PermanentError`. The execution engine acknowledges it without retrying or sending it to a dead-letter queue, and logs a terminal failure.

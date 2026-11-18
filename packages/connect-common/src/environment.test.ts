@@ -80,12 +80,16 @@ describe('resolveEnvironment', () => {
     expect(resolveEnvironment({ TERROS_ENV: 'localhost', TERROS_API_ENDPOINT: 'http://localhost:3000' })).toEqual(
       resolveEnvironment({ TERROS_API_ENDPOINT: 'http://localhost:3000' })
     )
+    expect(() =>
+      resolveEnvironment({ TERROS_ENV: 'localhost', TERROS_API_ENDPOINT: 'https://api.localhost.terros.com' })
+    ).toThrow(/http:\/\/localhost/)
     expect(() => resolveEnvironment({ TERROS_ENV: 'localhost' })).toThrow(/TERROS_API_ENDPOINT=http:\/\/localhost/)
   })
 
   // Falling through on a blank value would run a staging command against production.
   it('rejects a whitespace-only TERROS_ENV instead of defaulting to production', () => {
     expect(() => resolveEnvironment({ TERROS_ENV: '  ' })).toThrow(/blank/)
-    expect(resolveEnvironment({ TERROS_ENV: '' }).name).toBe('prod')
+    expect(() => resolveEnvironment({ TERROS_ENV: '' })).toThrow(/blank/)
+    expect(resolveEnvironment({}).name).toBe('prod')
   })
 })

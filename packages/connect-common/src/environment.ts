@@ -23,18 +23,20 @@ export function resolveEnvironment(env: NodeJS.ProcessEnv = process.env): Terros
   const requested = env.TERROS_ENV?.trim().toLowerCase()
   // "production" is what people type; it is the same backend as "prod", not a stack named production.
   const selected = requested === 'production' ? 'prod' : requested
-  // A whitespace-only value is a mistake, not "unset": falling through would run the command against production.
-  if (env.TERROS_ENV && !selected)
+  // A blank value (empty or whitespace) is a mistake, not "unset": an unset variable in a script (`TERROS_ENV=$STAGE`)
+  // would otherwise run the command against production.
+  if (env.TERROS_ENV !== undefined && !selected)
     throw new Error('TERROS_ENV (or --env) is blank. Use prod, staging, or a stack name.')
   if (selected && !STAGE_NAME.test(selected)) {
     throw new Error(`Unknown environment "${selected}". Use prod, staging, or a developer stack name such as "alex".`)
   }
   const endpoint = env.TERROS_API_ENDPOINT?.trim()
   // localhost has no host of its own: the port comes from the endpoint override.
-  if (selected === 'localhost' && !endpoint) {
+  const backend = endpoint ? parseEndpoint(endpoint) : { name: selected || 'prod' }
+  // A remote stack named "localhost" (api.localhost.terros.com) parses to the same name, so require a loopback URL.
+  if (selected === 'localhost' && !('baseUrl' in backend && backend.baseUrl.startsWith('http://localhost'))) {
     throw new Error('--env localhost needs TERROS_API_ENDPOINT=http://localhost:<port> to say which port.')
   }
-  const backend = endpoint ? parseEndpoint(endpoint) : { name: selected || 'prod' }
   if (
     selected &&
     (backend.name !== selected ||

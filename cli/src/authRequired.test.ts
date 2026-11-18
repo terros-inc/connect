@@ -53,7 +53,7 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', fetchMock)
   vi.stubEnv('TERROS_API_KEY', '')
   vi.stubEnv('TERROS_API_ENDPOINT', '')
-  vi.stubEnv('TERROS_ENV', '')
+  vi.stubEnv('TERROS_ENV', undefined)
   vi.stubEnv('TERROS_IMPERSONATE', '')
   vi.stubEnv('TERROS_DEBUG', '')
   home.path = await mkdtemp(join(tmpdir(), 'terros-auth-'))
@@ -182,6 +182,17 @@ it('sends only the staging key to staging, never the production key', async () =
     expect(new URL(url).hostname).toBe('api.staging.terros.com')
     expect(init.headers).toMatchObject({ authorization: 'ApiKey staging-key' })
   }
+})
+
+// `TERROS_ENV=$STAGE` with STAGE unset exports an empty string; it must not mean production.
+it('rejects an explicitly empty TERROS_ENV before any request', async () => {
+  vi.stubEnv('TERROS_ENV', '')
+  vi.stubEnv('TERROS_API_KEY', 'production-key')
+  const { stderr } = await run('api', 'call', '/user/profile')
+  expect(process.exitCode).toBe(1)
+  expect(stderr.join(' ')).toMatch(/blank/)
+  expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('production-key')
+  expect(apiCalls()).toEqual([])
 })
 
 // A blank flag value from a script must not replace the selection or fall through to production.

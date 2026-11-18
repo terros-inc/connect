@@ -333,7 +333,8 @@ upper-cased, hyphens as underscores), or `TERROS_API_KEY_PORT_<port>` for
 off production. Staff-only access comes from the backend: the CLI does no staff
 check of its own, and a non-production backend only has accounts and keys for the
 people it was set up for. `--env production` means `prod`, and `--env localhost`
-uses the port in `TERROS_API_ENDPOINT=http://localhost:<port>`.
+needs `TERROS_API_ENDPOINT=http://localhost:<port>` (a loopback URL) for the port. An
+empty `TERROS_ENV` is an error, not production.
 
 ```sh
 TERROS_API_KEY_STAGE_STAGING=<staging key> terros --env staging whoami
@@ -396,8 +397,11 @@ the code from a browser that is still signed in without a new sign-in, the
 command opens the sign-out page (`https://auth.terros.com/v2/logout`) before the
 sign-in page: sign out, then approve the code. It uses that sign-in
 for this one request only: it is kept in memory, not saved, and your saved login
-from `terros auth login` stays as it was. `TERROS_IMPERSONATE` and
-`TERROS_API_ENDPOINT` apply as usual. If the sign-in does not grant
+from `terros auth login` stays as it was. `TERROS_IMPERSONATE` applies as usual.
+The step-up works on production and on shared staging (`--env staging`), where
+the key it issues is a staging key; for a developer stack or localhost it
+refuses, because those are API-key only. `TERROS_API_ENDPOINT` must be an
+accepted Terros host (see the environment section). If the sign-in does not grant
 `sensitive:manage`, usually because the approval reused an earlier browser
 sign-in, the command stops with an error naming the scope and sends nothing:
 sign out at `https://auth.terros.com/v2/logout` and run it again. The API

@@ -84,15 +84,15 @@ afterEach(() => {
 describe('--env', () => {
   // The flag picks the backend for the sign-in and schema storage, so it must not reach the endpoint as a field.
   it('is not sent as an endpoint field and does not leak into the next call', async () => {
-    vi.stubEnv('TERROS_ENV', '')
+    vi.stubEnv('TERROS_ENV', undefined)
     vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(schemaWithParameter('/user/logins', 'userId')))
 
     await main(['user', 'logins', '--env', 'staging', '--userId', 'U.example'])
-    expect(process.env.TERROS_ENV).toBe('')
+    expect(process.env.TERROS_ENV).toBeUndefined()
     expect(call.mock.calls).toEqual([['/user/logins', { userId: 'U.example' }]])
 
     await main(['--env=alex', 'user', 'logins'])
-    expect(process.env.TERROS_ENV).toBe('')
+    expect(process.env.TERROS_ENV).toBeUndefined()
   })
 
   it('labels direct command errors for staging but preserves production output', async () => {

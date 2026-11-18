@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchProfile)
   vi.stubEnv('TERROS_API_KEY', 'test-key')
   vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.terros.com')
-  vi.stubEnv('TERROS_ENV', '')
+  vi.stubEnv('TERROS_ENV', undefined)
   vi.stubEnv('TERROS_IMPERSONATE', '')
 })
 

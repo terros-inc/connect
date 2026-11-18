@@ -246,7 +246,7 @@ describe('saveTokens', () => {
 
   it('does not send a production login to an overridden staging endpoint', async () => {
     await writeAuth(JSON.stringify({ access_token: 'prod-token', expires_at: Date.now() + 3600000 }))
-    vi.stubEnv('TERROS_ENV', '')
+    vi.stubEnv('TERROS_ENV', undefined)
     vi.stubEnv('TERROS_API_KEY', '')
     vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.staging.terros.com')
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
@@ -265,7 +265,7 @@ describe('saveTokens', () => {
     vi.stubEnv('TERROS_ENV', 'staging')
     await saveTokens({ ...rotated, access_token: 'staging-token' })
     expect((await getTokens())?.access_token).toBe('staging-token')
-    vi.stubEnv('TERROS_ENV', '')
+    vi.stubEnv('TERROS_ENV', undefined)
     expect((await getTokens())?.access_token).toBe('prod-token')
     expect(await readdir(join(configDir(), 'env'))).toEqual(['staging'])
   })
