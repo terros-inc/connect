@@ -20,7 +20,9 @@ const STACK_HOST = /^api\.([a-z][a-z0-9-]*)\.terros\.com$/
  * production gets its own state directory, so a staging sign-in or schema is never sent to production, nor the reverse.
  */
 export function resolveEnvironment(env: NodeJS.ProcessEnv = process.env): TerrosEnvironment {
-  const selected = env.TERROS_ENV?.trim().toLowerCase()
+  const requested = env.TERROS_ENV?.trim().toLowerCase()
+  // "production" is what people type; it is the same backend as "prod", not a stack named production.
+  const selected = requested === 'production' ? 'prod' : requested
   // A whitespace-only value is a mistake, not "unset": falling through would run the command against production.
   if (env.TERROS_ENV && !selected)
     throw new Error('TERROS_ENV (or --env) is blank. Use prod, staging, or a stack name.')
@@ -28,11 +30,16 @@ export function resolveEnvironment(env: NodeJS.ProcessEnv = process.env): Terros
     throw new Error(`Unknown environment "${selected}". Use prod, staging, or a developer stack name such as "alex".`)
   }
   const endpoint = env.TERROS_API_ENDPOINT?.trim()
+  // localhost has no host of its own: the port comes from the endpoint override.
+  if (selected === 'localhost' && !endpoint) {
+    throw new Error('--env localhost needs TERROS_API_ENDPOINT=http://localhost:<port> to say which port.')
+  }
   const backend = endpoint ? parseEndpoint(endpoint) : { name: selected || 'prod' }
   if (
     selected &&
     (backend.name !== selected ||
-      ('baseUrl' in backend &&
+      (selected !== 'localhost' &&
+        'baseUrl' in backend &&
         backend.baseUrl !== (selected === 'prod' ? 'https://api.terros.com' : `https://api.${selected}.terros.com`)))
   ) {
     throw new Error('TERROS_ENV (or --env) conflicts with TERROS_API_ENDPOINT: they pick different backends.')
@@ -90,8 +97,11 @@ export function environmentApiKey(
   return env[environmentApiKeyVariable(environment)]
 }
 
-/** Non-production environments have no Auth0 tenant of their own, so a production sign-in must never stand in for one. */
+/**
+ * Shared staging already accepts production tokens, so signing in there adds no exposure and is how staff get a key.
+ * A developer's own stack or localhost is someone's personal server: a token sent there is valid against production.
+ */
 export function interactiveSignInRefusal(environment: TerrosEnvironment): string | undefined {
-  if (environment.name === 'prod') return undefined
-  return `Interactive sign-in is only available for production, because ${environment.name} has no sign-in of its own and a production sign-in would be a production credential. Use an API key: set ${environmentApiKeyVariable(environment)}.`
+  if (environment.name === 'prod' || environment.name === 'staging') return undefined
+  return `Interactive sign-in is only available for production and staging, because ${environment.name} is not a shared Terros backend and a sign-in sent to it would be a production credential. Use an API key: set ${environmentApiKeyVariable(environment)}.`
 }

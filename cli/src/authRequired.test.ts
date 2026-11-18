@@ -131,16 +131,43 @@ it('sends nothing to staging when only a production login is saved', async () =>
   const { stderr } = await run('--env', 'staging', 'api', 'call', '/user/profile')
   expect(process.exitCode).toBe(1)
   expect(stderr.join(' ')).toContain('[staging]')
-  expect(stderr.join(' ')).toContain('TERROS_API_KEY_STAGE_STAGING')
+  expect(stderr.join(' ')).toMatch(/not signed in/i)
   expect(fetchMock.mock.calls.map(([url]) => new URL(url).hostname)).not.toContain('api.staging.terros.com')
   expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('production-token')
 })
 
-it('refuses an interactive sign-in for staging before contacting the identity provider', async () => {
-  const { stderr } = await run('--env', 'staging', 'auth', 'login')
+// A developer stack is someone's own server: a sign-in sent there would be a production credential.
+it('refuses an interactive sign-in for a developer stack before contacting the identity provider', async () => {
+  const { stderr } = await run('--env', 'alex', 'auth', 'login')
   expect(process.exitCode).toBe(1)
-  expect(stderr.join(' ')).toContain('TERROS_API_KEY_STAGE_STAGING')
+  expect(stderr.join(' ')).toContain('TERROS_API_KEY_STAGE_ALEX')
   expect(auth0Calls()).toEqual([])
+})
+
+// Shared staging accepts production tokens already and staff need a sign-in there to mint a staging key.
+it('starts the interactive sign-in for staging', async () => {
+  auth0 = Response.json({ error: 'server_error' }, { status: 500 })
+  const { stderr } = await run('--env', 'staging', 'auth', 'login')
+  expect(auth0Calls().length).toBeGreaterThan(0)
+  expect(stderr.join(' ')).not.toContain('Interactive sign-in is only available')
+})
+
+it('sends a saved staging login to staging only', async () => {
+  const directory = join(home.path, '.config', 'terros', 'env', 'staging')
+  await mkdir(directory, { recursive: true })
+  await writeFile(
+    join(directory, 'auth.json'),
+    JSON.stringify({ access_token: 'staging-login-token', expires_at: Date.now() + 3600000 })
+  )
+  const requests = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ type: 'success' }))
+  vi.stubGlobal('fetch', requests)
+  await run('--env', 'staging', 'api', 'call', '/user/profile')
+  const calls = requests.mock.calls.filter(([url]) => new URL(url).hostname.startsWith('api.'))
+  expect(calls.length).toBeGreaterThan(0)
+  for (const [url, init] of calls) {
+    expect(new URL(url).hostname).toBe('api.staging.terros.com')
+    expect(init.headers).toMatchObject({ authorization: 'Bearer staging-login-token' })
+  }
 })
 
 it('sends only the staging key to staging, never the production key', async () => {

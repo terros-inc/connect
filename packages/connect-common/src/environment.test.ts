@@ -54,7 +54,7 @@ describe('resolveEnvironment', () => {
     expect(resolveEnvironment({ TERROS_API_ENDPOINT: 'https://api.localhost.terros.com' }).stateDir).not.toBe(
       resolveEnvironment({ TERROS_API_ENDPOINT: 'http://localhost:3000' }).stateDir
     )
-    expect(() => resolveEnvironment({ TERROS_ENV: 'localhost', TERROS_API_ENDPOINT: 'http://localhost:3000' })).toThrow(
+    expect(() => resolveEnvironment({ TERROS_ENV: 'prod', TERROS_API_ENDPOINT: 'http://localhost:3000' })).toThrow(
       /conflicts/
     )
     for (const bad of [
@@ -69,6 +69,18 @@ describe('resolveEnvironment', () => {
       'http://localhost.evil.example',
     ])
       expect(() => resolveEnvironment({ TERROS_API_ENDPOINT: bad }), bad).toThrow(/Unsupported API host/)
+  })
+
+  // "--env production" must reach production, not a stack named production (api.production.terros.com).
+  it('treats production as prod and localhost as the endpoint override', () => {
+    expect(resolveEnvironment({ TERROS_ENV: 'Production' })).toEqual(resolveEnvironment({}))
+    expect(() =>
+      resolveEnvironment({ TERROS_ENV: 'production', TERROS_API_ENDPOINT: 'api.staging.terros.com' })
+    ).toThrow(/conflicts/)
+    expect(resolveEnvironment({ TERROS_ENV: 'localhost', TERROS_API_ENDPOINT: 'http://localhost:3000' })).toEqual(
+      resolveEnvironment({ TERROS_API_ENDPOINT: 'http://localhost:3000' })
+    )
+    expect(() => resolveEnvironment({ TERROS_ENV: 'localhost' })).toThrow(/TERROS_API_ENDPOINT=http:\/\/localhost/)
   })
 
   // Falling through on a blank value would run a staging command against production.

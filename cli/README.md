@@ -320,16 +320,20 @@ match the mobile apps' environment picker: `prod` (the default), `staging`
 (`https://api.staging.terros.com`), or a developer's own stack such as `alex`
 (`https://api.alex.terros.com`).
 
-Non-production environments are API-key only. Staging and developer stacks
-share production's Auth0 tenant, so an interactive sign-in for them would be a
-production credential; `terros --env <name> auth login` therefore refuses, and a
-saved production login is never sent to a non-production host. Set the key issued
-by that backend in `TERROS_API_KEY_STAGE_<NAME>` (`TERROS_API_KEY_STAGE_STAGING`
-for staging; name upper-cased, hyphens as underscores), or
-`TERROS_API_KEY_PORT_<port>` for `http://localhost:<port>`. Production keeps
-`TERROS_API_KEY`, which is never used off production. Staff-only access comes
-from the backend: the CLI does no staff check of its own, and a non-production
-backend only has accounts and keys for the people it was set up for.
+Staging accepts an interactive sign-in: `terros --env staging auth login` signs in
+for staging only, saved apart from your production login (and the sensitive-scope
+step-up for issuing a key works there too). A developer's own stack and
+`http://localhost` are API-key only: they are personal servers and share
+production's Auth0 tenant, so an interactive sign-in sent to them would be a
+production credential, and `auth login` refuses. A saved production login is never
+sent to a non-production host. Set the key issued by that backend in
+`TERROS_API_KEY_STAGE_<NAME>` (`TERROS_API_KEY_STAGE_STAGING` for staging; name
+upper-cased, hyphens as underscores), or `TERROS_API_KEY_PORT_<port>` for
+`http://localhost:<port>`. Production keeps `TERROS_API_KEY`, which is never used
+off production. Staff-only access comes from the backend: the CLI does no staff
+check of its own, and a non-production backend only has accounts and keys for the
+people it was set up for. `--env production` means `prod`, and `--env localhost`
+uses the port in `TERROS_API_ENDPOINT=http://localhost:<port>`.
 
 ```sh
 TERROS_API_KEY_STAGE_STAGING=<staging key> terros --env staging whoami
@@ -502,7 +506,8 @@ The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
 and passes the key only to the configuration check, discovery step, user-lookup
-step and read-only list step. The invalid-key step shares the secret-dependent setup and step gates, so it
+step and read-only list step; those three steps map the `TERROS_API_KEY` secret to
+`TERROS_API_KEY_STAGE_STAGING`, the variable the CLI reads for staging. The invalid-key step shares the secret-dependent setup and step gates, so it
 also skips without the staging secret even though its script runs independently
 without one. An admin must create the `staging` environment and its secret using
 a staging key owned by a

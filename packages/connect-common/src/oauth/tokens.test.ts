@@ -233,7 +233,10 @@ describe('saveTokens', () => {
       await new TerrosApiClient({ baseUrl: 'https://api.terros.com' }).get('user/profile')
       await expect(
         new TerrosApiClient({ baseUrl: 'https://api.staging.terros.com' }).get('user/profile')
-      ).rejects.toThrow(/TERROS_API_KEY_STAGE_STAGING/)
+      ).rejects.toThrow(/not signed in/i)
+      await expect(new TerrosApiClient({ baseUrl: 'https://api.alex.terros.com' }).get('user/profile')).rejects.toThrow(
+        /TERROS_API_KEY_STAGE_ALEX/
+      )
       expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual(['https://api.terros.com/user/profile'])
     } finally {
       fetchSpy.mockRestore()
@@ -248,7 +251,7 @@ describe('saveTokens', () => {
     vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.staging.terros.com')
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     try {
-      await expect(new TerrosApiClient().get('user/profile')).rejects.toThrow(/TERROS_API_KEY_STAGE_STAGING/)
+      await expect(new TerrosApiClient().get('user/profile')).rejects.toThrow(/not signed in/i)
       expect(fetchSpy).not.toHaveBeenCalled()
     } finally {
       fetchSpy.mockRestore()

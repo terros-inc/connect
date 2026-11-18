@@ -382,6 +382,23 @@ describe('API key issuance', () => {
       expect(call).toHaveBeenLastCalledWith(path, expect.anything())
     }
   )
+
+  // Shared staging accepts production tokens anyway, so staff can mint a staging key there; a developer's own stack must
+  // never receive a token that is valid against production.
+  it('allows the step-up for staging but refuses it for a developer stack', async () => {
+    schema('/apikey/add')
+    vi.mocked(signInWithSensitiveScope).mockClear().mockResolvedValue('step-up-token')
+
+    await main(['--env', 'staging', 'apikey', 'add'])
+    expect(signInWithSensitiveScope).toHaveBeenCalledOnce()
+    expect(buildTerrosClient).toHaveBeenLastCalledWith({ accessToken: 'step-up-token' })
+
+    vi.mocked(signInWithSensitiveScope).mockClear()
+    vi.mocked(buildTerrosClient).mockClear()
+    await expect(main(['--env', 'alex', 'apikey', 'add'])).rejects.toThrow(/TERROS_API_KEY_STAGE_ALEX/)
+    expect(signInWithSensitiveScope).not.toHaveBeenCalled()
+    expect(buildTerrosClient).not.toHaveBeenCalled()
+  })
 })
 
 // minimist alone reads `--longitude -124.5` as the short flags -1, -2 and -4, so a map query failed as unknown flags.
