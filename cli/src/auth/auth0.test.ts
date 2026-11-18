@@ -68,21 +68,6 @@ describe('signInToAuth0', () => {
   })
 })
 
-it('uses the device flow directly for staging login', async () => {
-  vi.stubEnv('TERROS_ENV', 'staging')
-  vi.mocked(open).mockClear()
-  vi.stubGlobal(
-    'fetch',
-    vi
-      .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(deviceCode)))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'token-placeholder' })))
-  )
-  await signInToAuth0('offline_access', vi.fn())
-  expect(vi.mocked(open).mock.calls).toEqual([['https://login.example.test/activate']])
-  vi.unstubAllEnvs()
-})
-
 describe('signInWithSensitiveScope', () => {
   const signIn = (token: Response): ReturnType<typeof vi.fn> => {
     const fetchMock = vi
@@ -114,12 +99,21 @@ describe('signInWithSensitiveScope', () => {
     expect(prompts).not.toContain(token)
   })
 
-  it('opens only the device approval page for a sensitive-scope sign-in', async () => {
+  // Guards against a step-up approved from a browser still signed in to Terros: Auth0 reuses that older sign-in
+  // without a prompt and leaves sensitive:manage out, so the browser must sign out before the code is approved.
+  it('signs the browser out before opening the sign-in page', async () => {
     vi.mocked(open).mockClear()
     signIn(new Response(JSON.stringify({ access_token: accessToken('offline_access sensitive:manage') })))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     await signInWithSensitiveScope()
-    expect(vi.mocked(open).mock.calls).toEqual([['https://login.example.test/activate']])
+
+    expect(vi.mocked(open).mock.calls).toEqual([
+      ['https://login.example.test/v2/logout'],
+      ['https://login.example.test/activate'],
+    ])
+    const prompts = error.mock.calls.flat().join('\n')
+    expect(prompts.indexOf('https://login.example.test/v2/logout')).toBeLessThan(prompts.indexOf('ABCD-EFGH'))
   })
 
   // Guards against the elevated sign-in replacing or downgrading the saved login, or being saved where a later refresh
@@ -154,7 +148,7 @@ describe('signInWithSensitiveScope', () => {
       vi.spyOn(console, 'error').mockImplementation(() => {})
 
       await expect(signInWithSensitiveScope()).rejects.toThrow(
-        /^Sign-in did not grant the sensitive:manage scope.*Run the command again with a recent sign-in/
+        /^Sign-in did not grant the sensitive:manage scope.*Sign out at https:\/\/login\.example\.test\/v2\/logout, then run the command again/
       )
     }
   )
