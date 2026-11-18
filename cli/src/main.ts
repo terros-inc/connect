@@ -9,9 +9,12 @@ import {
   matchesStringLiteral,
   type EndpointGroups,
   type CommandNode,
+  type EndpointParameter,
+  UPLOAD_URL_KEYS,
   withoutUploadUrls,
 } from '@terros-inc/mcp-core'
 import packageJson from '../package.json'
+import { readUploadFile, UPLOAD_FILE_FLAG, uploadToResponse } from './uploadFile'
 import {
   formatCommandsHelp,
   formatCommandUsage,
@@ -83,6 +86,7 @@ export async function runCli(argv: string[]): Promise<void> {
 const HELP_FLAGS = new Set(['--help', '-h'])
 /** The API paths that issue an API key. */
 const SENSITIVE_PATHS = new Set(['/apikey/add', '/apikey/restricted/add'])
+const INCLUDE_UPLOAD_URLS = 'includeUploadUrls'
 
 export async function main(argv: string[]): Promise<void> {
   const optionsEnd = argv.includes('--') ? argv.indexOf('--') : argv.length
@@ -129,7 +133,8 @@ export async function main(argv: string[]): Promise<void> {
     return
   }
 
-  const { params: flags, base } = readInputFile(params)
+  const { params: inputFlags, upload } = readUploadFile(params)
+  const { params: flags, base } = readInputFile(inputFlags)
   let input: object
   try {
     input = buildEndpointInput(endpoint, flags, base)
@@ -180,6 +185,10 @@ export async function main(argv: string[]): Promise<void> {
         input = { ...input, userId: user.userId }
       }
     }
+    // Read endpoints will soon return upload URLs only when asked, so an upload always asks.
+    if (upload && getEndpointInputParameters(endpoint).some(({ name }) => name === INCLUDE_UPLOAD_URLS)) {
+      input = { [INCLUDE_UPLOAD_URLS]: true, ...input }
+    }
     response =
       endpoint.path === '/apiHistory/start'
         ? await runApiHistoryQuery(client, input)
@@ -192,7 +201,9 @@ export async function main(argv: string[]): Promise<void> {
     process.exitCode = 1
     return
   }
+  if (upload) await uploadToResponse(response, upload)
   console.log(formatOutput(withoutUploadUrls(response)))
+  if (upload) console.error(`Uploaded ${upload.path} to ${upload.field}`)
   const hint = await companyScopeHint({ response })
   if (hint !== undefined) console.error(hint)
 }
@@ -258,21 +269,24 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   const endpoint = level.node.endpoint
   if (endpoint) {
     const depth = getHelpDepth(requestedDepth)
-    const parameters = getEndpointInputParameters(endpoint, depth).map((parameter) =>
-      endpoint.path === '/user/logins' && parameter.name === 'userId'
-        ? {
-            ...parameter,
-            description:
-              'User ID, email, account ID, or clientUserId whose sign-in history to return. Defaults to the authenticated user.',
-          }
-        : parameter
+    const { description, parameters } = withUploadFileHelp(
+      endpoint.description,
+      getEndpointInputParameters(endpoint, depth).map((parameter) =>
+        endpoint.path === '/user/logins' && parameter.name === 'userId'
+          ? {
+              ...parameter,
+              description:
+                'User ID, email, account ID, or clientUserId whose sign-in history to return. Defaults to the authenticated user.',
+            }
+          : parameter
+      )
     )
     console.log(
       formatSubcommandParametersHelp(
         level.words.join(' '),
         undefined,
         parameters,
-        endpoint.description,
+        description,
         true,
         level.subcommands,
         getExampleArguments(endpoint, endpoint.example)
@@ -282,6 +296,37 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
   }
 
   console.log(formatLevelHelp(level))
+}
+
+/**
+ * The API documents its upload URLs as response fields to PUT an image to, but the CLI never prints them. Where an
+ * endpoint mentions one, help says so and offers `--uploadFile` instead, dropping the request flag for the URL itself.
+ */
+function withUploadFileHelp(
+  description: string | undefined,
+  parameters: EndpointParameter[]
+): { description?: string; parameters: EndpointParameter[] } {
+  const fieldName = (parameter: EndpointParameter): string => parameter.name.split('.').at(-1) ?? ''
+  const keys = [...UPLOAD_URL_KEYS]
+  const mentionsUploadUrl =
+    keys.some((key) => description?.includes(key)) ||
+    parameters.some(
+      (parameter) => fieldName(parameter) === INCLUDE_UPLOAD_URLS || UPLOAD_URL_KEYS.has(fieldName(parameter))
+    )
+  if (!mentionsUploadUrl) return { description, parameters }
+  const note = `The CLI never prints upload URLs (${keys.join(', ')}); upload an image to one with --uploadFile.`
+  return {
+    description: description ? `${description}\n\n${note}` : note,
+    parameters: [
+      ...parameters.filter((parameter) => !UPLOAD_URL_KEYS.has(fieldName(parameter))),
+      {
+        name: UPLOAD_FILE_FLAG,
+        type: '<field>=<path>',
+        required: false,
+        description: `PUT a PNG, JPEG or WebP image, with its Content-Type, to the presigned URL in the response's <field> (${keys.join(' or ')}), as in --uploadFile uploadAvatarUrl=logo.png. Exits 1 if the response has no such URL.`,
+      },
+    ],
+  }
 }
 
 function arrayFlagHint(argv: string[], level: CommandLevel): string | undefined {

@@ -10,6 +10,14 @@ Help for an endpoint whose request has a field the API schema types as a list, s
 lists it as `string | null`. Before, help stopped with `type.slice(...).trim is not a function`, as
 `terros connect app update help` did for `--avatarUrl`.
 
+### New: `--uploadFile` uploads an image without printing its upload URL
+
+`--uploadFile <field>=<path>` on an endpoint command `PUT`s a PNG, JPEG or WebP file to the presigned URL in the
+response's `uploadAvatarUrl` or `uploadIconUrl`, so `terros connect app update --appId App.example --uploadFile
+uploadAvatarUrl=logo.png` sets a Connect app's logo. Before, the CLI left those URLs out of its output, as it still
+does, and nothing could upload to them, though help told you to. Help for endpoints that return an upload URL now says
+the CLI never prints it and lists `--uploadFile` in place of the URL field. See [Upload an Image](README.md#upload-an-image).
+
 ### Fixed: API-key step-up sign-in signs the browser out first
 
 `terros apikey restricted add` now opens the Terros sign-out page (`https://auth.terros.com/v2/logout`) before the

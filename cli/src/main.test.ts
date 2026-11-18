@@ -1,8 +1,12 @@
+import { format } from 'node:util'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { Settings } from 'luxon'
 import { buildEndpointInput, getExampleArguments, parseEndpoints, type Endpoint } from '@terros-inc/mcp-core'
 import { TerrosApiError } from '@terros-inc/connect-common'
-import { main, parseArgv } from './main'
+import { main, parseArgv, runCli } from './main'
 import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints } from './loadEndpoints'
 import { loadInternalSchemaWithStatus } from './crud/internal'
 import { authCommands } from './commands/auth'
@@ -241,6 +245,73 @@ describe('an endpoint command', () => {
     expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({
       company: { companyId: 'C.example', name: 'Acme Solar' },
     })
+  })
+})
+
+describe('--uploadFile', () => {
+  const uploadUrl = 'https://uploads.example.test/avatars/App.example?X-Amz-Signature=placeholder-signature'
+  const image = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+  let path: string
+  let stderr: ReturnType<typeof vi.spyOn>
+  const fetch = vi.fn()
+  // Formatted as the console prints it, so an Error's cause and stack count too.
+  const printed = (): string => [...log.mock.calls, ...stderr.mock.calls].map((args) => format(...args)).join('\n')
+
+  beforeEach(() => {
+    path = join(mkdtempSync(join(tmpdir(), 'terros-upload-')), 'logo.png')
+    writeFileSync(path, image)
+    stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.stubGlobal('fetch', fetch)
+    vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(schemaWithParameter('/connect/app/update', 'appId')))
+    call.mockResolvedValue({ type: 'success', app: { appId: 'App.example', uploadAvatarUrl: uploadUrl } })
+  })
+
+  afterEach(() => {
+    stderr.mockRestore()
+    vi.unstubAllGlobals()
+  })
+
+  // The URL grants write access to the image until it expires, so it must reach the PUT and never the terminal.
+  it('PUTs the file to the response upload URL without printing it', async () => {
+    fetch.mockResolvedValue(new Response(null, { status: 200 }))
+    await main(['connect', 'app', 'update', '--appId', 'App.example', '--uploadFile', `uploadAvatarUrl=${path}`])
+
+    expect(call).toHaveBeenCalledWith('/connect/app/update', { appId: 'App.example' })
+    expect(fetch).toHaveBeenCalledWith(uploadUrl, {
+      method: 'PUT',
+      body: new Uint8Array(image),
+      headers: { 'Content-Type': 'image/png' },
+    })
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual({ type: 'success', app: { appId: 'App.example' } })
+    expect(stderr).toHaveBeenCalledWith(`Uploaded ${path} to uploadAvatarUrl`)
+    expect(printed()).not.toContain('uploads.example.test')
+  })
+
+  // S3 echoes the signed request in its error body, and a fetch failure's cause can hold the URL; TERROS_DEBUG prints
+  // the whole error, cause included.
+  it.each([
+    ['an HTTP error', () => fetch.mockResolvedValue(new Response(`<Error>${uploadUrl}</Error>`, { status: 403 }))],
+    ['a network error', () => fetch.mockRejectedValue(new TypeError('fetch failed', { cause: new Error(uploadUrl) }))],
+  ])('fails on %s without printing the URL', async (_, fail) => {
+    fail()
+    vi.stubEnv('TERROS_DEBUG', '1')
+    await runCli(['connect', 'app', 'update', '--appId', 'App.example', '--uploadFile', `uploadAvatarUrl=${path}`])
+
+    expect(process.exitCode).toBe(1)
+    expect(printed()).toContain('uploading')
+    expect(printed()).not.toContain('uploads.example.test')
+  })
+
+  it('asks a read endpoint for its upload URLs', async () => {
+    fetch.mockResolvedValue(new Response(null, { status: 200 }))
+    const document = JSON.parse(schemaWithParameter('/connect/app/get', 'appId'))
+    document.paths['/connect/app/get'].post.requestBody.content[
+      'application/json'
+    ].schema.properties.includeUploadUrls = { type: 'boolean' }
+    vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(JSON.stringify(document)))
+    await main(['connect', 'app', 'get', '--appId', 'App.example', '--uploadFile', `uploadAvatarUrl=${path}`])
+
+    expect(call).toHaveBeenCalledWith('/connect/app/get', { includeUploadUrls: true, appId: 'App.example' })
   })
 })
 

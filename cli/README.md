@@ -269,6 +269,25 @@ terros workflow get --workflowId WF.example > workflow.json
 terros workflow update --inputFile workflow.json --dryRun
 ```
 
+## Upload an Image
+
+Commands never print presigned upload URLs (`uploadAvatarUrl`,
+`uploadIconUrl`): anyone holding one can replace that image until it expires.
+To upload an image to one, pass `--uploadFile <field>=<path>` with a PNG, JPEG
+or WebP file. For example, to set a Connect app's logo:
+
+```sh
+terros connect app update --appId App.example --uploadFile uploadAvatarUrl=logo.png
+```
+
+The command sends its request, `PUT`s the file to the URL in the response's
+`<field>` with the file's `Content-Type`, then prints the response without the
+URL and `Uploaded <path> to <field>` on standard error. It works on any endpoint
+command whose response carries exactly one such field, and asks a read endpoint
+for its upload URLs (`--includeUploadUrls true`) itself. It exits 1 if the response has no
+such URL (the API returns one only to a caller who may edit the image) or the
+upload fails; the error never includes the URL.
+
 ## Call an Unlisted Endpoint
 
 `terros api call` sends one request to an API path, including one the API
