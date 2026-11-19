@@ -223,6 +223,27 @@ describe('LeadPerfection Sync', () => {
     expect(writes).toEqual([])
   })
 
+  // Cutting a Canadian postal code to five characters found no account, so upsert created a duplicate.
+  it('matches by phone at a Canadian postal code instead of creating a duplicate with requestType upsert', async () => {
+    const lp = fakeLeadPerfection({
+      appointments: [appointment(1003, 'CXL', { Phone: '(555)555-0103', zip: 'M5V 2T6' })],
+      leads: { '1003': [lead('', '')] },
+    })
+    const { store, terros } = fakeTerros([
+      {
+        accountId: 'Account.examplePhone',
+        ...inStage('S.leadSet'),
+        location: { postal1: 'M5V 2T6' } as never,
+        resident: { phone: '555-555-0103' },
+      },
+    ])
+
+    await syncResults({ ...config, requestType: 'upsert' }, lp.client, terros, now)
+
+    expect(stageOf(store, 'Account.examplePhone')).toBe('S.resched')
+    expect(store.size).toBe(1)
+  })
+
   it('matches no account when two share the phone number', async () => {
     const lp = fakeLeadPerfection({
       appointments: [appointment(1003, 'CXL', { Phone: '(555)555-0103', zip: '27519' })],

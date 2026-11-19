@@ -149,7 +149,7 @@ function toState(value: string | undefined): string | undefined {
 }
 
 // Five characters for a US ZIP (so ZIP+4 loses its suffix), up to seven for a Canadian postal code.
-function toZip(value: string | undefined): string | undefined {
+export function toZip(value: string | undefined): string | undefined {
   const zip = value?.trim()
   if (!zip) return undefined
   return /^\d{5}/.test(zip) ? zip.slice(0, 5) : zip.toUpperCase().slice(0, 7)
