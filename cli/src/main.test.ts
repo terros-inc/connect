@@ -6,8 +6,9 @@ import { execFileSync } from 'node:child_process'
 import { Settings } from 'luxon'
 import { buildEndpointInput, getExampleArguments, parseEndpoints, type Endpoint } from '@terros-inc/mcp-core'
 import { TerrosApiError } from '@terros-inc/connect-common'
+import packageJson from '../package.json'
 import { main, parseArgv, runCli } from './main'
-import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh, loadPublicEndpoints, loadOfflineEndpoints } from './loadEndpoints'
 import { loadInternalSchemaWithStatus } from './crud/internal'
 import { authCommands } from './commands/auth'
 import { clearOpenApiCache } from './cache'
@@ -18,9 +19,10 @@ vi.mock('./loadEndpoints', () => ({
   loadEndpoints: vi.fn(),
   loadEndpointsAfterRefresh: vi.fn(),
   loadPublicEndpoints: vi.fn(),
+  loadOfflineEndpoints: vi.fn(),
 }))
 vi.mock('./cache', () => ({ clearOpenApiCache: vi.fn(), clearRuntimeCaches: vi.fn() }))
-vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn() }))
+vi.mock('./api/query', () => ({ buildTerrosClient: vi.fn(), setEnvironmentAccessToken: vi.fn() }))
 vi.mock('./auth/auth0', () => ({ signInWithSensitiveScope: vi.fn() }))
 vi.mock('./crud/internal', () => ({ loadInternalSchemaWithStatus: vi.fn() }))
 // The real connect commands and API client import workspace packages, which CI only builds after the tests run.
@@ -65,6 +67,7 @@ let log: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.mocked(loadOfflineEndpoints).mockImplementation(() => loadEndpoints())
   log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
   call.mockResolvedValue({ ok: true })
   vi.mocked(buildTerrosClient).mockReturnValue({ call } as unknown as ReturnType<typeof buildTerrosClient>)
@@ -76,6 +79,40 @@ afterEach(() => {
   log.mockRestore()
   process.exitCode = undefined
   vi.unstubAllEnvs()
+})
+
+describe('--env', () => {
+  // The flag picks the backend for the sign-in and schema storage, so it must not reach the endpoint as a field.
+  it('is not sent as an endpoint field and does not leak into the next call', async () => {
+    vi.stubEnv('TERROS_ENV', undefined)
+    vi.mocked(loadEndpoints).mockResolvedValue(parseEndpoints(schemaWithParameter('/user/logins', 'userId')))
+
+    await main(['user', 'logins', '--env', 'staging', '--userId', 'U.example'])
+    expect(process.env.TERROS_ENV).toBeUndefined()
+    expect(call.mock.calls).toEqual([['/user/logins', { userId: 'U.example' }]])
+
+    await main(['--env=alex', 'user', 'logins'])
+    expect(process.env.TERROS_ENV).toBeUndefined()
+  })
+
+  it('labels direct command errors for staging but preserves production output', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      schema('/account/get')
+      refreshedSchema('/account/get')
+      await main(['--env', 'staging', 'missing'])
+      expect(stderr.mock.calls[0]?.[0]).toMatch(/^\[staging\] Unknown command:/)
+      stderr.mockClear()
+      await main(['--env', 'prod', 'missing'])
+      expect(stderr.mock.calls[0]?.[0]).toMatch(/^Unknown command:/)
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
+  it('requires a value', async () => {
+    await expect(main(['user', 'logins', '--env'])).rejects.toThrow('--env needs a value')
+  })
 })
 
 // Built-ins dispatch before endpoint commands, so each case goes through main to prove the built-in never runs.
@@ -345,6 +382,23 @@ describe('API key issuance', () => {
       expect(call).toHaveBeenLastCalledWith(path, expect.anything())
     }
   )
+
+  // Shared staging accepts production tokens anyway, so staff can mint a staging key there; a developer's own stack must
+  // never receive a token that is valid against production.
+  it('allows the step-up for staging but refuses it for a developer stack', async () => {
+    schema('/apikey/add')
+    vi.mocked(signInWithSensitiveScope).mockClear().mockResolvedValue('step-up-token')
+
+    await main(['--env', 'staging', 'apikey', 'add'])
+    expect(signInWithSensitiveScope).toHaveBeenCalledOnce()
+    expect(buildTerrosClient).toHaveBeenLastCalledWith({ accessToken: 'step-up-token' })
+
+    vi.mocked(signInWithSensitiveScope).mockClear()
+    vi.mocked(buildTerrosClient).mockClear()
+    await expect(main(['--env', 'alex', 'apikey', 'add'])).rejects.toThrow(/TERROS_API_KEY_STAGE_ALEX/)
+    expect(signInWithSensitiveScope).not.toHaveBeenCalled()
+    expect(buildTerrosClient).not.toHaveBeenCalled()
+  })
 })
 
 // minimist alone reads `--longitude -124.5` as the short flags -1, -2 and -4, so a map query failed as unknown flags.
@@ -1015,4 +1069,18 @@ describe('acting as a customer', () => {
     await main(words)
     expect(log.mock.calls.join('\n')).toContain('TERROS_IMPERSONATE=<userId>')
   })
+})
+
+it.each([
+  ['whoami', '--version'],
+  ['whoami', '--version', 'extra'],
+  ['whoami', '-v', 'extra'],
+  ['--version', 'extra', 'whoami'],
+  ['--env', 'staging', 'whoami', '-v', 'extra'],
+])('prints version before dispatching %j', async (...args) => {
+  await main(args)
+  expect(log).toHaveBeenCalledExactlyOnceWith(packageJson.version)
+  expect(loadEndpoints).not.toHaveBeenCalled()
+  expect(loadEndpointsAfterRefresh).not.toHaveBeenCalled()
+  expect(buildTerrosClient).not.toHaveBeenCalled()
 })

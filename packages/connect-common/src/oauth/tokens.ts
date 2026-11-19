@@ -1,8 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { mkdir, writeFile, readFile, chmod, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { resolveEnvironment } from '../environment.ts'
 import type { SavedTokens, TokenResponse } from './types.ts'
 import { AuthRequiredError, refreshTokens } from './auth0.ts'
 
@@ -15,26 +15,30 @@ const LOCK_RETRY_MS = 50
 const LOCK_TIMEOUT_MS = MINUTE
 const LOCK_OWNER = /^(\d+):([\w-]+)$/
 
-let pendingRefresh: Promise<SavedTokens | null> | undefined
+const pendingRefresh = new Map<string, Promise<SavedTokens | null>>()
 let deadRefreshToken: string | undefined
 
-export async function getTokens(): Promise<SavedTokens | null> {
-  const tokens = await readTokens()
+export async function getTokens(stateDir: string = resolveEnvironment().stateDir): Promise<SavedTokens | null> {
+  const tokens = await readTokens(stateDir)
   if (tokens === null) {
     return null
   }
   if (areTokensValid(tokens)) return tokens
   // Refresh tokens rotate and Auth0 revokes the whole login when one is sent twice, so callers in this process share
   // one refresh, and that refresh re-reads auth.json under a lock shared with other terros processes.
-  pendingRefresh ??= withAuthLock(refreshSavedTokens).finally(() => {
-    pendingRefresh = undefined
-  })
-  return await pendingRefresh
+  let pending = pendingRefresh.get(stateDir)
+  if (!pending) {
+    pending = withAuthLock(stateDir, () => refreshSavedTokens(stateDir)).finally(() => {
+      pendingRefresh.delete(stateDir)
+    })
+    pendingRefresh.set(stateDir, pending)
+  }
+  return await pending
 }
 
-async function refreshSavedTokens(): Promise<SavedTokens | null> {
+async function refreshSavedTokens(stateDir: string): Promise<SavedTokens | null> {
   // A caller that read auth.json before another refresh saved would otherwise send the already-spent token.
-  const tokens = await readTokens()
+  const tokens = await readTokens(stateDir)
   if (tokens === null || areTokensValid(tokens)) return tokens
   if (tokens.refresh_token === undefined) return null
   // A refresh token Auth0 rejected stays rejected, so a later caller in this process (the command's own request after
@@ -45,11 +49,11 @@ async function refreshSavedTokens(): Promise<SavedTokens | null> {
     throw error
   })
   // Auth0 omits refresh_token when rotation is off, and then the saved one stays valid.
-  return await writeTokens({ ...response, refresh_token: response.refresh_token ?? tokens.refresh_token })
+  return await writeTokens(stateDir, { ...response, refresh_token: response.refresh_token ?? tokens.refresh_token })
 }
 
-async function withAuthLock<T>(run: () => Promise<T>): Promise<T> {
-  const lockFile = `${await getAuthFilePath()}.lock`
+async function withAuthLock<T>(stateDir: string, run: () => Promise<T>): Promise<T> {
+  const lockFile = `${await getAuthFilePath(stateDir)}.lock`
   const owner = `${process.pid}:${randomUUID()}`
   const deadline = Date.now() + LOCK_TIMEOUT_MS
   while (!(await tryLock(lockFile, owner))) {
@@ -118,9 +122,9 @@ function areTokensValid(tokens: SavedTokens): boolean {
   return tokens.expires_at > Date.now() + MINUTE * 5
 }
 
-async function readTokens(): Promise<SavedTokens | null> {
+export async function readTokens(stateDir: string = resolveEnvironment().stateDir): Promise<SavedTokens | null> {
   try {
-    const path = await getAuthFilePath()
+    const path = await getAuthFilePath(stateDir)
     const file = await readFile(path, 'utf-8')
     return JSON.parse(file)
   } catch (e) {
@@ -130,10 +134,11 @@ async function readTokens(): Promise<SavedTokens | null> {
 
 export async function saveTokens(tokenResponse: TokenResponse): Promise<SavedTokens> {
   // A sign-in must not be overwritten by a refresh of the previous login running in another process.
-  return await withAuthLock(() => writeTokens(tokenResponse))
+  const stateDir = resolveEnvironment().stateDir
+  return await withAuthLock(stateDir, () => writeTokens(stateDir, tokenResponse))
 }
 
-async function writeTokens(tokenResponse: TokenResponse): Promise<SavedTokens> {
+async function writeTokens(stateDir: string, tokenResponse: TokenResponse): Promise<SavedTokens> {
   const expiresAt = Date.now() + tokenResponse.expires_in * SECOND
 
   const savedTokens: SavedTokens = {
@@ -145,7 +150,7 @@ async function writeTokens(tokenResponse: TokenResponse): Promise<SavedTokens> {
   }
 
   // Write and rename so a crash or a concurrent reader never sees a partial auth.json and loses the rotated token.
-  const authFile = await getAuthFilePath()
+  const authFile = await getAuthFilePath(stateDir)
   const tempFile = `${authFile}.${randomUUID()}.tmp`
   try {
     await writeFile(tempFile, JSON.stringify(savedTokens), { mode: AUTH_FILE_MODE })
@@ -158,9 +163,7 @@ async function writeTokens(tokenResponse: TokenResponse): Promise<SavedTokens> {
   return savedTokens
 }
 
-async function getAuthFilePath(): Promise<string> {
-  const home = homedir()
-  const configPath = join(home, '.config', 'terros')
+async function getAuthFilePath(configPath: string): Promise<string> {
   await mkdir(configPath, { recursive: true, mode: AUTH_DIR_MODE })
   await chmod(configPath, AUTH_DIR_MODE)
   return join(configPath, 'auth.json')

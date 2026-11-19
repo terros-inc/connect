@@ -49,12 +49,12 @@ describe('TerrosApiClient', () => {
 
   it('sends a POST with the route, headers, and JSON body, returning the parsed success', async () => {
     mockFetch({ type: 'success', value: 42 })
-    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
+    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://api.terros.com' })
 
     const result = await caller.call('user/get', { userId: 'U:1' })
 
     expect(result).toEqual({ type: 'success', value: 42 })
-    expect(globalThis.fetch).toHaveBeenCalledWith('https://example.com/user/get', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://api.terros.com/user/get', {
       method: 'POST',
       headers: expect.objectContaining({
         'Content-Type': 'application/json',
@@ -69,17 +69,74 @@ describe('TerrosApiClient', () => {
     const caller = new TerrosApiClient({
       apiKey: 'test-key',
       authType: 'ConnectKey',
-      baseUrl: 'https://example.com',
+      baseUrl: 'https://api.terros.com',
     })
 
     await caller.call('user/get', {})
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'https://example.com/user/get',
+      'https://api.terros.com/user/get',
       expect.objectContaining({
         headers: expect.objectContaining({ authorization: 'ConnectKey test-key' }),
       })
     )
+  })
+
+  it('rejects untrusted hosts before sending any credentials', () => {
+    for (const config of [{}, { apiKey: 'key' }, { accessToken: 'token' }]) {
+      expect(() => new TerrosApiClient({ ...config, baseUrl: 'https://collector.example.test' })).toThrow(
+        /Unsupported API host/
+      )
+    }
+  })
+
+  it('selects the key for the effective host instead of the production key', async () => {
+    mockFetch({ type: 'success' })
+    vi.stubEnv('TERROS_API_KEY', 'production-key')
+    vi.stubEnv('TERROS_API_KEY_STAGE_STAGING', 'staging-key')
+    await new TerrosApiClient({ baseUrl: 'https://api.staging.terros.com' }).get('openapi')
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ headers: expect.objectContaining({ authorization: 'ApiKey staging-key' }) })
+    )
+    vi.unstubAllEnvs()
+  })
+
+  it('does not use the production key when a staging key is absent', async () => {
+    mockFetch({ type: 'success' })
+    vi.stubEnv('TERROS_API_KEY', 'production-key')
+    vi.stubEnv('TERROS_API_KEY_STAGE_STAGING', '')
+    vi.mocked(getTokens).mockResolvedValue(null)
+    await expect(new TerrosApiClient({ baseUrl: 'https://api.staging.terros.com' }).get('openapi')).rejects.toThrow()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    vi.unstubAllEnvs()
+  })
+
+  it('uses a separate key for each localhost port and the localhost stack', async () => {
+    mockFetch({ type: 'success' })
+    vi.stubEnv('TERROS_API_KEY_STAGE_LOCALHOST', 'stack-key')
+    vi.stubEnv('TERROS_API_KEY_PORT_3000', 'port-3000-key')
+    vi.stubEnv('TERROS_API_KEY_PORT_3001', 'port-3001-key')
+    vi.stubEnv('TERROS_API_KEY_STAGE_LOCALHOST_3000', 'stack-localhost-3000-key')
+    vi.stubEnv('TERROS_API_KEY_STAGE_PORT_3000', 'stack-port-3000-key')
+    await [
+      ['http://localhost:3000', 'port-3000-key'],
+      ['http://localhost:3001', 'port-3001-key'],
+      ['https://api.localhost.terros.com', 'stack-key'],
+      ['https://api.localhost-3000.terros.com', 'stack-localhost-3000-key'],
+      ['https://api.port-3000.terros.com', 'stack-port-3000-key'],
+    ].reduce(
+      (previous, [baseUrl, key]) =>
+        previous.then(async () => {
+          await new TerrosApiClient({ baseUrl }).get('openapi')
+          expect(globalThis.fetch).toHaveBeenLastCalledWith(
+            `${baseUrl}/openapi`,
+            expect.objectContaining({ headers: expect.objectContaining({ authorization: `ApiKey ${key}` }) })
+          )
+        }),
+      Promise.resolve()
+    )
+    vi.unstubAllEnvs()
   })
 
   // Guards the CLI's step-up for API-key issuance: losing TERROS_IMPERSONATE would issue the key to the staff member,
@@ -88,13 +145,13 @@ describe('TerrosApiClient', () => {
     mockFetch({ type: 'success' })
     vi.stubEnv('TERROS_API_KEY', 'env-key')
     vi.stubEnv('TERROS_IMPERSONATE', 'U.example')
-    vi.stubEnv('TERROS_API_ENDPOINT', 'api.staging.example.test')
+    vi.stubEnv('TERROS_API_ENDPOINT', 'api.staging.terros.com')
     vi.mocked(getTokens).mockClear()
 
     await new TerrosApiClient({ accessToken: 'step-up-token' }).call('apikey/restricted/add', {})
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      'https://api.staging.example.test/apikey/restricted/add',
+      'https://api.staging.terros.com/apikey/restricted/add',
       expect.objectContaining({
         headers: expect.objectContaining({ authorization: 'Bearer step-up-token', impersonate_user_id: 'U.example' }),
       })
@@ -105,7 +162,7 @@ describe('TerrosApiClient', () => {
 
   it('includes analytics headers describing the platform and SDK version', async () => {
     mockFetch({ type: 'success', value: 42 })
-    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
+    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://api.terros.com' })
 
     await caller.call('user/get', { userId: 'U:1' })
 
@@ -120,7 +177,7 @@ describe('TerrosApiClient', () => {
   it('wraps a network failure in an Error with the underlying cause', async () => {
     const networkError = new TypeError('fetch failed')
     globalThis.fetch = vi.fn().mockRejectedValue(networkError) as unknown as typeof fetch
-    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
+    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://api.terros.com' })
 
     await expect(caller.call('user/get', {})).rejects.toThrow('Request to user/get failed')
     await expect(caller.call('user/get', {})).rejects.toMatchObject({ cause: networkError })
@@ -128,7 +185,7 @@ describe('TerrosApiClient', () => {
 
   it('throws with the status text on a non-ok response', async () => {
     mockFetch({}, false)
-    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
+    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://api.terros.com' })
 
     await expect(caller.call('user/get', {})).rejects.toThrow('Bad Request')
     await expect(caller.call('user/get', {})).rejects.toMatchObject({ status: 400 })
@@ -165,7 +222,7 @@ describe('TerrosApiClient', () => {
 
   it('preserves the typed API error for CLI and MCP callers', async () => {
     mockFetch({ type: 'error', error: 'impersonation_not_allowed', message: 'Impersonation is not allowed' })
-    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://example.com' })
+    const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://api.terros.com' })
 
     await expect(caller.call('user/get', {})).rejects.toMatchObject({
       name: 'TerrosApiError',
@@ -183,29 +240,29 @@ describe('TerrosApiClient', () => {
 
     it('prefers the explicit config baseUrl over the env var and default', async () => {
       process.env.TERROS_SDK_BASE_URL = 'https://env.example.com'
-      const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://config.example.com' })
+      const caller = new TerrosApiClient({ apiKey: 'test-key', baseUrl: 'https://api.staging.terros.com' })
 
       await caller.call('user/get', {})
 
-      expect(globalThis.fetch).toHaveBeenCalledWith('https://config.example.com/user/get', expect.anything())
+      expect(globalThis.fetch).toHaveBeenCalledWith('https://api.staging.terros.com/user/get', expect.anything())
     })
 
     it('falls back to the env var when no baseUrl is configured', async () => {
-      process.env.TERROS_API_ENDPOINT = 'https://env.example.com'
+      process.env.TERROS_API_ENDPOINT = 'http://localhost:3000'
       const caller = new TerrosApiClient({ apiKey: 'test-key' })
 
       await caller.call('user/get', {})
 
-      expect(globalThis.fetch).toHaveBeenCalledWith('https://env.example.com/user/get', expect.anything())
+      expect(globalThis.fetch).toHaveBeenCalledWith('http://localhost:3000/user/get', expect.anything())
     })
 
     it('adds the HTTPS protocol when the env var contains a bare hostname', async () => {
-      process.env.TERROS_API_ENDPOINT = 'env.example.com'
+      process.env.TERROS_API_ENDPOINT = 'api.staging.terros.com'
       const caller = new TerrosApiClient({ apiKey: 'test-key' })
 
       await caller.call('user/get', {})
 
-      expect(globalThis.fetch).toHaveBeenCalledWith('https://env.example.com/user/get', expect.anything())
+      expect(globalThis.fetch).toHaveBeenCalledWith('https://api.staging.terros.com/user/get', expect.anything())
     })
 
     it('falls back to the prod default when neither baseUrl nor env var is set', async () => {

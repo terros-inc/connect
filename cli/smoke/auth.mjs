@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import assert from 'node:assert/strict'
+import { environmentApiKeyVariable, resolveEnvironment } from '../../packages/connect-common/src/environment.ts'
 
 const endpoint = process.env.TERROS_API_ENDPOINT?.trim()
 const apiKey = 'invalid-smoke-test-key'
@@ -21,7 +22,11 @@ try {
       process.execPath,
       [fileURLToPath(new URL('../cli.js', import.meta.url)), 'whoami'],
       {
-        env: { HOME: home, TERROS_API_ENDPOINT: endpoint, TERROS_API_KEY: apiKey },
+        env: {
+          HOME: home,
+          TERROS_API_ENDPOINT: endpoint,
+          [environmentApiKeyVariable(resolveEnvironment({ TERROS_API_ENDPOINT: endpoint }))]: apiKey,
+        },
         timeout: 30_000,
         maxBuffer: 1024 * 1024,
       }
@@ -38,7 +43,11 @@ try {
   assert.notEqual(exitCode, 0, 'CLI must reject an invalid API key')
   assert.doesNotMatch(`${stdout}\n${stderr}`, /^\s+at\s+.+/m, 'CLI must not print a stack trace')
   assert.equal(
-    stderr.trim().split('\n').at(-1) ?? '',
+    stderr
+      .trim()
+      .split('\n')
+      .at(-1)
+      ?.replace(/^\[[^\]]+\] /, '') ?? '',
     'Invalid or unauthorized API key',
     'CLI must report a clear authentication error'
   )

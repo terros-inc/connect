@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { loadEndpoints as loadCoreEndpoints, parseEndpoints, type EndpointGroups } from '@terros-inc/mcp-core'
-import { loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
+import { cacheKey, loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
 import { readCache, writeCache } from './cache'
 
 const PUBLIC_SCHEMA_URL = 'https://docs.terros.com/openapi/terros.yml'
@@ -105,4 +105,18 @@ export async function loadEndpointsAfterRefresh(): Promise<{ endpoints: Endpoint
     // A staff user whose internal schema failed is likely missing an internal command, which the public one lacks.
     schemaStatus: internal.status === 'failed' ? 'failed' : publicSchema.status,
   }
+}
+
+export async function loadOfflineEndpoints(): Promise<EndpointGroups> {
+  const key = await cacheKey(true)
+  const internal = key ? await readCache('openapi', key) : undefined
+  if (internal !== undefined) {
+    try {
+      return await loadCoreEndpoints({ bundled: JSON.stringify(internal) })
+    } catch {
+      // A corrupt cache must not prevent offline help.
+    }
+  }
+  const cached = await readCache('public-openapi', PUBLIC_SCHEMA_URL, { expires: false })
+  return loadCoreEndpoints({ bundled: isPublicSchemaCache(cached) ? (cached.schema ?? bundled()) : bundled() })
 }

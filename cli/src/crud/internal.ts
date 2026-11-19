@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 import { loadInternalSpec } from '@terros-inc/mcp-core'
-import { AuthRequiredError, getTokens } from '@terros-inc/connect-common/auth'
+import { AuthRequiredError, getTokens, readTokens } from '@terros-inc/connect-common/auth'
+import { environmentApiKey, resolveEnvironment } from '@terros-inc/connect-common'
+import { reportError } from '../reportError'
 import { readCache, writeCache } from '../cache'
 import { buildTerrosClient } from '../api/query'
 
@@ -15,13 +17,14 @@ function tokenIdentity(token: string | undefined): string | undefined {
   return undefined
 }
 
-async function cacheKey(): Promise<string | undefined> {
-  let identity = process.env.TERROS_API_KEY
+export async function cacheKey(offline = false): Promise<string | undefined> {
+  let identity = environmentApiKey(resolveEnvironment())
   if (!identity) {
-    const tokens = await getTokens()
+    const tokens = await (offline ? readTokens() : getTokens())
     if (!tokens?.access_token) return undefined
     identity = tokenIdentity(tokens.id_token) ?? tokenIdentity(tokens.access_token) ?? tokens.refresh_token
   }
+  if (!identity) return undefined
   return createHash('sha256')
     .update(JSON.stringify([identity, process.env.TERROS_API_ENDPOINT, process.env.TERROS_IMPERSONATE]))
     .digest('hex')
@@ -48,7 +51,7 @@ export async function loadInternalSchemaWithStatus(): Promise<InternalSchemaResu
   } catch (error) {
     // Signed out or expired is not a schema problem: stay quiet so the command itself reports it once.
     if (error instanceof AuthRequiredError) return { status: 'unavailable' }
-    console.error(
+    reportError(
       `Unable to load internal API commands; using bundled schema: ${error instanceof Error ? error.message : error}`
     )
     return { status: 'failed' }

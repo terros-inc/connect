@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { loadEndpoints, loadEndpointsAfterRefresh } from './loadEndpoints'
+import { loadEndpoints, loadEndpointsAfterRefresh, loadOfflineEndpoints } from './loadEndpoints'
 import { loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
 
 const home = vi.hoisted(() => ({ path: '' }))
@@ -11,7 +11,11 @@ vi.mock('node:os', async (importOriginal) => ({
   homedir: () => home.path,
 }))
 vi.mock('node:fs', () => ({ readFileSync: vi.fn() }))
-vi.mock('./crud/internal', () => ({ loadInternalSchema: vi.fn(), loadInternalSchemaWithStatus: vi.fn() }))
+vi.mock('./crud/internal', () => ({
+  cacheKey: vi.fn(),
+  loadInternalSchema: vi.fn(),
+  loadInternalSchemaWithStatus: vi.fn(),
+}))
 
 const publicSchema = `
 openapi: 3.1.1
@@ -239,4 +243,10 @@ it('exposes API history start as an internal CLI command that requires a company
   for (const name of ['errorsOnly', 'endpoint', 'since']) {
     expect(start?.components).toHaveProperty(['schemas', 'Input', 'properties', name])
   }
+})
+
+it('loads bundled help without a network request or token refresh', async () => {
+  expect(await loadOfflineEndpoints()).toHaveProperty('company.get.path', '/company/get')
+  expect(fetch).not.toHaveBeenCalled()
+  expect(loadInternalSchema).not.toHaveBeenCalled()
 })

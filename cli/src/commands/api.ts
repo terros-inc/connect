@@ -1,5 +1,6 @@
 import type { ParsedArgs } from 'minimist'
 import { withoutUploadUrls } from '@terros-inc/mcp-core'
+import { reportError } from '../reportError'
 import { loadEndpointsAfterRefresh } from '../loadEndpoints'
 import { formatOutput } from '../formatOutput'
 import { clearOpenApiCache } from '../cache'
@@ -32,7 +33,7 @@ export const apiCommands = {
         return
       }
 
-      console.error(
+      reportError(
         'The API schema could not be refreshed. Check your network connection, or update the CLI with `npm install -g @terros-inc/cli`, and retry.'
       )
       process.exitCode = 1

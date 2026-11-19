@@ -5,7 +5,7 @@ import { parseEndpoints } from '@terros-inc/mcp-core'
 import { getTokens } from '@terros-inc/connect-common/auth'
 import { clearOpenApiCache, clearRuntimeCaches } from '../cache'
 import { buildTerrosClient } from '../api/query'
-import { loadInternalSchema, loadInternalSchemaWithStatus } from './internal'
+import { cacheKey, loadInternalSchema, loadInternalSchemaWithStatus } from './internal'
 
 const home = vi.hoisted(() => ({ path: '' }))
 vi.mock('node:os', async (importOriginal) => ({
@@ -120,7 +120,7 @@ it.each(['TERROS_API_KEY', 'TERROS_API_ENDPOINT', 'TERROS_IMPERSONATE'])(
   'partitions caches when %s changes',
   async (variable) => {
     await loadInternalSchema()
-    vi.stubEnv(variable, 'different')
+    vi.stubEnv(variable, variable === 'TERROS_API_ENDPOINT' ? 'https://api.staging.terros.com' : 'different')
     call.mockResolvedValue({ type: 'success', company: { companyId: 'C:customer' } })
     expect(await loadInternalSchema()).toBeUndefined()
     expect(call).toHaveBeenCalledTimes(2)
@@ -192,4 +192,14 @@ it('refreshes only the API schema without refetching the cached profile', async 
   await loadInternalSchema()
   expect(call).toHaveBeenCalledTimes(1)
   expect(get).toHaveBeenCalledTimes(2)
+})
+
+it('does not reuse an internal schema after the API key changes', async () => {
+  vi.stubEnv('TERROS_API_KEY', 'staff-key')
+  await loadInternalSchema()
+  const staffKey = await cacheKey(true)
+  expect(await (await import('../cache')).readCache('openapi', staffKey!)).toEqual(schema)
+  vi.stubEnv('TERROS_API_KEY', 'customer-key')
+  expect(await (await import('../cache')).readCache('openapi', (await cacheKey(true))!)).toBeUndefined()
+  expect(call).toHaveBeenCalledTimes(1)
 })

@@ -28,7 +28,8 @@ beforeEach(() => {
   fetchProfile.mockClear()
   vi.stubGlobal('fetch', fetchProfile)
   vi.stubEnv('TERROS_API_KEY', 'test-key')
-  vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.example.test')
+  vi.stubEnv('TERROS_API_ENDPOINT', 'https://api.terros.com')
+  vi.stubEnv('TERROS_ENV', undefined)
   vi.stubEnv('TERROS_IMPERSONATE', '')
 })
 
@@ -71,4 +72,14 @@ it('says it is not impersonating when TERROS_IMPERSONATE names the signed-in use
   const output = await whoami()
   expect(output).toContain('impersonating: no')
   expect(output).not.toContain('real-user:')
+})
+
+// Staff must see which backend answered; production output stays exactly as it was.
+it('names a non-production environment and the host it used', async () => {
+  vi.stubEnv('TERROS_API_ENDPOINT', '')
+  vi.stubEnv('TERROS_ENV', 'staging')
+  vi.stubEnv('TERROS_API_KEY_STAGE_STAGING', 'staging-test-key')
+  const output = await whoami()
+  expect(output.split('\n').at(-1)).toBe('environment:   staging (https://api.staging.terros.com)')
+  expect(fetchProfile).toHaveBeenCalledWith('https://api.staging.terros.com/user/profile', expect.anything())
 })

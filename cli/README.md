@@ -195,7 +195,8 @@ terros <command> [<subcommand> ...] help
 ```
 
 `--help` and `-h` anywhere on the line print the same help and never run the
-command.
+command. Help and `--version` make no network calls; help uses a matching cached
+schema when available, or the cached or bundled public schema otherwise.
 
 Use `--depth` with `help` to show additional nested object type detail. The
 default depth is one layer. It only changes help output: running a command with
@@ -307,9 +308,49 @@ cannot tell what they are.
 
 The request goes where the other commands' requests go, with the same
 sign-in: the signed-in user (or `TERROS_API_KEY`), acting as
-`TERROS_IMPERSONATE` when set, to `TERROS_API_ENDPOINT` or production. Pass a
+`TERROS_IMPERSONATE` when set, to the selected backend. Pass a
 path, not a URL. The command exits 1 on an HTTP, network or API error, and
 never prints the access token.
+
+## Pick the Backend Environment (Terros Staff)
+
+Terros staff can point the CLI at another backend with `--env <name>` on any
+command, or `TERROS_ENV=<name>` in the environment (the flag wins). The names
+match the mobile apps' environment picker: `prod` (the default), `staging`
+(`https://api.staging.terros.com`), or a developer's own stack such as `alex`
+(`https://api.alex.terros.com`).
+
+Staging accepts an interactive sign-in: `terros --env staging auth login` signs in
+for staging only, saved apart from your production login (and the sensitive-scope
+step-up for issuing a key works there too). A developer's own stack and
+`http://localhost` are API-key only: they are personal servers and share
+production's Auth0 tenant, so an interactive sign-in sent to them would be a
+production credential, and `auth login` refuses. A saved production login is never
+sent to a non-production host. Set the key issued by that backend in
+`TERROS_API_KEY_STAGE_<NAME>` (`TERROS_API_KEY_STAGE_STAGING` for staging; name
+upper-cased, hyphens as underscores), or `TERROS_API_KEY_PORT_<port>` for
+`http://localhost:<port>`. Production keeps `TERROS_API_KEY`, which is never used
+off production. Staff-only access comes from the backend: the CLI does no staff
+check of its own, and a non-production backend only has accounts and keys for the
+people it was set up for. `--env production` means `prod`, and `--env localhost`
+needs `TERROS_API_ENDPOINT=http://localhost:<port>` (a loopback URL) for the port. An
+empty `TERROS_ENV` is an error, not production.
+
+```sh
+TERROS_API_KEY_STAGE_STAGING=<staging key> terros --env staging whoami
+TERROS_ENV=staging TERROS_API_KEY_STAGE_STAGING=<staging key> terros account get --accountId A.example
+terros whoami                 # production, with its own sign-in
+```
+
+Each non-production environment keeps its own cached API schema
+under `~/.config/terros/env/<name>/` (localhost uses `localhost/port-<port>`). Production keeps `~/.config/terros/`, so nothing
+changes for customers who never set the option. `terros whoami` prints an
+`environment:` line, and errors start with `[<name>]`, whenever the backend is
+not production. `TERROS_API_ENDPOINT` also selects a backend and its separate
+sign-in and schema cache, but only `https://api.terros.com`,
+`https://api.<stage>.terros.com` and `http://localhost` are accepted; any other
+host is refused so that no credential can be sent to it. If both options are set,
+they must select the same backend.
 
 ## Act as Another User
 
@@ -356,8 +397,11 @@ the code from a browser that is still signed in without a new sign-in, the
 command opens the sign-out page (`https://auth.terros.com/v2/logout`) before the
 sign-in page: sign out, then approve the code. It uses that sign-in
 for this one request only: it is kept in memory, not saved, and your saved login
-from `terros auth login` stays as it was. `TERROS_IMPERSONATE` and
-`TERROS_API_ENDPOINT` apply as usual. If the sign-in does not grant
+from `terros auth login` stays as it was. `TERROS_IMPERSONATE` applies as usual.
+The step-up works on production and on shared staging (`--env staging`), where
+the key it issues is a staging key; for a developer stack or localhost it
+refuses, because those are API-key only. `TERROS_API_ENDPOINT` must be an
+accepted Terros host (see the environment section). If the sign-in does not grant
 `sensitive:manage`, usually because the approval reused an earlier browser
 sign-in, the command stops with an error naming the scope and sends nothing:
 sign out at `https://auth.terros.com/v2/logout` and run it again. The API
@@ -406,6 +450,11 @@ so run `pnpm build` after changing TypeScript files.
 
 ### CLI smoke checks
 
+The staging checks read the key from the selected environment's own variable
+(`TERROS_API_KEY_STAGE_STAGING` for staging) and never the generic
+`TERROS_API_KEY`; the CLI sends that key only to staging. Discovery reads the schema cache from the staging
+environment's own directory.
+
 From the repository root, build and run the smoke checks separately from unit tests:
 
 ```sh
@@ -417,15 +466,15 @@ pnpm --filter @terros-inc/cli smoke:auth
 pnpm --filter @terros-inc/cli smoke:list
 ```
 
-For discovery, authenticated user lookup and the read-only list, supply an authorized staging API key through `TERROS_API_KEY` and set
+For discovery, authenticated user lookup and the read-only list, supply an authorized staging API key through `TERROS_API_KEY_STAGE_STAGING` and set
 `TERROS_API_ENDPOINT` to the staging API base URL. The key must belong to a
 Terros-internal user with access to `/openapi`. Without a non-whitespace key,
 each check prints `SKIP` and exits successfully. With a key, an explicit endpoint
 is required; none of the harnesses default to production.
 
-The discovery check (`smoke`) runs the built CLI's `account get --help` in a temporary home directory
+The discovery check (`smoke`) runs the built CLI's `api refresh`, then `account get --help`, in a temporary home directory
 and requires both the backend OpenAPI cache containing `/account/get` and full-path
-command help. Bundled schema fallback cannot pass it. The loader's profile lookup
+command help. Bundled schema fallback cannot pass it. The refresh's profile lookup
 is part of discovery; the check does not execute an account command. The temporary
 home is removed afterward, and the check does not use a saved CLI login.
 Failures print the error message and any CLI stderr with every occurrence of the
@@ -461,7 +510,8 @@ The job declares the `staging` GitHub environment, checks its `TERROS_API_KEY`
 secret before checking out code, and skips the remaining steps successfully if
 the key is missing or whitespace-only. It fixes the endpoint to the staging API
 and passes the key only to the configuration check, discovery step, user-lookup
-step and read-only list step. The invalid-key step shares the secret-dependent setup and step gates, so it
+step and read-only list step; those three steps map the `TERROS_API_KEY` secret to
+`TERROS_API_KEY_STAGE_STAGING`, the variable the CLI reads for staging. The invalid-key step shares the secret-dependent setup and step gates, so it
 also skips without the staging secret even though its script runs independently
 without one. An admin must create the `staging` environment and its secret using
 a staging key owned by a
