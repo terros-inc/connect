@@ -56,7 +56,9 @@ export async function sendAccount(
     return
   }
 
-  // The webhook can be older than the account: a parallel delivery may have linked it since.
+  // The webhook can be older than the account: a parallel delivery may have linked it since. This re-read is not a
+  // claim: two overlapping deliveries can both pass it and both add a lead, because Terros has no conditional
+  // ("set only if empty") account update. Duplicates are merged by hand; see the README's Known gaps.
   const { account: stored } = await terros.account.get({ accountId: account.id })
   if (stored.externalLeadId) {
     console.log(`Skipping account ${account.id}: already sent as LeadPerfection lead ${stored.externalLeadId}`)
@@ -73,6 +75,10 @@ export async function sendAccount(
     return
   }
 
+  // A timeout, network error or 5xx here is retried, though LeadPerfection may already have accepted the lead, so the
+  // retry can add a duplicate. Nothing can check first: LeadPerfection's search lags 5+ minutes behind an accepted
+  // lead, and failing permanently instead would lose real leads. Duplicates are merged by hand; see the README's
+  // Known gaps.
   const leadId = await leadPerfection.leadAdd(lead)
   console.log(`Sent account ${account.id} to LeadPerfection as inbound lead ${leadId}`)
   await saveExternalLeadId(terros, account.id, String(leadId))
