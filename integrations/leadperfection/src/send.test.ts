@@ -139,8 +139,13 @@ describe('LeadPerfection Send', () => {
     const { terros, store } = fakeTerros([
       { accountId, appointmentDate, externalLeadId: 'pending:2026-11-18T15:00:00.000Z' },
     ])
-    const { account: accounts } = terros as { account: object }
-    const stale = { ...accounts, get: async () => ({ type: 'success', account: { accountId, appointmentDate } }) }
+    const { account: accounts } = terros as { account: { get: (input: object) => Promise<object> } }
+    let reads = 0
+    const stale = {
+      ...accounts,
+      get: async (input: object) =>
+        reads++ ? accounts.get(input) : { type: 'success', account: { accountId, appointmentDate } },
+    }
 
     await sendAccount(account(), config, lp.client, { account: stale } as never)
 
@@ -192,22 +197,67 @@ describe('LeadPerfection Send', () => {
     expect(lp.paths().filter((path) => path === leadAdd)).toHaveLength(1)
   })
 
-  // A LeadAdd LeadPerfection refused added nothing; a claim left behind would keep the account from ever being sent.
+  // Connect sends this app's own account updates back to Send like any other change. Clearing the claim after a
+  // refusal was such an update, so a refusal that kept happening called LeadAdd again on every echo without end.
   it.each([
-    ['rate-limits', { status: 429, body: { Message: 'Too many requests' } }, Error],
-    ['refuses', { status: 200, body: [{ id: 0, Status: 0, Message: 'Invalid srs_id' }] }, IntegrationError],
-  ])('releases the claim when LeadPerfection %s the lead', async (_, failure, errorType) => {
-    const lp = fakeLeadPerfection({ fail: { [leadAdd]: [failure] } })
+    ['refuses', [{ status: 200, body: [{ id: 0, Status: 0, Message: 'Invalid srs_id' }] }], IntegrationError, 1],
+    ['rate-limits', Array(3).fill({ status: 429, body: { Message: 'Too many requests' } }), PermanentError, 3],
+  ])('marks the account failed, once, when LeadPerfection %s the lead', async (_, failures, errorType, calls) => {
+    vi.useFakeTimers()
+    const lp = fakeLeadPerfection({ fail: { [leadAdd]: failures } })
     const { terros, store } = fakeTerros([{ accountId, appointmentDate }])
+    const { account: accounts } = terros as { account: { update: (input: object) => Promise<object> } }
+    const deliveries = [account()]
+    const echoing = {
+      ...accounts,
+      update: async (input: object) => {
+        const saved = await accounts.update(input)
+        deliveries.push(account({ externalLeadId: store.get(accountId)?.externalLeadId }))
+        return saved
+      },
+    }
+    const errors: unknown[] = []
+
+    for (let delivery = 0; delivery < 10 && deliveries.length; delivery++) {
+      const sent = sendAccount(deliveries.shift()!, config, lp.client, { account: echoing } as never)
+      await Promise.all([sent.catch((error: unknown) => errors.push(error)), vi.runAllTimersAsync()])
+    }
+    vi.useRealTimers()
+
+    expect(deliveries).toEqual([])
+    expect(lp.paths().filter((path) => path === leadAdd)).toHaveLength(calls)
+    expect(errors).toEqual([expect.any(errorType)])
+    expect(store.get(accountId)?.externalLeadId).toMatch(/^failed:/)
+
+    // A person fixed the cause and cleared the marker.
+    await accounts.update({ account: { accountId, externalLeadId: null } })
+    await sendAccount(account(), config, lp.client, terros)
+    expect(lp.added).toHaveLength(1)
+  })
+
+  // A 429 added nothing, and a redelivery would see this delivery's claim and skip the account.
+  it('sends the account when a rate limit on LeadAdd clears within the run', async () => {
+    vi.useFakeTimers()
+    const lp = fakeLeadPerfection({ fail: { [leadAdd]: [{ status: 429, body: { Message: 'Too many requests' } }] } })
+    const { terros, store } = fakeTerros([{ accountId, appointmentDate }])
+
+    await Promise.all([sendAccount(account(), config, lp.client, terros), vi.runAllTimersAsync()])
+    vi.useRealTimers()
+
+    expect(lp.added).toHaveLength(1)
+    expect(store.get(accountId)?.externalLeadId).toBe('2901')
+  })
+
+  // The claim's save conflicts whenever the attribute exists, while Send reads an empty one as unsent: such an
+  // account was skipped as claimed by another delivery on every change, and never sent.
+  it('stops for a person when an empty externalLeadId blocks the claim', async () => {
+    const lp = fakeLeadPerfection()
+    const { terros } = fakeTerros([{ accountId, appointmentDate, externalLeadId: '' }])
 
     const error = await sendAccount(account(), config, lp.client, terros).catch((caught: unknown) => caught)
 
-    expect(error).toBeInstanceOf(errorType)
-    if (errorType === Error) expect(error).not.toBeInstanceOf(PermanentError)
-    expect(store.get(accountId)).not.toHaveProperty('externalLeadId')
-
-    await sendAccount(account(), config, lp.client, terros)
-    expect(lp.added).toHaveLength(1)
-    expect(store.get(accountId)?.externalLeadId).toBe('2901')
+    expect(error).toBeInstanceOf(PermanentError)
+    expect((error as Error).message).toContain(`Account ${accountId}`)
+    expect(lp.added).toEqual([])
   })
 })

@@ -83,7 +83,7 @@ export async function sendAccount(
 
   let leadId: number
   try {
-    leadId = await leadPerfection.leadAdd(lead)
+    leadId = await addLead(leadPerfection, lead)
   } catch (error) {
     if (error instanceof LeadAddUncertainError) {
       throw new PermanentError(
@@ -93,14 +93,23 @@ export async function sendAccount(
         { cause: error }
       )
     }
+    // Nothing was added, but clearing the claim is itself an account change, which Connect sends back to Send: a
+    // refusal that keeps happening, such as a wrong srs_id, would then call LeadAdd on every echo without end.
+    const reason = error instanceof Error ? error.message : String(error)
+    const failed = `${FAILED_PREFIX}${new Date().toISOString()}:${reason.slice(0, 200)}`
     await updateAfterClaim(
       terros,
       account.id,
-      null,
-      `LeadPerfection refused account ${account.id} (${String(error)}), but clearing its pending externalLeadId ` +
-        `${claim} failed. Clear it by hand to send the account again.`
+      failed,
+      `LeadPerfection did not add account ${account.id} (${reason}), but replacing its pending externalLeadId ` +
+        `${claim} failed. Fix the cause, then clear it by hand to send the account again.`
     )
-    throw error
+    const Failure = error instanceof IntegrationError ? IntegrationError : PermanentError
+    throw new Failure(
+      `LeadPerfection did not add account ${account.id}: ${reason}. Its externalLeadId is now ${failed}: fix the ` +
+        'cause, then clear it to send the account again.',
+      { cause: error }
+    )
   }
   console.log(`Sent account ${account.id} to LeadPerfection as inbound lead ${leadId}`)
   await updateAfterClaim(
@@ -114,6 +123,23 @@ export async function sendAccount(
 
 // Marks an account a delivery has claimed but not yet sent. Every other delivery sees an externalLeadId and skips it.
 const PENDING_PREFIX = 'pending:'
+// Marks an account LeadPerfection did not add, which waits for a person to fix the cause and clear it.
+const FAILED_PREFIX = 'failed:'
+const LEAD_ADD_ATTEMPTS = 3
+
+// A rate limit or a failure before the request went out added nothing, and this delivery holds the claim, so it
+// retries here: the queue cannot, since a redelivery would see the claim and skip the account.
+async function addLead(leadPerfection: Pick<LeadPerfectionClient, 'leadAdd'>, lead: LeadAddRequest): Promise<number> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await leadPerfection.leadAdd(lead)
+    } catch (error) {
+      const final = error instanceof PermanentError || error instanceof LeadAddUncertainError
+      if (final || attempt === LEAD_ADD_ATTEMPTS) throw error
+      await new Promise((resolve) => setTimeout(resolve, attempt * 10_000))
+    }
+  }
+}
 
 // Returns whether this delivery holds the claim. A claim write that failed in transit may still have been saved, and
 // a redelivery would then skip the account for good, so the stored account decides. The claim is unique per delivery
@@ -127,7 +153,15 @@ async function claimAccount(
     await terros.account.update({ account: { accountId, externalLeadId: claim }, onlyIfNoExternalLeadId: true })
     return true
   } catch (error) {
-    if (isConflict(error)) return false
+    if (isConflict(error)) {
+      // The save only checks that the attribute exists, so a stored empty value would block every claim for good.
+      const { account } = await terros.account.get({ accountId })
+      if (account.externalLeadId) return false
+      throw new PermanentError(
+        `Account ${accountId} has an empty externalLeadId that keeps Send from claiming it, so it is never sent. ` +
+          'Clear it (send null to /account/update) to send the account.'
+      )
+    }
     const { account } = await terros.account.get({ accountId }).catch(() => {
       throw error
     })

@@ -144,7 +144,8 @@ export function fakeTerros(accounts: FakeAccount[] = []) {
     update: async (input: { account: FakeAccount; onlyIfNoExternalLeadId?: boolean }) => {
       writes.push({ route: 'account/update', input })
       const existing = store.get(input.account.accountId) ?? notFound(input.account.accountId)
-      if (input.onlyIfNoExternalLeadId && existing.externalLeadId) {
+      // attribute_not_exists, so an empty value stored conflicts too.
+      if (input.onlyIfNoExternalLeadId && existing.externalLeadId !== undefined) {
         throw Object.assign(new Error('Conflict: The account already has an externalLeadId'), { code: 'Conflict' })
       }
       apply(existing, input.account)
