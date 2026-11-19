@@ -8,6 +8,7 @@ import {
   CalendarClient,
   CompanyClient,
   ConnectClient,
+  PlanClient,
   TeamClient,
 } from './clients'
 
@@ -18,6 +19,7 @@ export class TerrosClient {
   readonly calendar: CalendarClient
   readonly company: CompanyClient
   readonly connect: ConnectClient
+  readonly plan: PlanClient
   readonly team: TeamClient
   readonly user: UserClient
 
@@ -34,6 +36,7 @@ export class TerrosClient {
     this.calendar = new CalendarClient(api)
     this.company = new CompanyClient(api)
     this.connect = new ConnectClient(api)
+    this.plan = new PlanClient(api)
     this.team = new TeamClient(api)
     this.user = new UserClient(api)
   }

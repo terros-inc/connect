@@ -38,7 +38,7 @@ The function gets:
 
 ## TerrosClient
 
-`new TerrosClient()` groups API calls by resource: `account`, `account.status`, `apiHistory`, `area`, `calendar`, `calendar.event`, `company`, `connect`, `team` and `user`. Each method posts its input to the API path of the same name, so `client.account.upsert(input)` calls `/account/upsert`, and returns the response. The [API reference](https://docs.terros.com) documents each path's fields.
+`new TerrosClient()` groups API calls by resource: `account`, `account.status`, `apiHistory`, `area`, `calendar`, `calendar.event`, `company`, `connect`, `plan`, `team` and `user`. Each method posts its input to the API path of the same name, so `client.account.upsert(input)` calls `/account/upsert`, and returns the response. `plan` methods always send `version: 2`, the API's stage-based plan shape; plans exist only for weeks and quarters (`PLAN_PERIOD_TYPES`). The [API reference](https://docs.terros.com) documents each path's fields.
 
 A failed call throws. When the API answers with an error, the thrown error's `name` is `TerrosApiError` and its `code` is the API's error code, such as `NotFound`.
 
