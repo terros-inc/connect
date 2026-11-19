@@ -7,7 +7,7 @@ import {
   type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { type LeadAddRequest, LeadPerfectionClient, readSecrets } from './leadperfection.ts'
+import { LeadAddUncertainError, type LeadAddRequest, LeadPerfectionClient, readSecrets } from './leadperfection.ts'
 
 export const LEADPERFECTION_SOURCE = 'LeadPerfection'
 
@@ -32,7 +32,8 @@ export const handler = wrapConnectHandler<AccountWebhook, void, SendConfig>(asyn
 
 // Sends an account to LeadPerfection once, when it is in one of the configured stages, and saves the returned
 // inbound lead ID as its externalLeadId. An account with an externalLeadId, or one that came from LeadPerfection,
-// is never sent again.
+// is never sent again. LeadPerfection does not dedupe leads, so before LeadAdd the account is claimed with a pending
+// externalLeadId that only one delivery can set, and a LeadAdd that may have added the lead is never retried.
 export async function sendAccount(
   account: AccountWebhookData,
   config: SendConfig,
@@ -56,9 +57,7 @@ export async function sendAccount(
     return
   }
 
-  // The webhook can be older than the account: a parallel delivery may have linked it since. This re-read is not a
-  // claim: two overlapping deliveries can both pass it and both add a lead, because Terros has no conditional
-  // ("set only if empty") account update. Duplicates are merged by hand; see the README's Known gaps.
+  // The webhook can be older than the account: a parallel delivery may have linked it since.
   const { account: stored } = await terros.account.get({ accountId: account.id })
   if (stored.externalLeadId) {
     console.log(`Skipping account ${account.id}: already sent as LeadPerfection lead ${stored.externalLeadId}`)
@@ -75,34 +74,70 @@ export async function sendAccount(
     return
   }
 
-  // A timeout, network error or 5xx here is retried, though LeadPerfection may already have accepted the lead, so the
-  // retry can add a duplicate. Nothing can check first: LeadPerfection's search lags 5+ minutes behind an accepted
-  // lead, and failing permanently instead would lose real leads. Duplicates are merged by hand; see the README's
-  // Known gaps.
-  const leadId = await leadPerfection.leadAdd(lead)
+  const claim = `${PENDING_PREFIX}${new Date().toISOString()}`
+  try {
+    await terros.account.update({
+      account: { accountId: account.id, externalLeadId: claim },
+      onlyIfNoExternalLeadId: true,
+    })
+  } catch (error) {
+    if (!isConflict(error)) throw error
+    console.log(`Skipping account ${account.id}: another delivery claimed it first`)
+    return
+  }
+
+  let leadId: number
+  try {
+    leadId = await leadPerfection.leadAdd(lead)
+  } catch (error) {
+    if (error instanceof LeadAddUncertainError) {
+      throw new PermanentError(
+        `LeadPerfection may have added account ${account.id} as a lead (${error.message}), so it is not sent again ` +
+          `and its externalLeadId stays ${claim}. Look for lognumber ${account.id} in LeadPerfection: set the ` +
+          'account externalLeadId to that lead ID, or clear it to send the account again.',
+        { cause: error }
+      )
+    }
+    await updateAfterClaim(
+      terros,
+      account.id,
+      null,
+      `LeadPerfection refused account ${account.id} (${String(error)}), but clearing its pending externalLeadId ` +
+        `${claim} failed. Clear it by hand to send the account again.`
+    )
+    throw error
+  }
   console.log(`Sent account ${account.id} to LeadPerfection as inbound lead ${leadId}`)
-  await saveExternalLeadId(terros, account.id, String(leadId))
+  await updateAfterClaim(
+    terros,
+    account.id,
+    String(leadId),
+    `LeadPerfection lead ${leadId} was created for account ${account.id}, but saving it as the account ` +
+      `externalLeadId failed. Replace ${claim} with ${leadId} by hand.`
+  )
 }
 
-// The lead now exists in LeadPerfection, and a retried delivery would add it again, so a failed save is retried
-// here and then reported as permanent for someone to link by hand.
-async function saveExternalLeadId(
+// Marks an account a delivery has claimed but not yet sent. Every other delivery sees an externalLeadId and skips it.
+const PENDING_PREFIX = 'pending:'
+
+function isConflict(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'Conflict'
+}
+
+// A redelivery would see the claim and skip the account for good, so a failed write is retried here and then
+// reported as permanent for someone to fix by hand.
+async function updateAfterClaim(
   terros: Pick<TerrosClient, 'account'>,
   accountId: AccountWebhookData['id'],
-  externalLeadId: string
+  externalLeadId: string | null,
+  failure: string
 ): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       await terros.account.update({ account: { accountId, externalLeadId } })
       return
     } catch (cause) {
-      if (attempt === 3) {
-        throw new PermanentError(
-          `LeadPerfection lead ${externalLeadId} was created for account ${accountId}, but saving it as the ` +
-            'account externalLeadId failed. Set it by hand, or a later change in a send stage sends it again.',
-          { cause }
-        )
-      }
+      if (attempt === 3) throw new PermanentError(failure, { cause })
       await new Promise((resolve) => setTimeout(resolve, attempt * 1000))
     }
   }

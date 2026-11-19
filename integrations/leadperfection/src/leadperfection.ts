@@ -80,6 +80,14 @@ export type LeadLink = { lognumber?: string; in1_id?: string }
 type LeadAddReply = { id?: number; Status?: number; Message?: string }
 
 const RENEW_BEFORE_EXPIRY_MS = 10 * 60_000
+// Well inside the 60-second script budget, so a hung LeadAdd ends in an error Send can report rather than a killed run.
+const LEAD_ADD_TIMEOUT_MS = 20_000
+
+// LeadAdd was sent but its outcome is unknown: LeadPerfection may have added the lead. It does not dedupe by
+// lognumber, so sending it again could add a second lead.
+export class LeadAddUncertainError extends Error {
+  override readonly name: string = 'LeadAddUncertainError'
+}
 
 // Tokens last 24 hours and only work on the server and for the user that got them. Scripts of different installs
 // can share a warm runtime, so the cache is keyed by every credential and never held in a single shared field.
@@ -123,7 +131,14 @@ export class LeadPerfectionClient {
   }
 
   async leadAdd(lead: LeadAddRequest): Promise<number> {
-    const replies = await this.call<LeadAddReply[]>('/api/Leads/LeadAdd', lead)
+    const path = '/api/Leads/LeadAdd'
+    const response = await this.send(path, lead, true)
+    if (response.status >= 500) {
+      throw new LeadAddUncertainError(
+        `LeadPerfection ${path} returned ${response.status}: ${readMessage(response.text)}`
+      )
+    }
+    const replies = parseReply<LeadAddReply[]>(path, response)
     const reply = replies[0]
     if (reply?.Status !== 1 || !reply.id) {
       throw new IntegrationError(`LeadPerfection refused the lead: ${reply?.Message ?? JSON.stringify(replies)}`)
@@ -171,12 +186,26 @@ export class LeadPerfectionClient {
   }
 
   private async call<T>(path: string, body: Record<string, FormValue>): Promise<T> {
-    let reply = await this.post(path, body, await this.token())
+    return parseReply<T>(path, await this.send(path, body))
+  }
+
+  // A failure getting the token is before the request, so only the request itself can be uncertain.
+  private async send(path: string, body: Record<string, FormValue>, addsRecord = false): Promise<Reply> {
+    const post = async (): Promise<Reply> => {
+      const token = await this.token()
+      if (!addsRecord) return this.post(path, body, token)
+      try {
+        return await this.post(path, body, token, AbortSignal.timeout(LEAD_ADD_TIMEOUT_MS))
+      } catch (cause) {
+        throw new LeadAddUncertainError(`LeadPerfection ${path} failed: ${String(cause)}`, { cause })
+      }
+    }
+    let reply = await post()
     if (isTokenRefused(reply)) {
       tokens.delete(this.cacheKey)
-      reply = await this.post(path, body, await this.token())
+      reply = await post()
     }
-    return parseReply<T>(path, reply)
+    return reply
   }
 
   private async token(): Promise<string> {
@@ -208,7 +237,12 @@ export class LeadPerfectionClient {
     return access_token
   }
 
-  private async post(path: string, body: Record<string, FormValue>, token?: string): Promise<Reply> {
+  private async post(
+    path: string,
+    body: Record<string, FormValue>,
+    token?: string,
+    signal?: AbortSignal
+  ): Promise<Reply> {
     const form = new URLSearchParams()
     for (const [key, value] of Object.entries(body)) if (value !== undefined) form.set(key, String(value))
     const response = await this.fetch(`${this.baseUrl}${path}`, {
@@ -218,6 +252,7 @@ export class LeadPerfectionClient {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: form.toString(),
+      signal,
     })
     return { status: response.status, text: await response.text() }
   }

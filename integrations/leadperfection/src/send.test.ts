@@ -1,4 +1,4 @@
-import type { AccountId, AccountWebhookData } from '@terros-inc/sdk'
+import { type AccountId, type AccountWebhookData, IntegrationError, PermanentError } from '@terros-inc/sdk'
 import { sendAccount, type SendConfig } from './send.ts'
 import { fakeLeadPerfection, fakeTerros } from './fakeLeadPerfection.ts'
 
@@ -41,6 +41,9 @@ async function send(data: AccountWebhookData, stored: object = {}, sendConfig = 
   return { lp, ...terros }
 }
 
+const leadAdd = '/api/Leads/LeadAdd'
+const claim = expect.stringMatching(/^pending:/)
+
 describe('LeadPerfection Send', () => {
   // Field-by-field mapping from the old integration, within the docs' LeadAdd limits.
   it('sends one LeadAdd with the mapped fields and saves the lead ID', async () => {
@@ -67,7 +70,13 @@ describe('LeadPerfection Send', () => {
         appttime: '02:30PM',
       },
     ])
-    expect(writes).toEqual([{ route: 'account/update', input: { account: { accountId, externalLeadId: '2901' } } }])
+    expect(writes).toEqual([
+      {
+        route: 'account/update',
+        input: { account: { accountId, externalLeadId: claim }, onlyIfNoExternalLeadId: true },
+      },
+      { route: 'account/update', input: { account: { accountId, externalLeadId: '2901' } } },
+    ])
   })
 
   it('sends a Canadian postal code whole, the configured product and market, and no non-numeric pro_id', async () => {
@@ -108,5 +117,73 @@ describe('LeadPerfection Send', () => {
 
     expect(lp.added).toEqual([])
     expect(writes).toEqual([])
+  })
+
+  // Two deliveries for one account, such as a stage change and an edit a second apart, both read no externalLeadId.
+  // Without a claim only one of them can win, both called LeadAdd and LeadPerfection held two leads.
+  it('adds one lead when two deliveries for an account overlap', async () => {
+    const lp = fakeLeadPerfection()
+    const { terros, store } = fakeTerros([{ accountId, appointmentDate }])
+
+    await Promise.all([
+      sendAccount(account(), config, lp.client, terros),
+      sendAccount(account(), config, lp.client, terros),
+    ])
+
+    expect(lp.added).toHaveLength(1)
+    expect(store.get(accountId)?.externalLeadId).toBe('2901')
+  })
+
+  it('does not call LeadAdd when another delivery claimed the account after it was read', async () => {
+    const lp = fakeLeadPerfection()
+    const { terros, store } = fakeTerros([
+      { accountId, appointmentDate, externalLeadId: 'pending:2026-11-18T15:00:00.000Z' },
+    ])
+    const { account: accounts } = terros as { account: object }
+    const stale = { ...accounts, get: async () => ({ type: 'success', account: { accountId, appointmentDate } }) }
+
+    await sendAccount(account(), config, lp.client, { account: stale } as never)
+
+    expect(lp.added).toEqual([])
+    expect(store.get(accountId)?.externalLeadId).toBe('pending:2026-11-18T15:00:00.000Z')
+  })
+
+  // LeadPerfection can accept a lead and still time out, drop the connection or return a 5xx. Retrying that as a
+  // transient failure added the lead a second time.
+  it.each([
+    ['a timeout', { throws: new DOMException('The operation was aborted due to timeout', 'TimeoutError') }],
+    ['a network error', { throws: new TypeError('fetch failed') }],
+    ['a 5xx', { status: 503, body: { Message: 'Service Unavailable' } }],
+  ])('keeps the claim and stops for a person after %s on LeadAdd', async (_, failure) => {
+    const lp = fakeLeadPerfection({ fail: { [leadAdd]: [failure] } })
+    const { terros, store } = fakeTerros([{ accountId, appointmentDate }])
+
+    const error = await sendAccount(account(), config, lp.client, terros).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(PermanentError)
+    expect((error as Error).message).toContain(`lognumber ${accountId}`)
+    expect(store.get(accountId)?.externalLeadId).toEqual(claim)
+
+    await sendAccount(account(), config, lp.client, terros)
+    expect(lp.paths().filter((path) => path === leadAdd)).toHaveLength(1)
+  })
+
+  // A LeadAdd LeadPerfection refused added nothing; a claim left behind would keep the account from ever being sent.
+  it.each([
+    ['rate-limits', { status: 429, body: { Message: 'Too many requests' } }, Error],
+    ['refuses', { status: 200, body: [{ id: 0, Status: 0, Message: 'Invalid srs_id' }] }, IntegrationError],
+  ])('releases the claim when LeadPerfection %s the lead', async (_, failure, errorType) => {
+    const lp = fakeLeadPerfection({ fail: { [leadAdd]: [failure] } })
+    const { terros, store } = fakeTerros([{ accountId, appointmentDate }])
+
+    const error = await sendAccount(account(), config, lp.client, terros).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(errorType)
+    if (errorType === Error) expect(error).not.toBeInstanceOf(PermanentError)
+    expect(store.get(accountId)).not.toHaveProperty('externalLeadId')
+
+    await sendAccount(account(), config, lp.client, terros)
+    expect(lp.added).toHaveLength(1)
+    expect(store.get(accountId)?.externalLeadId).toBe('2901')
   })
 })
