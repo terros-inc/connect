@@ -89,7 +89,7 @@ Each run reads the last `lookbackDays` days again, since LeadPerfection has no w
 
 ## Limits
 
-LeadPerfection allows 60 API calls a minute, and a script run has a minute. One Sync run makes at most 5 `GetJobStatusChanges` pages of 100, one `GetSalesApptDetailDateRange` and 40 `GetLead` lookups, and stops taking new customers 45 seconds after it starts. It reads job status changes newest first, so in a window with more than 500 it reads the newest 500 and skips the older ones, which earlier runs normally read while they were newer. Customers left over from lookups or time wait for the next run, which reads the same window again. Customers already linked cost no `GetLead` call.
+LeadPerfection allows 60 API calls a minute, and a script run has a minute. One Sync run makes at most 5 `GetJobStatusChanges` pages of 100, one `GetSalesApptDetailDateRange` and 40 `GetLead` lookups, and stops taking new customers 45 seconds after it starts. It reads job status changes newest first, so in a window with more than 500 it reads the newest 500 and skips the older ones, which earlier runs normally read while they were newer. Each run starts at a random customer, so customers left over from lookups or time are reached by a later run, which reads the same window again. Customers already linked cost no `GetLead` call.
 
 ## Not covered yet
 

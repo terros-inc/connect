@@ -110,7 +110,7 @@ describe('LeadPerfection Sync', () => {
     expect(store.get('Account.examplePhone' as AccountId)?.externalLeadId).toBe('leadperfection:1003')
     expect(store.size).toBe(4)
     // 1004 was linked already and 1006 has no mapped status, so neither costs a GetLead call.
-    expect(getLeadCalls()).toEqual(['1001', '1002', '1003', '1005'])
+    expect(getLeadCalls().sort()).toEqual(['1001', '1002', '1003', '1005'])
   })
 
   // A re-run over the same window must neither write nor spend LeadPerfection calls on customers it linked.
@@ -147,20 +147,26 @@ describe('LeadPerfection Sync', () => {
   })
 
   // Unmatched customers are looked up on every run; without rotation the first ones would use every run's lookups.
+  // Runs 10 minutes apart over 10 customers started at the same customer every time when the start came from the clock.
   it('looks up every customer over successive runs when one run cannot look up them all', async () => {
-    const cstIds = [1, 2, 3, 4, 5, 6]
+    const cstIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     const lp = fakeLeadPerfection({ appointments: cstIds.map((cstId) => appointment(cstId, 'Sale')) })
     const { terros } = fakeTerros()
     const lookups = LIMITS.leadLookups
     LIMITS.leadLookups = 2
+    const random = vi.spyOn(Math, 'random')
     try {
-      for (const run of [0, 1, 2]) await syncResults(config, lp.client, terros, now + run * 600_000)
+      for (const run of [0, 1, 2, 3, 4]) {
+        random.mockReturnValueOnce(run / 5)
+        await syncResults(config, lp.client, terros, now + run * 600_000)
+      }
     } finally {
       LIMITS.leadLookups = lookups
+      random.mockRestore()
     }
 
     const looked = lp.calls.filter((call) => call.url.endsWith('/GetLead')).map((call) => Number(call.form.cst_id))
-    expect(looked).toHaveLength(6)
+    expect(looked).toHaveLength(10)
     expect(new Set(looked)).toEqual(new Set(cstIds))
   })
 
