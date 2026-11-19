@@ -383,6 +383,31 @@ importers:
         specifier: 'catalog:'
         version: 4.1.12(@types/node@24.13.2)(vite@8.1.6(@types/node@24.13.2)(esbuild@0.28.1)(yaml@2.9.0))
 
+  integrations/leadperfection:
+    dependencies:
+      '@terros-inc/sdk':
+        specifier: 'workspace:'
+        version: link:../../sdk
+      luxon:
+        specifier: 'catalog:'
+        version: 3.7.2
+    devDependencies:
+      '@terros-inc/cli':
+        specifier: 'workspace:'
+        version: link:../../cli
+      '@types/luxon':
+        specifier: 'catalog:'
+        version: 3.7.2
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.12(@types/node@24.13.2)(vite@8.1.6(@types/node@24.13.2)(esbuild@0.28.1)(yaml@2.9.0))
+
   integrations/salesforce:
     dependencies:
       '@terros-inc/sdk':

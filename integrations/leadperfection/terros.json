@@ -1,0 +1,104 @@
+{
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
+  "appId": "App.v9jnn5vpXWIOdXjllXVRb",
+  "scripts": [
+    {
+      "name": "LeadPerfection Send",
+      "description": "Terros to LeadPerfection. Sends an account as a LeadPerfection lead (LeadAdd) when it is in one of sendStageIds, once: the returned lead ID is saved as the account's externalLeadId and the account is not sent again.",
+      "entrypoint": "src/send.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "configSchema": [
+        {
+          "name": "sendStageIds",
+          "type": "string",
+          "description": "Required. Comma-separated Terros stage IDs (S.*). An account in one of them with no externalLeadId is sent."
+        },
+        {
+          "name": "srs_id",
+          "type": "string",
+          "description": "Required. Numeric LeadPerfection source sub ID for these leads (SETUP - CUSTOMER - SOURCE SUBS)."
+        },
+        {
+          "name": "sender",
+          "type": "string",
+          "description": "Optional. LeadPerfection sender name, shown on each lead to identify who sent it."
+        },
+        {
+          "name": "productID",
+          "type": "string",
+          "description": "Optional. LeadPerfection product code (SETUP - TERRITORY - PRODUCTS) for the lead's product interest."
+        },
+        {
+          "name": "brn_id",
+          "type": "string",
+          "description": "Optional. LeadPerfection market ID. Blank lets LeadPerfection pick the market from product and ZIP code."
+        },
+        {
+          "name": "timeZone",
+          "type": "string",
+          "description": "Optional. IANA time zone, such as America/Chicago, of the appointment date and time sent. Blank uses the account owner's time zone; with neither, no appointment is sent."
+        }
+      ],
+      "authSchema": {
+        "server": "LeadPerfection API server prefix that LeadPerfection gave you: api, api2, api3, or apitest for the sandbox.",
+        "clientId": "LeadPerfection client ID: the site code, which is also your LeadPerfection site subdomain.",
+        "appKey": "LeadPerfection app key issued to Terros.",
+        "username": "LeadPerfection API user created by your LeadPerfection security admin.",
+        "password": "Password of that LeadPerfection API user."
+      },
+      "permissions": ["account:list", "account:save"],
+      "slug": "leadperfection-send"
+    },
+    {
+      "name": "LeadPerfection Sync",
+      "description": "LeadPerfection to Terros. Every run reads recent appointment results and job status changes from LeadPerfection and moves each matching Terros account to the mapped stage. Set the install's schedule to rate(10 minutes).",
+      "entrypoint": "src/sync.ts",
+      "type": "scheduled",
+      "cron": "rate(10 minutes)",
+      "configSchema": [
+        {
+          "name": "workflowId",
+          "type": "string",
+          "description": "Required. Terros workflow ID (WF.*) of the mapped stages."
+        },
+        {
+          "name": "resultStages",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Key: a LeadPerfection appointment result (dsp_id), such as Set, Sale, DNS, DNS-U or CXL. Value: the Terros stage ID (S.*) to move the account to. Results not listed are left alone."
+        },
+        {
+          "name": "jobStatusStages",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Key: a LeadPerfection job status, such as Complete. Value: the Terros stage ID (S.*). A mapped job status wins over the appointment result. Statuses not listed are left alone."
+        },
+        {
+          "name": "requestType",
+          "type": "string",
+          "description": "Optional. 'update' (default) moves only accounts that match a LeadPerfection customer; 'upsert' also creates an account for a customer that started in LeadPerfection."
+        },
+        {
+          "name": "lookbackDays",
+          "type": "number",
+          "description": "Optional. Days back from today that each run reads again. Defaults to 2."
+        },
+        {
+          "name": "timeZone",
+          "type": "string",
+          "description": "Optional. IANA time zone of your LeadPerfection site, such as America/Chicago, used for its dates. Defaults to UTC."
+        }
+      ],
+      "authSchema": {
+        "server": "LeadPerfection API server prefix that LeadPerfection gave you: api, api2, api3, or apitest for the sandbox.",
+        "clientId": "LeadPerfection client ID: the site code, which is also your LeadPerfection site subdomain.",
+        "appKey": "LeadPerfection app key issued to Terros.",
+        "username": "LeadPerfection API user created by your LeadPerfection security admin.",
+        "password": "Password of that LeadPerfection API user."
+      },
+      "permissions": ["account:add", "account:list", "account:save"],
+      "slug": "leadperfection-sync"
+    }
+  ]
+}
