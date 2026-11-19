@@ -1,10 +1,13 @@
 import type { TeamId, UserId } from '../user'
 import type { AuditProps } from '../shared'
 
+type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+type WeekOfYear = `0${Exclude<Digit, 0>}` | `${1 | 2 | 3 | 4}${Digit}` | `5${0 | 1 | 2}`
+
 /** A week as `W<year>|<week 01-52>`, such as `W2026|47`. */
-export type WeeklyPeriodValue = `W${number}|${number}`
+export type WeeklyPeriodValue = `W${number}|${WeekOfYear}`
 /** A quarter as `Q<year>|<quarter 1-4>`, such as `Q2026|4`. */
-export type QuarterlyPeriodValue = `Q${number}|${number}`
+export type QuarterlyPeriodValue = `Q${number}|${1 | 2 | 3 | 4}`
 export type PlanPeriodValue = WeeklyPeriodValue | QuarterlyPeriodValue
 
 /** Plans exist only for weeks and quarters. */
@@ -21,12 +24,25 @@ export type PlanScopeId = UserId | TeamId
 
 export type PlanStatus = 'Pending' | 'Submitted' | 'Approved' | 'Rejected' | 'Closed'
 
-/** `Pitch`, or a workflow stage ID. */
+/** `Pitch`, an account status ID (`AS.`), or a workflow stage ID (`S.`). */
 export type PlanStageId = 'Pitch' | `S.${string}` | `AS.${string}`
+
+export type PlanMilestone =
+  | 'Pitch'
+  | 'Lead'
+  | 'Set'
+  | 'Sit'
+  | 'Closed'
+  | 'Approved'
+  | 'Permit Submitted'
+  | 'Permit Approved'
+  | 'Installed'
+  | 'Archived'
+  | 'Do Not Contact'
 
 /** One stage target of a plan. Dashboards show `quantityRequired` as the stage's target when `pricePerUnit` is unset. */
 export type PlanStageData = {
-  milestone: string
+  milestone: PlanMilestone
   stageId?: PlanStageId
   conversionRate: number
   quantityRequired?: number
@@ -43,7 +59,8 @@ export type DailyPlan = {
   workingHours?: { startTime: number; endTime: number }
 }
 
-export type PlanFields = AuditProps & {
+/** The plan fields a caller sets; the server sets the audit fields. */
+export type PlanFields = {
   status: PlanStatus
   days: DailyPlan[]
   comments?: string
@@ -55,4 +72,4 @@ export type PlanFields = AuditProps & {
   questionsAndAnswers?: { question: string; answer?: string }[]
 }
 
-export type PlanData = PlanFields & PlanPeriod & PlanScope
+export type PlanData = AuditProps & PlanFields & PlanPeriod & PlanScope

@@ -24,7 +24,7 @@ export type PlanGetSuccess = ApiSuccess<{
 }>
 
 export type PlanAddInput = {
-  plan: PlanData
+  plan: PlanFields & PlanPeriod & PlanScope
 }
 
 export type PlanUpdateInput = {

@@ -22,8 +22,9 @@ export class PlanClient {
     return this.api.call('plan/get', { ...input, version: VERSION })
   }
 
-  add(input: PlanAddInput): Promise<PlanGetSuccess> {
-    return this.api.call('plan/add', { ...input, version: VERSION })
+  add({ plan }: PlanAddInput): Promise<PlanGetSuccess> {
+    // The API still requires the legacy opinion-based goals on add; version 2 plans keep their targets in stages instead.
+    return this.api.call('plan/add', { plan: { ...plan, opinions: { self: { milestones: {} } } }, version: VERSION })
   }
 
   update(input: PlanUpdateInput): Promise<PlanGetSuccess> {
