@@ -147,7 +147,6 @@ describe('LeadPerfection Sync', () => {
   })
 
   // Unmatched customers are looked up on every run; without rotation the first ones would use every run's lookups.
-  // Runs 10 minutes apart over 10 customers started at the same customer every time when the start came from the clock.
   it('looks up every customer over successive runs when one run cannot look up them all', async () => {
     const cstIds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     const lp = fakeLeadPerfection({ appointments: cstIds.map((cstId) => appointment(cstId, 'Sale')) })
