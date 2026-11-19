@@ -14,14 +14,17 @@ The [Terros Connect guide](https://docs.terros.com/docs/info/connect) covers how
 Wrap a script's function in `wrapConnectHandler` and export it as `handler`:
 
 ```ts
-import { wrapConnectHandler, type AccountWebhook } from '@terros-inc/sdk'
+import { wrapConnectHandler, type AccountWebhook, type CustomFieldId } from '@terros-inc/sdk'
 
-type ScriptConfig = { status: string }
+type ScriptConfig = { fieldId: CustomFieldId; value: string }
 
 export const handler = wrapConnectHandler<AccountWebhook, void, ScriptConfig>(async (input, client) => {
   const { payload, config } = input.context
   if (payload.action === 'remove') return
-  await client.account.update({ account: { accountId: payload.data.id, sourceStatus: config.scriptConfig.status } })
+  const { fieldId, value } = config.scriptConfig
+  // The update below is itself an account change, which runs this script again.
+  if (payload.data.customFieldMap?.[fieldId] === value) return
+  await client.account.update({ account: { accountId: payload.data.id, customFieldsPatch: { [fieldId]: value } } })
 })
 ```
 
