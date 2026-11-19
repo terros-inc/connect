@@ -148,12 +148,36 @@ describe('LeadPerfection Send', () => {
     expect(store.get(accountId)?.externalLeadId).toBe('pending:2026-11-18T15:00:00.000Z')
   })
 
+  // The claim was saved but its response was lost. Failing then left a claim no delivery owned, so every
+  // redelivery skipped the account and it was never sent.
+  it('sends the account when its claim was saved but the response was lost', async () => {
+    const lp = fakeLeadPerfection()
+    const { terros, store } = fakeTerros([{ accountId, appointmentDate }])
+    const { account: accounts } = terros as { account: { update: (input: object) => Promise<object> } }
+    let lost = false
+    const lossy = {
+      ...accounts,
+      update: async (input: object) => {
+        const saved = await accounts.update(input)
+        if (lost) return saved
+        lost = true
+        throw new TypeError('fetch failed')
+      },
+    }
+
+    await sendAccount(account(), config, lp.client, { account: lossy } as never)
+
+    expect(lp.added).toHaveLength(1)
+    expect(store.get(accountId)?.externalLeadId).toBe('2901')
+  })
+
   // LeadPerfection can accept a lead and still time out, drop the connection or return a 5xx. Retrying that as a
   // transient failure added the lead a second time.
   it.each([
     ['a timeout', { throws: new DOMException('The operation was aborted due to timeout', 'TimeoutError') }],
     ['a network error', { throws: new TypeError('fetch failed') }],
     ['a 5xx', { status: 503, body: { Message: 'Service Unavailable' } }],
+    ['a reply without the lead', { status: 200, body: [] }],
   ])('keeps the claim and stops for a person after %s on LeadAdd', async (_, failure) => {
     const lp = fakeLeadPerfection({ fail: { [leadAdd]: [failure] } })
     const { terros, store } = fakeTerros([{ accountId, appointmentDate }])

@@ -138,12 +138,22 @@ export class LeadPerfectionClient {
         `LeadPerfection ${path} returned ${response.status}: ${readMessage(response.text)}`
       )
     }
-    const replies = parseReply<LeadAddReply[]>(path, response)
-    const reply = replies[0]
-    if (reply?.Status !== 1 || !reply.id) {
-      throw new IntegrationError(`LeadPerfection refused the lead: ${reply?.Message ?? JSON.stringify(replies)}`)
+    let replies: LeadAddReply[]
+    try {
+      replies = parseReply<LeadAddReply[]>(path, response)
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw error
+      throw new LeadAddUncertainError(
+        `LeadPerfection ${path} returned an unreadable reply: ${response.text.slice(0, 200)}`
+      )
     }
-    return reply.id
+    const reply = Array.isArray(replies) ? replies[0] : undefined
+    if (reply?.Status === 1 && reply.id) return reply.id
+    // Only an explicit refusal shows nothing was added: a reply cut short or without the lead ID may hide a new lead.
+    if (reply?.Status !== undefined && reply.Status !== 1) {
+      throw new IntegrationError(`LeadPerfection refused the lead: ${reply.Message ?? JSON.stringify(replies)}`)
+    }
+    throw new LeadAddUncertainError(`LeadPerfection ${path} returned no lead ID: ${JSON.stringify(replies)}`)
   }
 
   // StartIndex is a page number, not a record offset. Reads the newest maxPages pages at most and returns them

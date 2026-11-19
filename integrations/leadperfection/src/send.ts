@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import {
   type AccountWebhook,
@@ -74,14 +75,8 @@ export async function sendAccount(
     return
   }
 
-  const claim = `${PENDING_PREFIX}${new Date().toISOString()}`
-  try {
-    await terros.account.update({
-      account: { accountId: account.id, externalLeadId: claim },
-      onlyIfNoExternalLeadId: true,
-    })
-  } catch (error) {
-    if (!isConflict(error)) throw error
+  const claim = `${PENDING_PREFIX}${new Date().toISOString()}/${randomUUID().slice(0, 8)}`
+  if (!(await claimAccount(terros, account.id, claim))) {
     console.log(`Skipping account ${account.id}: another delivery claimed it first`)
     return
   }
@@ -119,6 +114,28 @@ export async function sendAccount(
 
 // Marks an account a delivery has claimed but not yet sent. Every other delivery sees an externalLeadId and skips it.
 const PENDING_PREFIX = 'pending:'
+
+// Returns whether this delivery holds the claim. A claim write that failed in transit may still have been saved, and
+// a redelivery would then skip the account for good, so the stored account decides. The claim is unique per delivery
+// for that comparison.
+async function claimAccount(
+  terros: Pick<TerrosClient, 'account'>,
+  accountId: AccountWebhookData['id'],
+  claim: string
+): Promise<boolean> {
+  try {
+    await terros.account.update({ account: { accountId, externalLeadId: claim }, onlyIfNoExternalLeadId: true })
+    return true
+  } catch (error) {
+    if (isConflict(error)) return false
+    const { account } = await terros.account.get({ accountId }).catch(() => {
+      throw error
+    })
+    if (account.externalLeadId === claim) return true
+    if (account.externalLeadId) return false
+    throw error
+  }
+}
 
 function isConflict(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'Conflict'
