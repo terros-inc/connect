@@ -312,6 +312,16 @@ sign-in: the signed-in user (or `TERROS_API_KEY`), acting as
 path, not a URL. The command exits 1 on an HTTP, network or API error, and
 never prints the access token.
 
+## Build and Publish a Connect App
+
+The `terros connect` commands work on the Connect app in the current directory: its `terros.json` and `package.json`. They take no flags. The [Terros Connect guide](https://docs.terros.com/docs/info/connect) explains `terros.json` and how to write scripts.
+
+- `terros connect validate` checks `terros.json` against the Connect script schema published at `https://docs.terros.com/openapi/connect-script.schema.json`, or against the CLI's own copy when that can't be fetched.
+- `terros connect pack` validates, then bundles each script's `entrypoint` with its dependencies and zips it into `dist/`. It needs the `zip` command.
+- `terros connect publish` packs, creates the draft version named by `version` in `package.json` unless it exists, uploads every script to it, uploads `DOCS.md` (or `README.md`) as the app's documentation, and deploys the version. A deployed version can't be published again: raise `version` first.
+
+Point an editor at the `terros.json` schema the CLI ships with `"$schema": "./node_modules/@terros-inc/cli/configSchema.json"`.
+
 ## Pick the Backend Environment (Terros Staff)
 
 Terros staff can point the CLI at another backend with `--env <name>` on any
