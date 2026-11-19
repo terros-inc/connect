@@ -7,7 +7,7 @@ import {
   type WorkflowId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { LEADPERFECTION_SOURCE } from './send.ts'
+import { LEADPERFECTION_SOURCE, toZip } from './send.ts'
 import {
   fromLeadPerfectionDate,
   type JobStatusChange,
@@ -332,7 +332,7 @@ async function findAccount(
 // phone digits. More than one match is ambiguous and matches nothing.
 async function findByPhone(customer: Customer, terros: Terros): Promise<AccountData | undefined> {
   const phone = phoneDigits(customer.phone)
-  const zip = customer.zip?.slice(0, 5)
+  const zip = toZip(customer.zip)
   if (!phone || !zip) return undefined
   const { accounts } = await terros.account.list({ searchInput: { zipCodes: [zip] }, size: 1000 })
   const matches = accounts.filter((account) => phoneDigits(account.resident?.phone) === phone)
