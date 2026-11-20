@@ -8,8 +8,13 @@ import {
 import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 describe('formatCommandsHelp', () => {
-  it('includes version help and the staff impersonation guide after the command list', () => {
+  it('starts with sign-in and profile, and ends with version help and the staff impersonation guide', () => {
     expect(formatCommandsHelp(['account'])).toBe(`usage: terros <command> [<subcommand> ...] [parameters]
+
+Getting started (people and AI agents):
+  terros auth login         sign in
+  terros user profile       see who you are signed in as: company, teams, roles and permissions
+  terros permission list    list your permissions in detail
 
 Commands:
   account
