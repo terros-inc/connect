@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { DateTime } from 'luxon'
 import {
   type AccountWebhook,
@@ -7,7 +8,7 @@ import {
   type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { type LeadAddRequest, LeadPerfectionClient, readSecrets } from './leadperfection.ts'
+import { LeadAddUncertainError, type LeadAddRequest, LeadPerfectionClient, readSecrets } from './leadperfection.ts'
 
 export const LEADPERFECTION_SOURCE = 'LeadPerfection'
 
@@ -32,7 +33,8 @@ export const handler = wrapConnectHandler<AccountWebhook, void, SendConfig>(asyn
 
 // Sends an account to LeadPerfection once, when it is in one of the configured stages, and saves the returned
 // inbound lead ID as its externalLeadId. An account with an externalLeadId, or one that came from LeadPerfection,
-// is never sent again.
+// is never sent again. LeadPerfection does not dedupe leads, so before LeadAdd the account is claimed with a pending
+// externalLeadId that only one delivery can set, and a LeadAdd that may have added the lead is never retried.
 export async function sendAccount(
   account: AccountWebhookData,
   config: SendConfig,
@@ -56,9 +58,7 @@ export async function sendAccount(
     return
   }
 
-  // The webhook can be older than the account: a parallel delivery may have linked it since. This re-read is not a
-  // claim: two overlapping deliveries can both pass it and both add a lead, because Terros has no conditional
-  // ("set only if empty") account update. Duplicates are merged by hand; see the README's Known gaps.
+  // The webhook can be older than the account: a parallel delivery may have linked it since.
   const { account: stored } = await terros.account.get({ accountId: account.id })
   if (stored.externalLeadId) {
     console.log(`Skipping account ${account.id}: already sent as LeadPerfection lead ${stored.externalLeadId}`)
@@ -75,34 +75,120 @@ export async function sendAccount(
     return
   }
 
-  // A timeout, network error or 5xx here is retried, though LeadPerfection may already have accepted the lead, so the
-  // retry can add a duplicate. Nothing can check first: LeadPerfection's search lags 5+ minutes behind an accepted
-  // lead, and failing permanently instead would lose real leads. Duplicates are merged by hand; see the README's
-  // Known gaps.
-  const leadId = await leadPerfection.leadAdd(lead)
+  const claim = `${PENDING_PREFIX}${new Date().toISOString()}/${randomUUID().slice(0, 8)}`
+  if (!(await claimAccount(terros, account.id, claim))) {
+    console.log(`Skipping account ${account.id}: another delivery claimed it first`)
+    return
+  }
+
+  let leadId: number
+  try {
+    leadId = await addLead(leadPerfection, lead)
+  } catch (error) {
+    if (error instanceof LeadAddUncertainError) {
+      throw new PermanentError(
+        `LeadPerfection may have added account ${account.id} as a lead (${error.message}), so it is not sent again ` +
+          `and its externalLeadId stays ${claim}. Look for lognumber ${account.id} in LeadPerfection: set the ` +
+          'account externalLeadId to that lead ID, or clear it to send the account again.',
+        { cause: error }
+      )
+    }
+    // Nothing was added, but clearing the claim is itself an account change, which Connect sends back to Send: a
+    // refusal that keeps happening, such as a wrong srs_id, would then call LeadAdd on every echo without end.
+    const reason = error instanceof Error ? error.message : String(error)
+    const failed = `${FAILED_PREFIX}${new Date().toISOString()}:${reason.slice(0, 200)}`
+    await updateAfterClaim(
+      terros,
+      account.id,
+      failed,
+      `LeadPerfection did not add account ${account.id} (${reason}), but replacing its pending externalLeadId ` +
+        `${claim} failed. Fix the cause, then clear it by hand to send the account again.`
+    )
+    const Failure = error instanceof IntegrationError ? IntegrationError : PermanentError
+    throw new Failure(
+      `LeadPerfection did not add account ${account.id}: ${reason}. Its externalLeadId is now ${failed}: fix the ` +
+        'cause, then clear it to send the account again.',
+      { cause: error }
+    )
+  }
   console.log(`Sent account ${account.id} to LeadPerfection as inbound lead ${leadId}`)
-  await saveExternalLeadId(terros, account.id, String(leadId))
+  await updateAfterClaim(
+    terros,
+    account.id,
+    String(leadId),
+    `LeadPerfection lead ${leadId} was created for account ${account.id}, but saving it as the account ` +
+      `externalLeadId failed. Replace ${claim} with ${leadId} by hand.`
+  )
 }
 
-// The lead now exists in LeadPerfection, and a retried delivery would add it again, so a failed save is retried
-// here and then reported as permanent for someone to link by hand.
-async function saveExternalLeadId(
+// Marks an account a delivery has claimed but not yet sent. Every other delivery sees an externalLeadId and skips it.
+const PENDING_PREFIX = 'pending:'
+// Marks an account LeadPerfection did not add, which waits for a person to fix the cause and clear it.
+const FAILED_PREFIX = 'failed:'
+const LEAD_ADD_ATTEMPTS = 3
+
+// A rate limit or a failure before the request went out added nothing, and this delivery holds the claim, so it
+// retries here: the queue cannot, since a redelivery would see the claim and skip the account.
+async function addLead(leadPerfection: Pick<LeadPerfectionClient, 'leadAdd'>, lead: LeadAddRequest): Promise<number> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await leadPerfection.leadAdd(lead)
+    } catch (error) {
+      const final = error instanceof PermanentError || error instanceof LeadAddUncertainError
+      if (final || attempt === LEAD_ADD_ATTEMPTS) throw error
+      await new Promise((resolve) => setTimeout(resolve, attempt * 10_000))
+    }
+  }
+}
+
+// Returns whether this delivery holds the claim. A claim write that failed in transit may still have been saved, and
+// a redelivery would then skip the account for good, so the stored account decides. The claim is unique per delivery
+// for that comparison.
+async function claimAccount(
   terros: Pick<TerrosClient, 'account'>,
   accountId: AccountWebhookData['id'],
-  externalLeadId: string
+  claim: string
+): Promise<boolean> {
+  try {
+    await terros.account.update({ account: { accountId, externalLeadId: claim }, onlyIfNoExternalLeadId: true })
+    return true
+  } catch (error) {
+    if (isConflict(error)) {
+      // The save only checks that the attribute exists, so a stored empty value would block every claim for good.
+      const { account } = await terros.account.get({ accountId })
+      if (account.externalLeadId) return false
+      throw new PermanentError(
+        `Account ${accountId} has an empty externalLeadId that keeps Send from claiming it, so it is never sent. ` +
+          'Clear it (send null to /account/update) to send the account.'
+      )
+    }
+    const { account } = await terros.account.get({ accountId }).catch(() => {
+      throw error
+    })
+    if (account.externalLeadId === claim) return true
+    if (account.externalLeadId) return false
+    throw error
+  }
+}
+
+function isConflict(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'Conflict'
+}
+
+// A redelivery would see the claim and skip the account for good, so a failed write is retried here and then
+// reported as permanent for someone to fix by hand.
+async function updateAfterClaim(
+  terros: Pick<TerrosClient, 'account'>,
+  accountId: AccountWebhookData['id'],
+  externalLeadId: string | null,
+  failure: string
 ): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
       await terros.account.update({ account: { accountId, externalLeadId } })
       return
     } catch (cause) {
-      if (attempt === 3) {
-        throw new PermanentError(
-          `LeadPerfection lead ${externalLeadId} was created for account ${accountId}, but saving it as the ` +
-            'account externalLeadId failed. Set it by hand, or a later change in a send stage sends it again.',
-          { cause }
-        )
-      }
+      if (attempt === 3) throw new PermanentError(failure, { cause })
       await new Promise((resolve) => setTimeout(resolve, attempt * 1000))
     }
   }

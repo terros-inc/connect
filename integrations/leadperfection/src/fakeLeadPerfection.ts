@@ -2,7 +2,8 @@ import type { AccountData, AccountId } from '@terros-inc/sdk'
 import { LeadPerfectionClient, type LeadPerfectionSecrets } from './leadperfection.ts'
 
 export type FakeCall = { url: string; form: Record<string, string>; contentType?: string; authorization?: string }
-type FakeReply = { status: number; body: unknown }
+// A reply, or an error fetch throws the way a dropped connection or a timeout does.
+type FakeReply = { status: number; body: unknown } | { throws: Error }
 
 let installs = 0
 
@@ -52,6 +53,7 @@ export function fakeLeadPerfection(
     const path = new URL(url).pathname
 
     const failure = fail.get(path)?.shift()
+    if (failure && 'throws' in failure) throw failure.throws
     if (failure) return reply(failure.status, failure.body)
 
     if (path === '/token') {
@@ -117,8 +119,9 @@ export function fakeLeadPerfection(
 
 type FakeAccount = Partial<AccountData> & { accountId: AccountId }
 
-// An in-memory Terros account API: get, update, match (accountId, then externalLeadId, then sourceId), list by
-// ZIP code and upsert with a stage ID as workflowTarget. Writes are recorded.
+// An in-memory Terros account API: get, update (null clears a field, and onlyIfNoExternalLeadId fails with Conflict
+// like the API's conditional save), match (accountId, then externalLeadId, then sourceId), list by ZIP code and
+// upsert with a stage ID as workflowTarget. Writes are recorded, failed ones included.
 export function fakeTerros(accounts: FakeAccount[] = []) {
   const store = new Map(accounts.map((account) => [account.accountId, { ...account }]))
   const writes: { route: string; input: unknown }[] = []
@@ -130,6 +133,7 @@ export function fakeTerros(accounts: FakeAccount[] = []) {
   const apply = (account: FakeAccount, changes: Record<string, unknown>) => {
     const { workflowTarget, ...rest } = changes
     Object.assign(account, rest, workflowTarget ? { workflowStageId: workflowTarget } : {})
+    for (const [key, value] of Object.entries(rest)) if (value === null) delete account[key as keyof FakeAccount]
   }
 
   const account = {
@@ -137,9 +141,13 @@ export function fakeTerros(accounts: FakeAccount[] = []) {
       type: 'success',
       account: store.get(accountId) ?? notFound(accountId),
     }),
-    update: async (input: { account: FakeAccount }) => {
+    update: async (input: { account: FakeAccount; onlyIfNoExternalLeadId?: boolean }) => {
       writes.push({ route: 'account/update', input })
       const existing = store.get(input.account.accountId) ?? notFound(input.account.accountId)
+      // attribute_not_exists, so an empty value stored conflicts too.
+      if (input.onlyIfNoExternalLeadId && existing.externalLeadId !== undefined) {
+        throw Object.assign(new Error('Conflict: The account already has an externalLeadId'), { code: 'Conflict' })
+      }
       apply(existing, input.account)
       return { type: 'success', account: existing }
     },

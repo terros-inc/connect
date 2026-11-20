@@ -102,7 +102,7 @@ export async function syncResults(
 
   const lookups = { remaining: LIMITS.leadLookups }
   let failed = 0
-  for (const customer of rotate(customers, now)) {
+  for (const customer of rotate(customers)) {
     if (Date.now() - startedAt > LIMITS.runMs) {
       console.log('Out of run time; the remaining customers wait for the next run')
       break
@@ -126,10 +126,11 @@ export async function syncResults(
   if (failed > 0) throw new Error(`${failed} LeadPerfection customers failed to sync; the next run retries them`)
 }
 
-// A customer no account matches costs a GetLead call on every run. Starting each run at a different customer keeps
-// a window with more of them than one run's lookups from starving the customers after them.
-function rotate<T>(items: T[], now: number): T[] {
-  const offset = items.length ? Math.floor(now / 60_000) % items.length : 0
+// A customer no account matches costs a GetLead call on every run. Starting each run at a random customer keeps a
+// window with more of them than one run's lookups from starving the customers after them. A clock-based start would
+// repeat whenever the schedule interval divides evenly into the customer count.
+function rotate<T>(items: T[]): T[] {
+  const offset = Math.floor(Math.random() * items.length)
   return [...items.slice(offset), ...items.slice(0, offset)]
 }
 

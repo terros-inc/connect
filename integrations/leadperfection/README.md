@@ -62,7 +62,9 @@ An account in one of `sendStageIds` with no `externalLeadId` becomes one LeadPer
 | `pro_id`                                  | Owner's Terros external user ID, when it is a number (the rep's LeadPerfection employee ID) |
 | `sender`, `srs_id`, `productID`, `brn_id` | Install config                                                                              |
 
-Once an account has an `externalLeadId`, Send skips it. Two rare cases can still send it twice; see [Known gaps](#known-gaps). Sync sets one on every account it links to or creates from a LeadPerfection customer (the customer's inbound lead ID, or `leadperfection:` and the customer ID when it has none), so Sync moving an account into a send stage does not send it back. Changes after the first send are not sent.
+Once an account has an `externalLeadId`, Send skips it. Sync sets one on every account it links to or creates from a LeadPerfection customer (the customer's inbound lead ID, or `leadperfection:` and the customer ID when it has none), so Sync moving an account into a send stage does not send it back. Changes after the first send are not sent.
+
+LeadPerfection does not merge a second lead for the same account, so Send adds each lead at most once. Before `LeadAdd`, Send claims the account by setting its `externalLeadId` to `pending:`, the time and a random suffix. Only one send can set it, so two changes to an account that arrive together add one lead, not two. When LeadPerfection rate-limits `LeadAdd` or the call fails before it is sent, Send tries again twice within the run. When LeadPerfection refuses the lead (such as a missing permission or a wrong `srs_id`), or those tries run out, Send replaces the claim with `failed:`, the time and the reason, and stops with an error. Send skips an account with a `failed:` value, so a refusal that keeps happening does not call LeadAdd again on every change. A person should fix the cause the reason names, then clear the `externalLeadId` (send `null` to `/account/update`), and the next change in a send stage sends the account. When `LeadAdd` times out (after 20 seconds), loses its connection, gets a server error or an unreadable reply, LeadPerfection may have added the lead anyway. Send then keeps the claim and stops with an error instead of trying again. A person should then look for the account ID as the `lognumber` in LeadPerfection's leads. If the lead is there, set the account's `externalLeadId` to its lead ID. If it is not, clear the `externalLeadId` (send `null` to `/account/update`) and the next change in a send stage sends the account. If an account still shows a `pending:` `externalLeadId` several minutes after the time in it, the send stopped without finishing: check it the same way.
 
 ## Matching
 
@@ -87,14 +89,7 @@ Each run reads the last `lookbackDays` days again, since LeadPerfection has no w
 
 ## Limits
 
-LeadPerfection allows 60 API calls a minute, and a script run has a minute. One Sync run makes at most 5 `GetJobStatusChanges` pages of 100, one `GetSalesApptDetailDateRange` and 40 `GetLead` lookups, and stops taking new customers 45 seconds after it starts. It reads job status changes newest first, so in a window with more than 500 it reads the newest 500 and skips the older ones, which earlier runs normally read while they were newer. Customers left over from lookups or time wait for the next run, which reads the same window again. Customers already linked cost no `GetLead` call.
-
-## Known gaps
-
-Send can occasionally create two LeadPerfection leads for one account. LeadPerfection does not reject a second `LeadAdd` for the same account, so when this happens, merge the duplicates by hand in LeadPerfection. The Terros team tracks a fix.
-
-- **Two deliveries at once.** Send checks that the account has no `externalLeadId` before it calls `LeadAdd`, and saves the new lead ID afterwards. If two changes to the same account arrive within a second or two of each other (for example, a stage change followed by an edit), both can pass that check and both add a lead, because Terros has no conditional ("set only if empty") account update that would let one of them claim the account first.
-- **A retry after an unclear failure.** If `LeadAdd` times out, hits a network error or gets a 5xx reply, LeadPerfection may already have accepted the lead. The delivery is retried, and the retry adds the lead again. Send cannot check first, because LeadPerfection's search takes 5 minutes or more to show a lead it has just accepted.
+LeadPerfection allows 60 API calls a minute, and a script run has a minute. One Sync run makes at most 5 `GetJobStatusChanges` pages of 100, one `GetSalesApptDetailDateRange` and 40 `GetLead` lookups, and stops taking new customers 45 seconds after it starts. It reads job status changes newest first, so in a window with more than 500 it reads the newest 500 and skips the older ones, which earlier runs normally read while they were newer. Each run starts at a random customer, so customers left over from lookups or time are reached by a later run, which reads the same window again. Customers already linked cost no `GetLead` call.
 
 ## Not covered yet
 
