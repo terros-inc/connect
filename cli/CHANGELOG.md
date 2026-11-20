@@ -4,6 +4,13 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
+### New: root help says how to get started
+
+`terros`, `terros help` and `terros --help` now start with `terros auth login` to sign in, then `terros user profile`
+to see who you are signed in as and your teams, roles and permissions, and `terros permission list` for the full
+permission list. Before, people and AI agents could only find out what they could see by calling commands and reading
+the errors.
+
 ### Fixed: help for an endpoint with a nullable field no longer fails
 
 Help for an endpoint whose request has a field the API schema types as a list, such as `type: [string, "null"]`, now

@@ -2,9 +2,18 @@ import minimist from 'minimist'
 import { getArrayItemTypes, getStringLiteralValues, type EndpointParameter } from '@terros-inc/mcp-core'
 import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
+// People and AI agents otherwise learn what they can see by calling commands and parsing permission errors.
+const GETTING_STARTED_HELP = `Getting started (people and AI agents):
+  terros auth login         sign in
+  terros user profile       see who you are signed in as: company, teams, roles and permissions
+  terros permission list    list your permissions in detail`
+
 export const HELP_PARENT_MESSAGE = `
 usage: terros <command> [<subcommand> ...] [parameters]
 Commands follow the API endpoint path, so /garden/bed/list is "terros garden bed list".
+
+${GETTING_STARTED_HELP}
+
 To see help text, you can run:
 
   terros help
@@ -15,6 +24,8 @@ To see help text, you can run:
 export function formatCommandsHelp(commands: string[]): string {
   const lines = [
     `usage: terros <command> [<subcommand> ...] [parameters]`,
+    '',
+    GETTING_STARTED_HELP,
     '',
     'Commands:',
     ...commands.map((command) => `  ${command}`),
