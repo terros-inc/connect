@@ -94,7 +94,11 @@ export type AccountAddSuccess = ApiSuccess<{
   duplicate?: boolean
 }>
 
-export type AccountPartialUpdateInput = Partial<Omit<AccountData, 'accountId' | 'contacts' | 'notes'>> & {
+export type AccountPartialUpdateInput = Partial<
+  Omit<AccountData, 'accountId' | 'contacts' | 'notes' | 'externalLeadId'>
+> & {
+  /** `null` clears it. */
+  externalLeadId?: string | null
   /**
    * Custom field values to change. Unlike `customFields`, which replaces the whole map, fields left out keep their
    * stored values, including fields the caller cannot view, and `null` clears one field. Send one or the other.
@@ -111,6 +115,12 @@ export type AccountPartialUpdateInput = Partial<Omit<AccountData, 'accountId' | 
 
 export type AccountUpdateInput = {
   account: AccountPartialUpdateInput & { accountId: AccountId }
+  /**
+   * Save only while the account has no `externalLeadId`; otherwise nothing is saved and the call fails with
+   * `Conflict`. Set it with a placeholder `externalLeadId` to claim the account before creating the external record,
+   * so two concurrent runs cannot both create it.
+   */
+  onlyIfNoExternalLeadId?: boolean
 }
 
 export type AccountUpdateSuccess = ApiSuccess<{
