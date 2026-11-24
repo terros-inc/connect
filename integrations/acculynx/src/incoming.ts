@@ -7,6 +7,7 @@ export type AccuLynxWebhookConfig = {
   requestType?: string
   subscriptionId?: string
   accountSource?: string
+  milestoneStageMapping?: Record<string, string>
 }
 
 export const handler = wrapConnectHandler<unknown, void, AccuLynxWebhookConfig>(async (input, client) => {
@@ -56,6 +57,11 @@ export async function receiveWebhook(
     console.log(`Ignoring AccuLynx job ${change.jobId}: this location's key cannot read its current milestone`)
     return
   }
+  const workflowTarget = getWorkflowTarget(milestone.name, config.milestoneStageMapping)
+  if (!workflowTarget) {
+    console.log(`Skipping AccuLynx job ${change.jobId}: milestone ${milestone.name} has no configured stage mapping`)
+    return
+  }
   const changedAt = Date.parse(milestone.duration?.startDate ?? '')
 
   const references = await accuLynx.getJobExternalReferences(change.jobId)
@@ -76,7 +82,7 @@ export async function receiveWebhook(
       ...jobDetails,
       accountId,
       workflowId: workflowId as WorkflowId,
-      workflowTarget: milestone.name,
+      workflowTarget,
       sourceId: change.jobId,
       sourceStatus: milestone.name,
       accountSource: config.accountSource || 'AccuLynx',
@@ -87,4 +93,17 @@ export async function receiveWebhook(
 
   if (result.type !== 'success') throw Error(`Terros account upsert failed for AccuLynx job ${change.jobId}`)
   console.log(`Updated Terros account ${result.account?.accountId} from AccuLynx job ${change.jobId}`)
+}
+
+function getWorkflowTarget(milestoneName: string, mapping: Record<string, string> | undefined): string | undefined {
+  if (mapping === undefined) return milestoneName
+
+  const milestoneKey = normalizeMilestoneName(milestoneName)
+  const entry = Object.entries(mapping).find(([name]) => normalizeMilestoneName(name) === milestoneKey)
+  return entry?.[1].trim() ? entry[1] : undefined
+}
+
+function normalizeMilestoneName(name: string): string {
+  const normalized = name.trim().toLowerCase()
+  return normalized === 'dead' ? 'cancelled' : normalized
 }

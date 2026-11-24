@@ -8,7 +8,7 @@ function account(overrides: Partial<AccountWebhookData> = {}): AccountWebhookDat
     id: 'Account.example',
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
-    workflowState: { workflowId: 'WF.north', stageId: 'S.example' },
+    workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'New Lead' },
     resident: { firstName: 'Pat', lastName: 'Example', email: 'pat@example.test', phone: '+1 312 555 0100' },
     address: {
       line1: '1 Main St',
@@ -124,6 +124,90 @@ describe('sendAccount', () => {
     )
 
     expect(calls).toHaveLength(2)
+  })
+
+  // Prevents early-stage accounts from being irreversibly created in AccuLynx while preserving stage names that
+  // differ only in case or accidental surrounding whitespace.
+  test('sends only at a configured trigger stage, matched case-insensitively after trimming', async () => {
+    const skipped = fakeAccuLynx(created)
+    const skippedTerros = fakeTerros()
+    await sendAccount(
+      account(),
+      { recordType: 'contact', triggerStages: ' Appointment Set, Sold ' },
+      skipped.client,
+      skippedTerros.terros
+    )
+
+    const sent = fakeAccuLynx(created)
+    const sentTerros = fakeTerros()
+    await sendAccount(
+      account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: '  SOLD  ' } }),
+      { recordType: 'contact', triggerStages: 'Appointment Set, sold' },
+      sent.client,
+      sentTerros.terros
+    )
+
+    expect(skipped.calls).toEqual([])
+    expect(skippedTerros.updates).toEqual([])
+    expect(sent.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts'])
+  })
+
+  // Prevents an account belonging to several teams from being skipped or routed to the wrong location, and proves
+  // the independent stage and market restrictions both apply.
+  test.each([
+    {
+      field: 'owner.memberOf',
+      values: 'Market A',
+      owner: {
+        userId: 'U.example' as const,
+        firstName: 'Pat',
+        lastName: 'Example',
+        email: 'user@example.test',
+        memberOf: [
+          { teamId: 'Team.other' as const, name: 'Market B' },
+          { teamId: 'Team.market' as const, name: 'Market A' },
+        ],
+      },
+    },
+    {
+      field: 'owner.teamIds',
+      values: 'Team.market',
+      owner: {
+        userId: 'U.example' as const,
+        firstName: 'Pat',
+        lastName: 'Example',
+        email: 'user@example.test',
+        teamIds: ['Team.other' as const, 'Team.market' as const],
+      },
+    },
+  ])('matches any value in $field while also requiring the trigger stage', async ({ field, values, owner }) => {
+    const matching = fakeAccuLynx(created)
+    await sendAccount(
+      account({ owner, workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Sold' } }),
+      { recordType: 'contact', triggerStages: 'Sold', accountFilterField: field, accountFilterValues: values },
+      matching.client,
+      fakeTerros().terros
+    )
+
+    const wrongStage = fakeAccuLynx(created)
+    await sendAccount(
+      account({ owner }),
+      { recordType: 'contact', triggerStages: 'Sold', accountFilterField: field, accountFilterValues: values },
+      wrongStage.client,
+      fakeTerros().terros
+    )
+
+    const wrongMarket = fakeAccuLynx(created)
+    await sendAccount(
+      account({ owner, workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Sold' } }),
+      { recordType: 'contact', triggerStages: 'Sold', accountFilterField: field, accountFilterValues: 'Team.none' },
+      wrongMarket.client,
+      fakeTerros().terros
+    )
+
+    expect(matching.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts'])
+    expect(wrongStage.calls).toEqual([])
+    expect(wrongMarket.calls).toEqual([])
   })
 
   // Prevents linking the account to a job that does not exist.

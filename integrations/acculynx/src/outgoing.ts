@@ -6,6 +6,7 @@ import {
   getContactSearchTerm,
   getRecordType,
   matchesAccountFilter,
+  matchesTriggerStage,
   toAccuLynxContact,
   toAccuLynxJob,
 } from './records.ts'
@@ -42,6 +43,11 @@ export async function sendAccount(
 ): Promise<void> {
   const recordType = getRecordType(config.recordType)
   getAddressCountry(config.addressCountry) // Refuses a bad value before anything is created.
+
+  if (!matchesTriggerStage(account, config)) {
+    console.log(`Skipping account ${account.id}: current stage is not one of this install's trigger stages`)
+    return
+  }
 
   if (!matchesAccountFilter(account, config)) {
     console.log(`Skipping account ${account.id}: ${config.accountFilterField} is not one of this install's values`)

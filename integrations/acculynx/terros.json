@@ -25,9 +25,14 @@
           "description": "Optional. AccuLynx lead source ID for new jobs."
         },
         {
+          "name": "triggerStages",
+          "type": "string",
+          "description": "Optional comma-separated Terros stage names. Only accounts currently at one of these stages are sent. Matching ignores case and surrounding whitespace. Blank sends accounts at any stage."
+        },
+        {
           "name": "accountFilterField",
           "type": "string",
-          "description": "Optional. Dotted Terros account field, such as workflowState.workflowId, that decides which AccuLynx location an account belongs to. Blank sends every account."
+          "description": "Optional. Dotted Terros account field, such as owner.memberOf or owner.teamIds, that decides which AccuLynx location an account belongs to. Lists match when any team ID or name is allowed. Blank sends every account."
         },
         {
           "name": "accountFilterValues",
@@ -71,6 +76,12 @@
           "name": "accountSource",
           "type": "string",
           "description": "Terros accountSource to record on the account (defaults to 'AccuLynx')"
+        },
+        {
+          "name": "milestoneStageMapping",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Optional mapping from AccuLynx milestone names to Terros stage names. Matching ignores case; Dead and Cancelled are equivalent. When configured, milestones without a mapping are skipped. Without a mapping, the milestone name is used unchanged."
         }
       ],
       "authSchema": {

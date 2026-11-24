@@ -55,6 +55,68 @@ describe('receiveWebhook', () => {
     ])
   })
 
+  // Prevents a vendor milestone from selecting a same-named but unrelated Terros stage; sourceStatus still records
+  // the vendor's original value.
+  test('maps a milestone to the configured stage case-insensitively', async () => {
+    const { client } = fakeAccuLynx(linked)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent(),
+      {
+        workflowId: 'WF.example',
+        requestType: 'update',
+        milestoneStageMapping: { approved: 'Contract Signed' },
+      },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({
+      account: { workflowTarget: 'Contract Signed', sourceStatus: 'Approved' },
+    })
+  })
+
+  test('treats Dead and Cancelled as the same milestone when mapping', async () => {
+    const dead = {
+      ...linked,
+      'GET /jobs/job-1/milestones/current': {
+        body: { name: 'Dead', duration: { startDate: '2026-01-05T19:00:00Z' } },
+      },
+    }
+    const { client } = fakeAccuLynx(dead)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent(),
+      {
+        workflowId: 'WF.example',
+        requestType: 'update',
+        milestoneStageMapping: { Cancelled: 'Closed Lost' },
+      },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Closed Lost', sourceStatus: 'Dead' } })
+  })
+
+  // Prevents a new job's default milestone from moving an account to a stage that the install did not opt into.
+  test('skips an unmapped milestone without reading or writing the Terros account', async () => {
+    const { client, calls } = fakeAccuLynx(linked)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent(),
+      { workflowId: 'WF.example', requestType: 'upsert', milestoneStageMapping: { Completed: 'Work Complete' } },
+      client,
+      terros
+    )
+
+    expect(calls.map((call) => call.path)).toEqual(['/jobs/job-1/milestones/current'])
+    expect(upserts).toEqual([])
+  })
+
   // Prevents 'update' mode from creating accounts for jobs that were never sent from Terros.
   test("'update' skips a job with no Terros account", async () => {
     const { client } = fakeAccuLynx(unlinked)
