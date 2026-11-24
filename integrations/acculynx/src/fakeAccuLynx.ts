@@ -20,7 +20,7 @@ export function fakeClock(start = 0): Clock & { slept: number[] } {
 
 // AccuLynx client against canned replies keyed by "METHOD /path", or "METHOD /path?query" to answer one query only.
 // A key with several replies answers them in order.
-export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>) {
+export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>, diagnostics = false) {
   const calls: FakeCall[] = []
   const queues = new Map(
     Object.entries(replies).map(([key, value]) => [key, Array.isArray(value) ? [...value] : [value]])
@@ -42,7 +42,12 @@ export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>) {
   }) as typeof fetch
 
   const clock = fakeClock()
-  const client = new AccuLynxClient('key-example', { fetch: fakeFetch, clock, limiter: new RateLimiter(10, clock) })
+  const client = new AccuLynxClient('key-example', {
+    fetch: fakeFetch,
+    clock,
+    limiter: new RateLimiter(10, clock),
+    diagnostics,
+  })
   return { client, calls, clock }
 }
 

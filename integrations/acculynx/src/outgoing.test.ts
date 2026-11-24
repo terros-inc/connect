@@ -1,5 +1,5 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
-import { toAccuLynxJob, toAccuLynxPhone } from './records.ts'
+import { isTestModeOn, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
 import { sendAccount } from './outgoing.ts'
 import { fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
 
@@ -42,6 +42,7 @@ describe('sendAccount', () => {
       'POST /contacts',
       'POST /jobs',
       'POST /jobs/external-references',
+      'GET /jobs/job-1',
     ])
     expect(calls[0]!.body).toMatchObject({ searchTerm: 'Example', sort: { sortColumn: 'CreatedDate' } })
     expect(calls[1]!.body).toMatchObject({
@@ -66,7 +67,7 @@ describe('sendAccount', () => {
 
     await sendAccount(account(), { recordType: 'contact' }, client, terros)
 
-    expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts'])
+    expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
   })
 
@@ -85,7 +86,12 @@ describe('sendAccount', () => {
 
     await sendAccount(account(), { recordType: 'contact' }, client, terros)
 
-    expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts/search', '/contacts'])
+    expect(calls.map((call) => call.path)).toEqual([
+      '/contacts/search',
+      '/contacts/search',
+      '/contacts',
+      '/contacts/contact-1',
+    ])
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
   })
 
@@ -123,7 +129,107 @@ describe('sendAccount', () => {
       terros
     )
 
-    expect(calls).toHaveLength(2)
+    expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
+  })
+
+  // Prevents an install check from creating a customer-visible record or marking the Terros account as linked.
+  test('test mode checks the connection and logs exact payloads without any write', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const { client, calls } = fakeAccuLynx(
+      {
+        'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
+      },
+      true
+    )
+    const { terros, updates } = fakeTerros()
+
+    await sendAccount(
+      account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Sold' } }),
+      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: 'true' },
+      client,
+      terros
+    )
+
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /company-settings'])
+    expect(updates).toEqual([])
+    const output = log.mock.calls.flat().join('\n')
+    expect(output).toContain('connection check succeeded')
+    expect(output).toContain('DRY RUN: account Account.example qualifies')
+    expect(output).toContain('DRY RUN: contact payload')
+    expect(output).toContain('"crossReference":"Account.example"')
+    expect(output).toContain('DRY RUN: job payload')
+    expect(output).toContain('"id":"<created-contact-id>"')
+    expect(output).toContain('AccuLynx GET /company-settings -> 200')
+    log.mockRestore()
+  })
+
+  // Prevents test mode from hiding why an account would not send, which would make rollout validation ambiguous.
+  test('test mode logs every existing account skip reason and still makes no write', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const connection = { 'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } } }
+    const fake = fakeAccuLynx(connection, true)
+    const terros = fakeTerros()
+
+    await sendAccount(
+      account(),
+      { recordType: 'contact', triggerStages: 'Sold', testMode: 'on' },
+      fake.client,
+      terros.terros
+    )
+    await sendAccount(
+      account(),
+      {
+        recordType: 'contact',
+        accountFilterField: 'workflowState.workflowId',
+        accountFilterValues: 'WF.south',
+        testMode: 'yes',
+      },
+      fake.client,
+      terros.terros
+    )
+    await sendAccount(
+      account({ externalLeadId: 'contact-existing' }),
+      { recordType: 'contact', testMode: '1' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls.every((call) => call.method === 'GET' && call.path === '/company-settings')).toBe(true)
+    expect(terros.updates).toEqual([])
+    const output = log.mock.calls.flat().join('\n')
+    expect(output).toContain('current stage is not one of')
+    expect(output).toContain('workflowState.workflowId is not one of')
+    expect(output).toContain('already linked to AccuLynx record')
+    log.mockRestore()
+  })
+
+  // Prevents a bad key from being mistaken for a successful dry run and ensures diagnostics cannot echo the key.
+  test('a 401 connection check fails clearly and redacts the API key from every log', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const fake = fakeAccuLynx(
+      { 'GET /company-settings': { status: 401, body: { message: 'key-example is invalid' } } },
+      true
+    )
+
+    await expect(
+      sendAccount(account(), { recordType: 'contact', testMode: 'true' }, fake.client, fakeTerros().terros)
+    ).rejects.toThrow('401')
+
+    const output = [...log.mock.calls, ...error.mock.calls].flat().join('\n')
+    expect(output).toContain('API key is missing, invalid, or deactivated (401)')
+    expect(output).toContain('[REDACTED]')
+    expect(output).not.toContain('key-example')
+    log.mockRestore()
+    error.mockRestore()
+  })
+
+  // Prevents a misspelled safety switch from silently enabling live writes.
+  test('an unknown testMode value is logged and treated as on', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(isTestModeOn('ture')).toBe(true)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('treating it as true'))
+    error.mockRestore()
   })
 
   // Prevents early-stage accounts from being irreversibly created in AccuLynx while preserving stage names that
@@ -149,7 +255,7 @@ describe('sendAccount', () => {
 
     expect(skipped.calls).toEqual([])
     expect(skippedTerros.updates).toEqual([])
-    expect(sent.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts'])
+    expect(sent.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
   })
 
   // Prevents an account belonging to several teams from being skipped or routed to the wrong location, and proves
@@ -205,7 +311,7 @@ describe('sendAccount', () => {
       fakeTerros().terros
     )
 
-    expect(matching.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts'])
+    expect(matching.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
     expect(wrongStage.calls).toEqual([])
     expect(wrongMarket.calls).toEqual([])
   })
@@ -266,6 +372,7 @@ describe('sendAccount', () => {
       'GET /contacts/contact-1/jobs',
       'POST /jobs',
       'POST /jobs/external-references',
+      'GET /jobs/job-1',
     ])
     expect(calls[2]!.body).toMatchObject({ contact: { id: 'contact-1' } })
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'job-1' } }])
@@ -333,6 +440,30 @@ describe('sendAccount', () => {
       '/jobs/external-references',
     ])
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'job-1' } }])
+  })
+
+  // Prevents a diagnostic read-back from blocking the durable Terros link, including AccuLynx's known unassigned-job gap.
+  test('job read-back confirms a readable create and tolerates an unassigned job', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const readable = fakeAccuLynx({
+      ...created,
+      'POST /jobs': { status: 201, body: { id: 'job-1', _link: '/jobs/job-1' } },
+      'GET /jobs/job-1': { body: { id: 'job-1' } },
+    })
+    const readableTerros = fakeTerros()
+    await sendAccount(account(), { recordType: 'job' }, readable.client, readableTerros.terros)
+
+    const unassigned = fakeAccuLynx(created)
+    const unassignedTerros = fakeTerros()
+    await sendAccount(account(), { recordType: 'job' }, unassigned.client, unassignedTerros.terros)
+
+    expect(readableTerros.updates).toHaveLength(1)
+    expect(unassignedTerros.updates).toHaveLength(1)
+    const output = log.mock.calls.flat().join('\n')
+    expect(output).toContain('link=/jobs/job-1')
+    expect(output).toContain('Confirmed AccuLynx job job-1 is readable after create')
+    expect(output).toContain('created but is not yet readable (likely unassigned)')
+    log.mockRestore()
   })
 })
 

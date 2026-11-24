@@ -22,6 +22,12 @@ export type AccuLynxAddress = {
   state?: { abbreviation?: string }
 }
 export type AccuLynxContact = { id?: string; crossReference?: string }
+export type AccuLynxCompanySettings = {
+  companyId?: string
+  name?: string
+  timeZoneInfo?: unknown
+  hasInsurance?: boolean
+}
 export type AccuLynxMilestone = { name?: string; duration?: { startDate?: string } }
 export type AccuLynxJob = {
   id?: string
@@ -42,12 +48,14 @@ type ClientOptions = {
   fetch?: typeof fetch
   clock?: Clock
   limiter?: RateLimiter
+  diagnostics?: boolean
 }
 
 export class AccuLynxClient {
   private readonly fetch: typeof fetch
   private readonly clock: Clock
   private readonly limiter: RateLimiter
+  private readonly diagnostics: boolean
 
   constructor(
     private readonly apiKey: string,
@@ -56,6 +64,15 @@ export class AccuLynxClient {
     this.fetch = options.fetch ?? fetch
     this.clock = options.clock ?? systemClock
     this.limiter = options.limiter ?? limiterForKey(apiKey)
+    this.diagnostics = options.diagnostics ?? false
+  }
+
+  getCompanySettings(): Promise<AccuLynxCompanySettings> {
+    return this.request('GET', '/company-settings') as Promise<AccuLynxCompanySettings>
+  }
+
+  safeLogValue(value: unknown): string {
+    return JSON.stringify(value).split(this.apiKey).join('[REDACTED]')
   }
 
   createContact(contact: Record<string, unknown>): Promise<AccuLynxCreated> {
@@ -111,6 +128,15 @@ export class AccuLynxClient {
     return (result?.items ?? []).map((job) => job.id).filter((id): id is string => !!id)
   }
 
+  async getContact(contactId: string): Promise<AccuLynxContact | undefined> {
+    try {
+      return (await this.request('GET', `/contacts/${encodeURIComponent(contactId)}`)) as AccuLynxContact
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 404) return undefined
+      throw error
+    }
+  }
+
   // Undefined when this key cannot see the job: it is in another location, does not exist, or is not returned.
   async getCurrentJobMilestone(jobId: string): Promise<AccuLynxMilestone | undefined> {
     try {
@@ -152,6 +178,12 @@ export class AccuLynxClient {
         body: body === undefined ? undefined : JSON.stringify(body),
       })
 
+      const text = await response.text()
+      const summary = summarizeBody(text, this.apiKey)
+      if (this.diagnostics) {
+        console.log(`AccuLynx ${method} ${path} -> ${response.status}; body: ${summary}`)
+      }
+
       if (response.status === 429 && attempt < maxAttempts) {
         const waitMs = getRetryWaitMs(response.headers)
         console.log(`AccuLynx ${method} ${path} was rate limited; retrying in ${waitMs}ms`)
@@ -160,17 +192,21 @@ export class AccuLynxClient {
       }
 
       if (!response.ok) {
-        const text = await response.text()
         throw new AccuLynxError(
-          `AccuLynx ${method} ${path} failed: ${response.status} ${response.statusText} ${text}`,
+          `AccuLynx ${method} ${path} failed: ${response.status} ${response.statusText}; body: ${summary}`,
           response.status
         )
       }
 
-      const text = await response.text()
       return text ? JSON.parse(text) : undefined
     }
   }
+}
+
+function summarizeBody(text: string, apiKey: string): string {
+  if (!text) return '<empty>'
+  const redacted = text.split(apiKey).join('[REDACTED]')
+  return redacted.length > 300 ? `${redacted.slice(0, 300)}…` : redacted
 }
 
 function getRetryWaitMs(headers: Headers): number {
