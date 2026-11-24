@@ -18,6 +18,7 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
    - `triggerStages` (optional): comma-separated Terros stage names at which accounts are sent. Names match case-insensitively after trimming; blank preserves the previous behavior of sending at any stage.
    - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location. A list field such as `owner.memberOf` or `owner.teamIds` matches when any team ID or name exactly matches a configured value.
    - `addressCountry`: the location's two-letter country code, such as `US`, so jobs get an address.
+   - `testMode` (optional, off by default): type `true`, `yes`, `on`, or `1` to validate the API key and preview Send without writing anything. Blank, `false`, `no`, `off`, or `0` is off. Any other text is treated as on and logged so a typo cannot accidentally enable writes.
 3. **AccuLynx Webhook** config:
    - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
    - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)).
@@ -35,6 +36,12 @@ AccuLynx API keys are created per location by an AccuLynx admin (Account Setting
 - **Webhook:** each install has its own AccuLynx subscription ([Install and configure](#install-and-configure), step 5), and `subscriptionId` makes it refuse other subscriptions' events.
 
 Job addresses: AccuLynx needs a country with every job address and Terros addresses have none. Set `addressCountry` (such as `US` or `CA`) on each Send install to the country of that location's jobs. Without it, jobs are created with no address rather than a guessed country.
+
+## Test mode and send confirmation
+
+Turn `testMode` on for a safe install check. Each Send run makes one read-only `GET /company-settings` request and logs whether the key works and the AccuLynx company/location it belongs to. It then logs the stage, filter and linked-record decisions for the account. A qualifying account is prefixed with `DRY RUN:` and includes the exact contact payload and, for `recordType: job`, the job payload with `<created-contact-id>` standing in for the ID AccuLynx would return. Skipped accounts log their reason. Test mode makes no AccuLynx or Terros writes, including no `externalLeadId` update. Request summaries contain only the method, path, status and a short response-body summary; credentials and authorization headers are never logged.
+
+After a normal-mode create, Send logs the returned ID and link, then reads the final contact or job back. A new unassigned job may not be returned by AccuLynx yet; Send logs that likely-unassigned case and still saves `externalLeadId`. Any other read-back failure is also diagnostic only and does not fail an otherwise successful delivery.
 
 ## Webhook authentication
 

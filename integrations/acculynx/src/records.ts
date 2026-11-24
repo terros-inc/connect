@@ -11,6 +11,21 @@ export type AccuLynxSendConfig = {
   accountFilterValues?: string
   triggerStages?: string
   addressCountry?: string
+  testMode?: string
+}
+
+const offSwitchValues = ['', 'false', 'no', 'off', '0']
+const onSwitchValues = ['true', 'yes', 'on', '1']
+
+// Unknown values fail safe: a misspelled test-mode value must never enable writes.
+export function isTestModeOn(value: string | boolean | undefined): boolean {
+  if (typeof value === 'boolean') return value
+  const text = (value ?? '').trim().toLowerCase()
+  if (offSwitchValues.includes(text)) return false
+  if (!onSwitchValues.includes(text)) {
+    console.error(`Config testMode is "${value}", expected true or false; treating it as true`)
+  }
+  return true
 }
 
 // Neither record type is a default: the install must say which one it sends.

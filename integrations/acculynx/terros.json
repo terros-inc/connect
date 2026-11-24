@@ -43,6 +43,11 @@
           "name": "addressCountry",
           "type": "string",
           "description": "Optional. Two-letter country code (such as US or CA) of this location's job addresses. Terros addresses carry no country and AccuLynx needs one, so without it jobs are created with no address."
+        },
+        {
+          "name": "testMode",
+          "type": "string",
+          "description": "Safety switch, off by default. Type true to check the API key and log qualifying accounts, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros. Blank, false, no, off, or 0 runs normally; any other text counts as on so a typo cannot enable writes."
         }
       ],
       "authSchema": {
