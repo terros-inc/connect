@@ -2,10 +2,10 @@
 
 Connects a Terros company to AccuLynx through the [AccuLynx API v2](https://apidocs.acculynx.com). Two scripts; a company turns on the direction(s) it needs. Neither direction is on by default.
 
-| Script           | Slug               | Direction         | What it does                                                                                                                                                                                                                          |
-| ---------------- | ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | The first time an account is sent, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it (`recordType: job`), and saves the new ID as the account's `externalLeadId`. Linked accounts are not sent again. |
-| AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives `job.milestone.current_changed` events and sets the Terros account's stage (`workflowTarget`) to the milestone name. Other topics are logged and ignored.                                                                    |
+| Script           | Slug               | Direction         | What it does                                                                                                                                                                                                                     |
+| ---------------- | ------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | At configured trigger stages, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it (`recordType: job`), and saves the new ID as the account's `externalLeadId`. Linked accounts are not sent again. |
+| AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives `job.milestone.current_changed` events and sets the Terros account's stage (`workflowTarget`) from the configured milestone mapping. Other topics and unmapped milestones are logged and ignored.                       |
 
 ## Install and configure
 
@@ -15,12 +15,14 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
 2. **AccuLynx Send** config:
    - `recordType` (required): `contact` or `job`.
    - `contactTypeId`, `leadSourceId` (optional): AccuLynx IDs for new contacts and jobs.
-   - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location.
+   - `triggerStages` (optional): comma-separated Terros stage names at which accounts are sent. Names match case-insensitively after trimming; blank preserves the previous behavior of sending at any stage.
+   - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location. A list field such as `owner.memberOf` or `owner.teamIds` matches when any team ID or name exactly matches a configured value.
    - `addressCountry`: the location's two-letter country code, such as `US`, so jobs get an address.
 3. **AccuLynx Webhook** config:
    - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
    - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)).
    - `accountSource` (optional): defaults to `AccuLynx`.
+   - `milestoneStageMapping` (optional): maps AccuLynx milestone names to Terros stage names. Milestone names match case-insensitively, and `Dead` and `Cancelled` are equivalent. When a mapping is configured, unmapped milestones are skipped; without one, the milestone name is used unchanged.
    - `subscriptionId`: from step 5.
 4. **Webhook URL.** `https://<terros-api>/connect/incoming/<installId>/acculynx-webhook?apiKey=<dedicated low-privilege Terros key>`. The Webhook's Terros calls run as that key, so use a key owned by a user of the install's company, made for this webhook alone and limited to `account:list` and `account:save`, plus `account:add` when `requestType` is `upsert`; it travels in the URL, so it must grant nothing else.
 5. **Subscription.** Create the location's AccuLynx subscription to that URL for topic `job.milestone.current_changed` (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key), and copy the returned subscription ID into `subscriptionId`.
@@ -29,7 +31,7 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
 
 AccuLynx API keys are created per location by an AccuLynx admin (Account Settings > API Keys). Install the app once per location, with that location's key as the `apiKey` secret on both scripts.
 
-- **Send:** with more than one location, set `accountFilterField` (a dotted Terros account field such as `workflowState.workflowId`) and `accountFilterValues` (comma-separated) so each install sends only its own accounts. Without a filter an install sends every account.
+- **Send:** with more than one location, set `accountFilterField` (a dotted Terros account field such as `owner.memberOf` or `owner.teamIds`) and `accountFilterValues` (comma-separated team IDs or names) so each install sends only its own accounts. A list matches when any element matches an allowed value. Plain string fields retain exact matching. Without a filter an install sends every account. `triggerStages` is a separate condition, so an account must pass both settings when both are configured.
 - **Webhook:** each install has its own AccuLynx subscription ([Install and configure](#install-and-configure), step 5), and `subscriptionId` makes it refuse other subscriptions' events.
 
 Job addresses: AccuLynx needs a country with every job address and Terros addresses have none. Set `addressCountry` (such as `US` or `CA`) on each Send install to the country of that location's jobs. Without it, jobs are created with no address rather than a guessed country.

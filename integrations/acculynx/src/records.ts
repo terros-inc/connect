@@ -9,6 +9,7 @@ export type AccuLynxSendConfig = {
   leadSourceId?: string
   accountFilterField?: string
   accountFilterValues?: string
+  triggerStages?: string
   addressCountry?: string
 }
 
@@ -29,7 +30,15 @@ export function matchesAccountFilter(account: AccountWebhookData, config: AccuLy
 
   const allowed = splitList(config.accountFilterValues)
   const value = getPathValue(account as Record<string, unknown>, field)
-  return value !== undefined && value !== null && allowed.includes(String(value))
+  if (!Array.isArray(value)) return value !== undefined && value !== null && allowed.includes(String(value))
+
+  return value.some((item) => getListFilterValues(item).some((candidate) => allowed.includes(candidate)))
+}
+
+export function matchesTriggerStage(account: AccountWebhookData, config: AccuLynxSendConfig): boolean {
+  const stages = splitList(config.triggerStages).map(normalizeName)
+  if (stages.length === 0) return true
+  return stages.includes(normalizeName(account.workflowState?.stageName))
 }
 
 export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxSendConfig): Record<string, unknown> {
@@ -165,6 +174,20 @@ export function splitList(value: string | undefined): string[] {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function getListFilterValues(value: unknown): string[] {
+  if (value === undefined || value === null) return []
+  if (typeof value !== 'object') return [String(value)]
+
+  const item = value as Record<string, unknown>
+  return [item.teamId, item.name].filter((candidate) => candidate !== undefined && candidate !== null).map(String)
+}
+
+function normalizeName(value: unknown): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
 }
 
 function getPathValue(source: Record<string, unknown>, path: string): unknown {
