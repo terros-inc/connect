@@ -25,3 +25,39 @@ it('accepts a three-part permission', () => {
   }
   expect(ConnectConfig.safeParse(manifest).success).toBe(true)
 })
+
+it('accepts boolean, select, and entity picker config fields', () => {
+  const script = { name: 'Sync', entrypoint: 'src/sync.ts', type: 'scheduled', cron: '0 * * * ? *' }
+  const manifest = {
+    appId: 'App.example',
+    scripts: [
+      {
+        ...script,
+        configSchema: [
+          { name: 'Enabled', type: 'boolean' },
+          { name: 'Region', type: 'select', options: ['North', 'South'] },
+          { name: 'Team', type: 'team' },
+          { name: 'Stage', type: 'workflow-stage' },
+          { name: 'Owner', type: 'user' },
+        ],
+        authSchema: {},
+        permissions: [],
+      },
+    ],
+  }
+
+  expect(ConnectConfig.safeParse(manifest).success).toBe(true)
+})
+
+it.each([
+  { name: 'missing options', field: { name: 'Region', type: 'select' } },
+  { name: 'empty options', field: { name: 'Region', type: 'select', options: [] } },
+])('rejects a select field with $name', ({ field }) => {
+  const script = { name: 'Sync', entrypoint: 'src/sync.ts', type: 'scheduled', cron: '0 * * * ? *' }
+  const manifest = {
+    appId: 'App.example',
+    scripts: [{ ...script, configSchema: [field], authSchema: {}, permissions: [] }],
+  }
+
+  expect(ConnectConfig.safeParse(manifest).success).toBe(false)
+})

@@ -11,7 +11,16 @@ export const ScriptDataType = z.enum(['Account', 'Company', 'User', 'Event', 'Sc
 
 export const ConfigMappingDataType = z.enum(['None', 'Account', 'User', 'Event'])
 
-export const ConfigFieldType = z.enum(['string', 'number', 'mapping'])
+export const ConfigFieldType = z.enum([
+  'string',
+  'number',
+  'mapping',
+  'boolean',
+  'select',
+  'team',
+  'workflow-stage',
+  'user',
+])
 
 const ConfigSchemaFieldBase = z.object({
   name: z.string(),
@@ -32,6 +41,27 @@ export const ConfigSchemaField = z.discriminatedUnion('type', [
   }),
   ConfigSchemaFieldBase.extend({
     type: ConfigFieldType.extract(['mapping']),
+    customFieldAccess: z.never().optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['boolean']),
+    customFieldAccess: z.never().optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['select']),
+    options: z.array(z.string()).min(1),
+    customFieldAccess: z.never().optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['team']),
+    customFieldAccess: z.never().optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['workflow-stage']),
+    customFieldAccess: z.never().optional(),
+  }),
+  ConfigSchemaFieldBase.extend({
+    type: ConfigFieldType.extract(['user']),
     customFieldAccess: z.never().optional(),
   }),
 ])
