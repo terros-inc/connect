@@ -32,8 +32,9 @@ describe('sendAccount', () => {
   // Prevents a job without its contact, an unlinked account (sent again on every change), or a job the
   // webhook cannot trace back to the account.
   test("recordType 'job' creates the contact, a job for it, links the account, and tags the job", async () => {
-    const { client, calls } = fakeAccuLynx(created)
+    const { client, calls, clock } = fakeAccuLynx(created)
     const { terros, updates } = fakeTerros()
+    await clock.sleep(Date.parse('2026-01-02T23:30:00Z'))
 
     await sendAccount(account(), { recordType: 'job', addressCountry: 'US' }, client, terros)
 
@@ -44,7 +45,12 @@ describe('sendAccount', () => {
       'POST /jobs/external-references',
       'GET /jobs/job-1',
     ])
-    expect(calls[0]!.body).toMatchObject({ searchTerm: 'Example', sort: { sortColumn: 'CreatedDate' } })
+    expect(calls[0]!.body).toMatchObject({
+      searchTerm: 'Example',
+      startDate: '2025-12-31',
+      endDate: '2026-01-03',
+      sort: { sortColumn: 'CreatedDate' },
+    })
     expect(calls[1]!.body).toMatchObject({
       firstName: 'Pat',
       lastName: 'Example',

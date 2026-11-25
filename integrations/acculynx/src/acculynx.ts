@@ -12,6 +12,10 @@ const searchPageSize = 25
 const maxSearchPages = 4
 const dayMs = 24 * 60 * 60 * 1000
 
+function toUtcCalendarDate(timestamp: number): string {
+  return new Date(timestamp).toISOString().slice(0, 10)
+}
+
 export type AccuLynxCreated = { id?: string; _link?: string }
 export type AccuLynxExternalReference = { jobId?: string; source?: string; projectId?: string }
 export type AccuLynxAddress = {
@@ -96,8 +100,8 @@ export class AccuLynxClient {
   ): Promise<AccuLynxContact | undefined> {
     const body = {
       ...(searchTerm ? { searchTerm } : {}),
-      startDate: new Date(createdSince).toISOString(),
-      endDate: new Date(this.clock.now() + dayMs).toISOString(),
+      startDate: toUtcCalendarDate(createdSince),
+      endDate: toUtcCalendarDate(this.clock.now() + dayMs),
       sort: { sortColumn: 'CreatedDate', sortDirection: 'Descending' },
     }
     for (let page = 0; page < maxSearchPages; page++) {
