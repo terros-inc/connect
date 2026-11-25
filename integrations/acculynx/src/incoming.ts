@@ -107,22 +107,21 @@ async function resolveCloser(
   accuLynx: AccuLynxClient,
   terros: Pick<TerrosClient, 'user'>
 ): Promise<SmallUser | undefined> {
-  try {
-    const representative = await accuLynx.getJobCompanyRepresentative(jobId)
-    const representativeUserId = representative?.user?.id
-    if (!representativeUserId) return undefined
+  const representative = await accuLynx.getJobCompanyRepresentative(jobId)
+  const representativeUserId = representative?.user?.id
+  if (!representativeUserId) return undefined
 
-    const representativeUser = await accuLynx.getUser(representativeUserId)
-    return representativeUser?.email ? await findTerrosUser(representativeUser.email, terros) : undefined
-  } catch {
-    console.log(`Skipping closer update for AccuLynx job ${jobId}: representative lookup failed`)
-    return undefined
-  }
+  const representativeUser = await accuLynx.getUser(representativeUserId)
+  return representativeUser?.email ? await findTerrosUser(representativeUser.email, terros) : undefined
 }
 
 async function findTerrosUser(email: string, terros: Pick<TerrosClient, 'user'>): Promise<SmallUser | undefined> {
   const response = await terros.user.list({ showArchived: false })
-  if (response.type !== 'success') return undefined
+  if (response.type !== 'success') {
+    const error = (response as unknown as { error?: string }).error ?? 'unknown error'
+    console.log(`Terros user lookup failed: ${error}`)
+    return undefined
+  }
   const normalizedEmail = email.trim().toLowerCase()
   return response.users.find((user: SmallUser) => user.email.trim().toLowerCase() === normalizedEmail)
 }

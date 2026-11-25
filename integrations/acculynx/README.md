@@ -72,7 +72,7 @@ A delivery can fail partway and be retried, so Send looks for what an earlier at
 
 ## Rate limit
 
-AccuLynx allows 10 requests per second per key. Every call waits for a slot in a per-key one-second window, and a `429` is retried up to three times after `Retry-After` (capped at 5 seconds). The window is shared by runs in the same runtime only; separate runtimes do not coordinate. A Send run makes up to four contact searches, then a job list and one reference lookup per job on a contact found again, then up to two creates; a Webhook run makes at most three.
+AccuLynx allows 10 requests per second per key. Every call waits for a slot in a per-key one-second window, and a `429` is retried up to three times after `Retry-After` (capped at 5 seconds). The window is shared by runs in the same runtime only; separate runtimes do not coordinate. A Send run makes up to four contact searches, then a job list and one reference lookup per job on a contact found again, then up to two creates. A Webhook run makes up to four requests for a linked job (milestone, references, representative, and representative user) or five for an unlinked upsert (plus the job).
 
 ## Linking jobs and accounts
 

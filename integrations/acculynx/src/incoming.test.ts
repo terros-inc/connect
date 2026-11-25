@@ -321,17 +321,18 @@ describe('receiveWebhook', () => {
         'GET /users/user-1': { status: 500 },
       },
     ],
-  ])('still applies the account update when %s fails', async (_case, replies) => {
+  ])('fails the delivery when %s fails', async (_case, replies) => {
     const { client } = fakeAccuLynx(replies)
     const { terros, upserts } = fakeTerros()
 
-    await receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'update' }, client, terros)
+    await expect(
+      receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'update' }, client, terros)
+    ).rejects.toThrow()
 
-    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved' } })
-    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
+    expect(upserts).toEqual([])
   })
 
-  test('still applies the account update when the Terros user lookup fails', async () => {
+  test('fails the delivery when the Terros user lookup fails', async () => {
     const { client } = fakeAccuLynx({
       ...linked,
       'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
@@ -343,6 +344,31 @@ describe('receiveWebhook', () => {
       user: { list: async () => Promise.reject(new Error('user lookup failed')) },
     }
 
+    await expect(
+      receiveWebhook(
+        milestoneEvent(),
+        { workflowId: 'WF.example', requestType: 'update' },
+        client,
+        failingTerros as never
+      )
+    ).rejects.toThrow('user lookup failed')
+
+    expect(upserts).toEqual([])
+  })
+
+  test('logs a Terros user API error and leaves the closer unchanged', async () => {
+    const { client } = fakeAccuLynx({
+      ...linked,
+      'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
+      'GET /users/user-1': { body: { email: 'user@example.test' } },
+    })
+    const { terros, upserts } = fakeTerros()
+    const failingTerros = {
+      ...(terros as object),
+      user: { list: async () => ({ type: 'error', error: 'not_authorized' }) },
+    }
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
     await receiveWebhook(
       milestoneEvent(),
       { workflowId: 'WF.example', requestType: 'update' },
@@ -350,8 +376,9 @@ describe('receiveWebhook', () => {
       failingTerros as never
     )
 
-    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved' } })
+    expect(log).toHaveBeenCalledWith('Terros user lookup failed: not_authorized')
     expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
+    log.mockRestore()
   })
 
   // Prevents creating blank accounts for jobs started in AccuLynx.
