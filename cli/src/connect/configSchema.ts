@@ -117,8 +117,18 @@ export const UnsavedScript = z.discriminatedUnion('type', [
 ])
 export type UnsavedScript = z.infer<typeof UnsavedScript>
 
+export const AppRepository = z.object({
+  url: z
+    .string()
+    .regex(/^https:\/\//)
+    .url(),
+  directory: z.string().min(1).optional(),
+})
+export type AppRepository = z.infer<typeof AppRepository>
+
 export const ConnectConfig = z.object({
   appId: z.string(),
+  repository: AppRepository.optional(),
   scripts: z.array(UnsavedScript),
 })
 export type ConnectConfig = z.infer<typeof ConnectConfig>
