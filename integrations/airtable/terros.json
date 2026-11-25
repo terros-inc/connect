@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.0XMK5bwnhhD-xWNU1h8a-",
+  "repository": { "url": "https://github.com/terros-inc/connect/tree/main/integrations/airtable" },
   "scripts": [
     {
       "name": "Airtable Sync",

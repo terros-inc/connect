@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.qF9UCV5_u2HWQnmvTYStV",
+  "repository": { "url": "https://github.com/terros-inc/connect/tree/main/integrations/terros-mirror" },
   "scripts": [
     {
       "name": "Terros Mirror Account Copy",
