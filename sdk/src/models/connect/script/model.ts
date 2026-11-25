@@ -9,7 +9,7 @@ type ConfigSchemaFieldBase = {
 export type ConfigSchemaField =
   | (ConfigSchemaFieldBase & { type: 'string'; customFieldAccess?: 'read' | 'write' })
   | (ConfigSchemaFieldBase & { type: 'number' | 'mapping' | 'boolean' | 'team' | 'workflow-stage' | 'user' })
-  | (ConfigSchemaFieldBase & { type: 'select'; options: string[] })
+  | (ConfigSchemaFieldBase & { type: 'select'; options: [string, ...string[]] })
 
 export type AuthSchemaField =
   | string
