@@ -18,7 +18,7 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
    - `triggerStages` (optional): comma-separated Terros stage names at which accounts are sent. Names match case-insensitively after trimming; blank preserves the previous behavior of sending at any stage.
    - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location. For a team field (`owner.teamIds`, `owner.memberOf`, `teamId`, or `team`), an assigned account `teamId` is matched by itself. If the account has no assigned team, the configured field is used as the fallback. A list field matches when any team ID or name exactly matches a configured value.
    - `addressCountry`: an optional fallback two-letter country code, such as `US`, for Account webhooks that omit country.
-   - `testMode` (optional, off by default): type `true`, `yes`, `on`, or `1` to validate the API key and preview Send without writing anything. Blank, `false`, `no`, `off`, or `0` is off. Any other text is treated as on and logged so a typo cannot accidentally enable writes.
+   - `testMode` (optional, off by default): turn on to validate the API key and preview Send without writing anything. Existing installs with a legacy text value continue to accept `true`, `yes`, `on`, or `1` as on and `false`, `no`, `off`, or `0` as off, ignoring case and surrounding whitespace. Any other legacy text is treated as on and logged so a typo cannot accidentally enable writes.
 3. **AccuLynx Webhook** config:
    - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
    - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)).
