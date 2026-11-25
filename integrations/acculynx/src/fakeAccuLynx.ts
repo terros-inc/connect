@@ -1,7 +1,7 @@
 import { type Clock, RateLimiter } from './rateLimit.ts'
 import { AccuLynxClient } from './acculynx.ts'
 
-export type FakeCall = { method: string; path: string; body?: unknown }
+export type FakeCall = { method: string; path: string; query: string; body?: unknown }
 type FakeReply = { status?: number; body?: unknown; headers?: Record<string, string> }
 
 // A clock whose sleep moves time forward at once, so rate-limit waits are instant and measurable.
@@ -30,7 +30,7 @@ export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>, d
     const { pathname, search } = new URL(url)
     const path = pathname.replace('/api/v2', '')
     const method = init.method ?? 'GET'
-    calls.push({ method, path, body: init.body ? JSON.parse(String(init.body)) : undefined })
+    calls.push({ method, path, query: search, body: init.body ? JSON.parse(String(init.body)) : undefined })
 
     const queue = queues.get(`${method} ${path}${search}`) ?? queues.get(`${method} ${path}`)
     const reply = (queue && queue.length > 1 ? queue.shift() : queue?.[0]) ?? { status: 404 }
@@ -48,7 +48,11 @@ export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>, d
     limiter: new RateLimiter(10, clock),
     diagnostics,
   })
-  return { client, calls, clock }
+  return { client, calls, clock, fetch: fakeFetch }
+}
+
+export function contactTypes(...items: { id: string; name: string; isDefault: boolean }[]): FakeReply {
+  return { body: { items } }
 }
 
 // Records Terros account calls and answers success.

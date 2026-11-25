@@ -11,7 +11,7 @@ import {
   toAccuLynxContact,
   toAccuLynxJob,
 } from './records.ts'
-import { AccuLynxClient, AccuLynxError } from './acculynx.ts'
+import { AccuLynxClient, AccuLynxError, type AccuLynxContactType } from './acculynx.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook, void, AccuLynxSendConfig>(async (input, client) => {
   const payload = input.context.payload
@@ -50,7 +50,7 @@ export async function sendAccount(
   terros: Pick<TerrosClient, 'account'>,
   testMode = isTestModeOn(config.testMode)
 ): Promise<void> {
-  if (testMode) await checkConnection(accuLynx)
+  const availableContactTypes = testMode ? await checkConnection(accuLynx, !config.contactTypeId?.trim()) : undefined
 
   const recordType = getRecordType(config.recordType)
   getAddressCountry(undefined, config.addressCountry) // Refuses a bad fallback before anything is created.
@@ -77,8 +77,10 @@ export async function sendAccount(
     return
   }
 
+  const contactTypeId = await resolveContactTypeId(config.contactTypeId, accuLynx, availableContactTypes, testMode)
+
   if (testMode) {
-    const contact = toAccuLynxContact(account, config)
+    const contact = toAccuLynxContact(account, contactTypeId)
     console.log(`DRY RUN: account ${account.id} qualifies for AccuLynx ${recordType}`)
     console.log(`DRY RUN: contact payload ${JSON.stringify(contact)}`)
     if (recordType === 'job') {
@@ -87,7 +89,7 @@ export async function sendAccount(
     return
   }
 
-  const contact = await findOrCreateContact(account, config, accuLynx)
+  const contact = await findOrCreateContact(account, contactTypeId, accuLynx)
   const externalLeadId = recordType === 'job' ? await findOrCreateJob(account, contact, config, accuLynx) : contact.id
   await readBackCreatedRecord(recordType, externalLeadId, accuLynx)
   const updated = await terros.account.update({ account: { accountId: account.id, externalLeadId } })
@@ -97,13 +99,35 @@ export async function sendAccount(
   console.log(`Saved AccuLynx ${recordType} ${externalLeadId} on Terros account ${account.id}`)
 }
 
-export async function checkConnection(accuLynx: AccuLynxClient): Promise<void> {
+export async function checkConnection(
+  accuLynx: AccuLynxClient,
+  listContactTypes = false
+): Promise<AccuLynxContactType[]> {
   try {
     const settings = await accuLynx.getCompanySettings()
     console.log(
       `TEST MODE: AccuLynx connection check succeeded for company/location ${accuLynx.safeLogValue(settings.name ?? '<unnamed>')} ` +
         `(${accuLynx.safeLogValue(settings.companyId ?? '<no company id>')})`
     )
+    if (!listContactTypes) return []
+
+    let contactTypes: AccuLynxContactType[]
+    try {
+      contactTypes = await accuLynx.listContactTypes()
+    } catch (error) {
+      throw Error(
+        `Cannot resolve required contactTypeId setting: AccuLynx contact types could not be listed; ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error }
+      )
+    }
+    console.log(
+      `TEST MODE: available AccuLynx contact types ${accuLynx.safeLogValue(
+        contactTypes.map(({ name, isDefault }) => ({ name: name ?? '<unnamed>', isDefault: Boolean(isDefault) }))
+      )}`
+    )
+    return contactTypes
   } catch (error) {
     if (error instanceof AccuLynxError && error.status === 401) {
       console.error('TEST MODE: AccuLynx connection check failed: API key is missing, invalid, or deactivated (401)')
@@ -114,6 +138,57 @@ export async function checkConnection(accuLynx: AccuLynxClient): Promise<void> {
     }
     throw error
   }
+}
+
+type ContactTypeChoice = { id: string; reason: 'default named Customer' | 'first default' }
+
+async function resolveContactTypeId(
+  configuredId: string | undefined,
+  accuLynx: AccuLynxClient,
+  availableContactTypes?: AccuLynxContactType[],
+  diagnostics = false
+): Promise<string> {
+  const trimmedConfiguredId = configuredId?.trim()
+  if (trimmedConfiguredId) {
+    if (diagnostics) {
+      console.log(
+        `Using configured AccuLynx contact type ${accuLynx.safeLogValue(trimmedConfiguredId)} (configured ID)`
+      )
+    }
+    return trimmedConfiguredId
+  }
+
+  let contactTypes: AccuLynxContactType[]
+  try {
+    contactTypes = availableContactTypes ?? (await accuLynx.listContactTypes())
+  } catch (error) {
+    throw Error(
+      `Cannot resolve required contactTypeId setting: AccuLynx contact types could not be listed; ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    )
+  }
+
+  const choice = chooseDefaultContactType(contactTypes)
+  if (!choice) {
+    throw Error('Cannot resolve required contactTypeId setting: AccuLynx returned no default contact type')
+  }
+  if (diagnostics) {
+    console.log(`Using AccuLynx contact type ${accuLynx.safeLogValue(choice.id)} (${choice.reason})`)
+  }
+  return choice.id
+}
+
+function chooseDefaultContactType(contactTypes: AccuLynxContactType[]): ContactTypeChoice | undefined {
+  const defaults = contactTypes.filter(
+    (contactType): contactType is AccuLynxContactType & { id: string } =>
+      contactType.isDefault === true && !!contactType.id
+  )
+  const customer = defaults.find((contactType) => contactType.name?.trim().toLowerCase() === 'customer')
+  if (customer) return { id: customer.id, reason: 'default named Customer' }
+  if (defaults[0]) return { id: defaults[0].id, reason: 'first default' }
+  return undefined
 }
 
 async function readBackCreatedRecord(
@@ -141,10 +216,10 @@ type Found = { id: string; existed: boolean }
 
 async function findOrCreateContact(
   account: AccountWebhookData,
-  config: AccuLynxSendConfig,
+  contactTypeId: string,
   accuLynx: AccuLynxClient
 ): Promise<Found> {
-  const contact = toAccuLynxContact(account, config)
+  const contact = toAccuLynxContact(account, contactTypeId)
   const existing = await accuLynx.findContactByCrossReference(
     account.id,
     getContactSearchTerm(contact),
