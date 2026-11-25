@@ -16,6 +16,8 @@ export type AccuLynxSendConfig = {
 
 const offSwitchValues = ['', 'false', 'no', 'off', '0']
 const onSwitchValues = ['true', 'yes', 'on', '1']
+const teamFilterFields = new Set(['owner.teamIds', 'owner.memberOf', 'teamId', 'team'])
+const unassignedTeamId = 'Team.unassigned'
 
 // Unknown values fail safe: a misspelled test-mode value must never enable writes.
 export function isTestModeOn(value: string | boolean | undefined): boolean {
@@ -39,11 +41,34 @@ export function getRecordType(value: string | undefined): AccuLynxRecordType {
 
 // One install per AccuLynx location. When a customer has several locations, each install sends only the accounts
 // whose accountFilterField value is listed in accountFilterValues. With no filter the install sends every account.
-export function matchesAccountFilter(account: AccountWebhookData, config: AccuLynxSendConfig): boolean {
+export function matchesAccountFilter(
+  account: AccountWebhookData,
+  config: AccuLynxSendConfig,
+  diagnostics = false
+): boolean {
   const field = config.accountFilterField?.trim()
   if (!field) return true
 
   const allowed = splitList(config.accountFilterValues)
+  if (teamFilterFields.has(field)) {
+    const accountTeamId = account.teamId?.trim()
+    if (accountTeamId && accountTeamId !== unassignedTeamId) {
+      const matches = allowed.includes(accountTeamId)
+      if (diagnostics) logTeamFilterDecision('account team', [accountTeamId], matches)
+      return matches
+    }
+
+    const candidates = getFilterValues(getPathValue(account as Record<string, unknown>, field)).filter(
+      (candidate) => candidate !== unassignedTeamId
+    )
+    const matches = candidates.some((candidate) => allowed.includes(candidate))
+    if (diagnostics) {
+      const path = field.startsWith('owner.') ? `owner teams from ${field}` : `configured ${field} fallback`
+      logTeamFilterDecision(path, candidates, matches)
+    }
+    return matches
+  }
+
   const value = getPathValue(account as Record<string, unknown>, field)
   if (!Array.isArray(value)) return value !== undefined && value !== null && allowed.includes(String(value))
 
@@ -197,6 +222,17 @@ function getListFilterValues(value: unknown): string[] {
 
   const item = value as Record<string, unknown>
   return [item.teamId, item.name].filter((candidate) => candidate !== undefined && candidate !== null).map(String)
+}
+
+function getFilterValues(value: unknown): string[] {
+  return (Array.isArray(value) ? value : [value]).flatMap(getListFilterValues)
+}
+
+function logTeamFilterDecision(path: string, candidates: string[], matches: boolean): void {
+  console.log(
+    `TEST MODE: account filter used ${path}; ${candidates.length ? `team=${JSON.stringify(candidates)}` : 'no team value'}; ` +
+      `${matches ? 'matched' : 'rejected by'} this install's values`
+  )
 }
 
 function normalizeName(value: unknown): string {
