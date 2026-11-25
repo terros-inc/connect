@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
-  "appId": "App.example",
+  "appId": "App.pedcKRCSsG87kRphiYXX8",
   "repository": {
     "url": "https://github.com/terros-inc/connect",
     "directory": "integrations/gaiia"
