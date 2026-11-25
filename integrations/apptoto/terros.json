@@ -48,11 +48,6 @@
           "description": "Optional. Map participant_confirmed, participant_not_coming and participant_needs_reschedule to Terros account stages. Leave a mapping blank to keep the current stage for that response."
         },
         {
-          "name": "webhookSecret",
-          "type": "string",
-          "description": "Required secret that the webhook must provide as a query token because Apptoto webhooks are unsigned."
-        },
-        {
           "name": "disabled",
           "type": "boolean",
           "description": "Kill switch. Enable to make this script do nothing."
@@ -63,7 +58,10 @@
           "description": "Enable to log the changes this script would make without writing them."
         }
       ],
-      "authSchema": {},
+      "authSchema": {
+        "username": "Apptoto account email",
+        "apiKey": "API key from Apptoto Settings → Integrations"
+      },
       "permissions": ["account:save", "event:read", "event:save"],
       "slug": "apptoto-appointment-webhook"
     }
