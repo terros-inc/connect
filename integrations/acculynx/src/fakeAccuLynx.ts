@@ -48,7 +48,7 @@ export function fakeAccuLynx(replies: Record<string, FakeReply | FakeReply[]>, d
     limiter: new RateLimiter(10, clock),
     diagnostics,
   })
-  return { client, calls, clock }
+  return { client, calls, clock, fetch: fakeFetch }
 }
 
 export function contactTypes(...items: { id: string; name: string; isDefault: boolean }[]): FakeReply {

@@ -1,6 +1,6 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
 import { isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
-import { sendAccount as sendAccountWithConfig } from './outgoing.ts'
+import { handler, sendAccount as sendAccountWithConfig } from './outgoing.ts'
 import { contactTypes, fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
 
 async function sendAccount(...args: Parameters<typeof sendAccountWithConfig>): Promise<void> {
@@ -93,6 +93,21 @@ describe('sendAccount', () => {
 
     expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
+  })
+
+  test('configured contactTypeId is trimmed before contact creation', async () => {
+    const { client, calls } = fakeAccuLynx(created)
+
+    await sendAccountWithConfig(
+      account(),
+      { recordType: 'contact', contactTypeId: '  type-configured  ' },
+      client,
+      fakeTerros().terros
+    )
+
+    expect(calls.find((call) => call.path === '/contacts')?.body).toMatchObject({
+      contactTypeIds: ['type-configured'],
+    })
   })
 
   test.each([
@@ -236,16 +251,14 @@ describe('sendAccount', () => {
     expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
   })
 
-  // Prevents an install check from creating a customer-visible record or marking the Terros account as linked.
-  test('test mode checks the connection and logs exact payloads without any write', async () => {
+  // Prevents an optional diagnostic endpoint from breaking a valid configured-ID install check, while ensuring the
+  // check cannot create a customer-visible record or mark the Terros account as linked.
+  test('test mode with a configured ID skips contact-type listing and logs exact payloads without any write', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { client, calls } = fakeAccuLynx(
       {
         'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
-        'GET /contacts/contact-types': contactTypes(
-          { id: 'type-general', name: 'General Contact', isDefault: false },
-          { id: 'type-customer', name: 'Customer', isDefault: true }
-        ),
+        'GET /contacts/contact-types': { status: 500, body: { title: 'Unavailable' } },
       },
       true
     )
@@ -258,23 +271,47 @@ describe('sendAccount', () => {
       terros
     )
 
-    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual([
-      'GET /company-settings',
-      'GET /contacts/contact-types',
-    ])
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /company-settings'])
     expect(updates).toEqual([])
     const output = log.mock.calls.flat().join('\n')
     expect(output).toContain('connection check succeeded')
     expect(output).toContain('DRY RUN: account Account.example qualifies')
     expect(output).toContain('DRY RUN: contact payload')
-    expect(output).toContain('available AccuLynx contact types')
-    expect(output).toContain('General Contact')
     expect(output).toContain('Using configured AccuLynx contact type')
     expect(output).toContain('"contactTypeIds":["type-configured"]')
     expect(output).toContain('"crossReference":"Account.example"')
     expect(output).toContain('DRY RUN: job payload')
     expect(output).toContain('"id":"<created-contact-id>"')
     expect(output).toContain('AccuLynx GET /company-settings -> 200')
+    log.mockRestore()
+  })
+
+  // Prevents an Account remove dry run from failing on contact-type discovery even though it cannot create a contact.
+  test('test-mode remove checks only the API key', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const fake = fakeAccuLynx(
+      {
+        'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
+        'GET /contacts/contact-types': { status: 500, body: { title: 'Unavailable' } },
+      },
+      true
+    )
+    vi.stubGlobal('fetch', fake.fetch)
+
+    await handler({
+      runId: 'ConnectRun.example',
+      context: {
+        payload: { entity: 'Account', action: 'remove', data: 'Account.example' },
+        config: {
+          scriptConfig: { testMode: 'true', contactTypeId: '' },
+          secrets: { apiKey: 'key-example' },
+        },
+      },
+    })
+
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /company-settings'])
+    expect(log.mock.calls.flat().join('\n')).toContain('Skipping AccuLynx send for Account remove')
+    vi.unstubAllGlobals()
     log.mockRestore()
   })
 

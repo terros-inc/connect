@@ -21,7 +21,7 @@ export const handler = wrapConnectHandler<AccountWebhook, void, AccuLynxSendConf
     if (testMode) {
       const apiKey = input.context.config.secrets?.apiKey
       if (!apiKey) throw Error('No AccuLynx apiKey')
-      await checkConnection(new AccuLynxClient(apiKey, { diagnostics: true }), config.contactTypeId)
+      await checkConnection(new AccuLynxClient(apiKey, { diagnostics: true }))
     }
     console.log('Skipping AccuLynx send for Account remove')
     return
@@ -50,7 +50,7 @@ export async function sendAccount(
   terros: Pick<TerrosClient, 'account'>,
   testMode = isTestModeOn(config.testMode)
 ): Promise<void> {
-  const availableContactTypes = testMode ? await checkConnection(accuLynx, config.contactTypeId) : undefined
+  const availableContactTypes = testMode ? await checkConnection(accuLynx, !config.contactTypeId?.trim()) : undefined
 
   const recordType = getRecordType(config.recordType)
   getAddressCountry(undefined, config.addressCountry) // Refuses a bad fallback before anything is created.
@@ -101,7 +101,7 @@ export async function sendAccount(
 
 export async function checkConnection(
   accuLynx: AccuLynxClient,
-  configuredContactTypeId?: string
+  listContactTypes = false
 ): Promise<AccuLynxContactType[]> {
   try {
     const settings = await accuLynx.getCompanySettings()
@@ -109,19 +109,18 @@ export async function checkConnection(
       `TEST MODE: AccuLynx connection check succeeded for company/location ${accuLynx.safeLogValue(settings.name ?? '<unnamed>')} ` +
         `(${accuLynx.safeLogValue(settings.companyId ?? '<no company id>')})`
     )
+    if (!listContactTypes) return []
+
     let contactTypes: AccuLynxContactType[]
     try {
       contactTypes = await accuLynx.listContactTypes()
     } catch (error) {
-      if (!configuredContactTypeId?.trim()) {
-        throw Error(
-          `Cannot resolve required contactTypeId setting: AccuLynx contact types could not be listed; ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          { cause: error }
-        )
-      }
-      throw error
+      throw Error(
+        `Cannot resolve required contactTypeId setting: AccuLynx contact types could not be listed; ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { cause: error }
+      )
     }
     console.log(
       `TEST MODE: available AccuLynx contact types ${accuLynx.safeLogValue(
@@ -149,11 +148,14 @@ async function resolveContactTypeId(
   availableContactTypes?: AccuLynxContactType[],
   diagnostics = false
 ): Promise<string> {
-  if (configuredId?.trim()) {
+  const trimmedConfiguredId = configuredId?.trim()
+  if (trimmedConfiguredId) {
     if (diagnostics) {
-      console.log(`Using configured AccuLynx contact type ${accuLynx.safeLogValue(configuredId)} (configured ID)`)
+      console.log(
+        `Using configured AccuLynx contact type ${accuLynx.safeLogValue(trimmedConfiguredId)} (configured ID)`
+      )
     }
-    return configuredId
+    return trimmedConfiguredId
   }
 
   let contactTypes: AccuLynxContactType[]
