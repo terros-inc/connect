@@ -1,4 +1,5 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
+import manifest from '../terros.json' with { type: 'json' }
 import { isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
 import { sendAccount } from './outgoing.ts'
 import { fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
@@ -163,7 +164,7 @@ describe('sendAccount', () => {
 
     await sendAccount(
       account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Sold' } }),
-      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: 'true' },
+      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: true },
       client,
       terros
     )
@@ -242,12 +243,35 @@ describe('sendAccount', () => {
     error.mockRestore()
   })
 
-  // Prevents a misspelled safety switch from silently enabling live writes.
+  // Prevents migrated and unsaved install values from changing the safety switch's behavior.
+  test.each([
+    { value: true, expected: true },
+    { value: false, expected: false },
+    { value: undefined, expected: false },
+    { value: null, expected: false },
+    { value: ' TRUE ', expected: true },
+    { value: 'Yes', expected: true },
+    { value: ' ON ', expected: true },
+    { value: '1', expected: true },
+    { value: ' FALSE ', expected: false },
+    { value: 'No', expected: false },
+    { value: ' OFF ', expected: false },
+    { value: '0', expected: false },
+  ])('reads testMode $value as $expected', ({ value, expected }) => {
+    expect(isTestModeOn(value)).toBe(expected)
+  })
+
+  // Prevents a misspelled legacy safety switch from silently enabling live writes.
   test('an unknown testMode value is logged and treated as on', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     expect(isTestModeOn('ture')).toBe(true)
     expect(error).toHaveBeenCalledWith(expect.stringContaining('treating it as true'))
     error.mockRestore()
+  })
+
+  test('declares testMode as a boolean install field', () => {
+    const send = manifest.scripts.find((script) => script.slug === 'acculynx-send')
+    expect(send?.configSchema.find((field) => field.name === 'testMode')?.type).toBe('boolean')
   })
 
   // Prevents early-stage accounts from being irreversibly created in AccuLynx while preserving stage names that

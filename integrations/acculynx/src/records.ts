@@ -11,7 +11,7 @@ export type AccuLynxSendConfig = {
   accountFilterValues?: string
   triggerStages?: string
   addressCountry?: string
-  testMode?: string
+  testMode?: boolean | string
 }
 
 const offSwitchValues = ['', 'false', 'no', 'off', '0']
@@ -20,7 +20,7 @@ const teamFilterFields = new Set(['owner.teamIds', 'owner.memberOf', 'teamId', '
 const unassignedTeamId = 'Team.unassigned'
 
 // Unknown values fail safe: a misspelled test-mode value must never enable writes.
-export function isTestModeOn(value: string | boolean | undefined): boolean {
+export function isTestModeOn(value: boolean | string | null | undefined): boolean {
   if (typeof value === 'boolean') return value
   const text = (value ?? '').trim().toLowerCase()
   if (offSwitchValues.includes(text)) return false
