@@ -1,0 +1,69 @@
+{
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
+  "appId": "App.example",
+  "repository": {
+    "url": "https://github.com/terros-inc/connect",
+    "directory": "integrations/gaiia"
+  },
+  "scripts": [
+    {
+      "name": "Gaiia Order Link",
+      "entrypoint": "src/outgoing.ts",
+      "type": "outgoing",
+      "dataType": "Account",
+      "configSchema": [
+        {
+          "name": "slug",
+          "type": "string",
+          "description": "Internet provider short name after app.gaiia.com/. Required."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "description": "Kill switch. Enable to make this script do nothing."
+        },
+        {
+          "name": "dryRun",
+          "type": "boolean",
+          "description": "Enable to log the link this script would generate without writing it."
+        }
+      ],
+      "authSchema": {},
+      "permissions": ["account:list", "account:save"],
+      "slug": "gaiia-order-link"
+    },
+    {
+      "name": "Gaiia Order Webhook",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "slug",
+          "type": "string",
+          "description": "Internet provider short name used to build resume and account links. Required."
+        },
+        {
+          "name": "stageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Optional. Map Gaiia order or account stages to Terros account stages."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "description": "Kill switch. Enable to make this script do nothing."
+        },
+        {
+          "name": "dryRun",
+          "type": "boolean",
+          "description": "Enable to log the changes this script would make without writing them."
+        }
+      ],
+      "authSchema": {
+        "webhookSecret": "Shared secret used to verify X-Gaiia-Webhook-Signature"
+      },
+      "permissions": ["account:list", "account:save"],
+      "slug": "gaiia-order-webhook"
+    }
+  ]
+}

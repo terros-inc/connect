@@ -26,6 +26,7 @@ Comments explain why, not what.
 - [AccuLynx](integrations/acculynx/AGENTS.md) — bidirectional CRM sync
 - [Airtable](integrations/airtable/AGENTS.md) — scheduled Airtable sync
 - [DocuSign](integrations/docusign/AGENTS.md) — webhook account updates
+- [Gaiia](integrations/gaiia/AGENTS.md) — lead handoff and order status sync
 - [GoHighLevel](integrations/gohighlevel/AGENTS.md) — bidirectional CRM sync
 - [JobNimbus](integrations/jobnimbus/AGENTS.md) — bidirectional CRM sync
 - [LeadPerfection](integrations/leadperfection/AGENTS.md) — sends leads at a chosen stage, polls appointment results and job statuses back

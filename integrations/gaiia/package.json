@@ -1,0 +1,23 @@
+{
+  "dependencies": {
+    "@terros-inc/sdk": "workspace:"
+  },
+  "description": "Gaiia lead handoff and order status sync",
+  "devDependencies": {
+    "@terros-inc/cli": "workspace:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "keywords": [],
+  "license": "MIT",
+  "name": "@terros-inc/connect-gaiia",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "publish": "terros connect publish"
+  },
+  "type": "module",
+  "version": "1.0.0"
+}
