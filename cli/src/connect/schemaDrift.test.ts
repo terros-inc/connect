@@ -1,7 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import { CONNECT_SCRIPT_SCHEMA_URL } from './validate'
+import { ConnectConfig } from './configSchema'
 
 const run = process.env.RUN_CONNECT_SCHEMA_DRIFT === '1' ? it : it.skip
+
+it('keeps configSchema.json aligned with its declaration schema', async () => {
+  const local = JSON.parse(await readFile(new URL('../../configSchema.json', import.meta.url), 'utf8'))
+
+  expect(local).toEqual(ConnectConfig.toJSONSchema())
+})
 
 it('detects drift in schema-valued additionalProperties', () => {
   const local = scriptSchema({ additionalProperties: { type: 'string' } })

@@ -29,6 +29,14 @@ const ConfigSchemaFieldBase = z.object({
 })
 
 const CustomFieldAccess = z.enum(['read', 'write'])
+const SELECT_OPTION_NOT_BLANK = 'Select options cannot be blank or whitespace-only'
+const SELECT_OPTIONS_UNIQUE = 'Select options must be unique'
+
+const SelectOptions = z
+  .array(z.string().regex(/\S/, { error: SELECT_OPTION_NOT_BLANK }))
+  .min(1)
+  .refine((options) => new Set(options).size === options.length, { error: SELECT_OPTIONS_UNIQUE })
+  .meta({ uniqueItems: true })
 
 export const ConfigSchemaField = z.discriminatedUnion('type', [
   ConfigSchemaFieldBase.extend({
@@ -49,7 +57,7 @@ export const ConfigSchemaField = z.discriminatedUnion('type', [
   }),
   ConfigSchemaFieldBase.extend({
     type: ConfigFieldType.extract(['select']),
-    options: z.array(z.string()).min(1),
+    options: SelectOptions,
     customFieldAccess: z.never().optional(),
   }),
   ConfigSchemaFieldBase.extend({
