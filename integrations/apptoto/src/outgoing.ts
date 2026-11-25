@@ -72,7 +72,7 @@ function authorization(secrets: Secrets): string {
   return `Basic ${Buffer.from(`${secrets.username}:${secrets.apiKey}`).toString('base64')}`
 }
 
-async function apptotoRequest<T>(secrets: Secrets, path: string, init: RequestInit = {}): Promise<T> {
+async function apptotoRequest<T>(secrets: Secrets, path: string, init: RequestInit = {}): Promise<T | undefined> {
   const response = await fetch(`${APPTOTO_API}${path}`, {
     ...init,
     headers: {
@@ -91,7 +91,9 @@ async function apptotoRequest<T>(secrets: Secrets, path: string, init: RequestIn
   if (!response.ok) {
     throw new ApptotoApiError(`Apptoto ${init.method ?? 'GET'} ${path} failed with ${response.status}`, response.status)
   }
-  return (await response.json()) as T
+  if (response.status === 204) return undefined
+  const body = await response.text()
+  return body ? (JSON.parse(body) as T) : undefined
 }
 
 async function findEvent(secrets: Secrets, externalId: string): Promise<ApptotoEvent | undefined> {
@@ -100,6 +102,7 @@ async function findEvent(secrets: Secrets, externalId: string): Promise<ApptotoE
       secrets,
       `/v1/event?external_id=${encodeURIComponent(externalId)}`
     )
+    if (!result) return undefined
     return 'event' in result ? result.event : result
   } catch (error) {
     if (error instanceof ApptotoApiError && error.status === 404) return undefined
@@ -126,7 +129,17 @@ export async function syncAppointment(
   const dryRun = isOn(scriptConfig.dryRun)
   if (payload.action === 'remove') {
     if (dryRun) {
-      console.log(`DRY RUN: would delete Apptoto event for Terros event ${payload.data.id}`)
+      console.log(
+        `DRY RUN: would delete Apptoto event for Terros event ${payload.data.id} on calendar ${scriptConfig.calendarId}`
+      )
+      return
+    }
+    const existing = await findEvent(secrets, payload.data.id)
+    if (!existing) return
+    if (String(existing.calendar_id) !== String(scriptConfig.calendarId)) {
+      console.log(
+        `Skipping delete for Terros event ${payload.data.id}: its Apptoto event is on calendar ${existing.calendar_id}, not configured calendar ${scriptConfig.calendarId}`
+      )
       return
     }
     await apptotoRequest(secrets, `/v1/events?external_id=${encodeURIComponent(payload.data.id)}`, {
@@ -168,7 +181,9 @@ export async function syncAppointment(
     participants: [participant],
   }
   if (dryRun) {
-    console.log(`DRY RUN: would upsert Apptoto event for Terros event ${event.id}: ${JSON.stringify(apptotoEvent)}`)
+    console.log(
+      `DRY RUN: would upsert Apptoto event for Terros event ${event.id} on calendar ${scriptConfig.calendarId}`
+    )
     return
   }
   await apptotoRequest(secrets, '/v1/events', {

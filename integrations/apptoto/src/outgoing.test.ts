@@ -40,7 +40,7 @@ type FakeApptoto = {
   requests: { method: string; url: URL; body?: any }[]
 }
 
-function installApptoto(initial?: StoredEvent): FakeApptoto {
+function installApptoto(initial?: StoredEvent, writeResponse?: () => Response): FakeApptoto {
   const events = new Map<string, StoredEvent>()
   if (initial) events.set(initial.external_id, initial)
   const requests: { method: string; url: URL; body?: any }[] = []
@@ -62,11 +62,11 @@ function installApptoto(initial?: StoredEvent): FakeApptoto {
       }
       if (method === 'PUT') {
         for (const update of body.events) events.set(update.external_id, { ...update })
-        return Response.json({ events: body.events })
+        return writeResponse?.() ?? Response.json({ events: body.events })
       }
       if (method === 'DELETE') {
         events.delete(externalId)
-        return Response.json({ events: [] })
+        return writeResponse?.() ?? Response.json({ events: [] })
       }
       return Response.json({ error: 'unexpected request' }, { status: 500 })
     })
@@ -129,8 +129,16 @@ test('removing an appointment deletes it by external id so reminders stop', asyn
   )
 
   expect(world.events).toHaveLength(0)
-  expect(world.requests).toHaveLength(1)
-  expect(world.requests[0]?.method).toBe('DELETE')
+  expect(world.requests.map(({ method }) => method)).toEqual(['GET', 'DELETE'])
+})
+
+test('accepts successful writes without a response body instead of retrying them', async () => {
+  const world = installApptoto(undefined, () => new Response(null, { status: 204 }))
+
+  await syncAppointment(event, fakeClient(), config, secrets)
+
+  expect(world.events).toHaveLength(1)
+  expect(world.requests.filter(({ method }) => method === 'PUT')).toHaveLength(1)
 })
 
 test('skips an update when the existing event belongs to another calendar', async () => {
@@ -141,6 +149,21 @@ test('skips an update when the existing event belongs to another calendar', asyn
   expect(world.requests).toHaveLength(1)
   expect(world.requests[0]?.method).toBe('GET')
   expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Apptoto cannot move events'))
+})
+
+test('skips a delete when the existing event belongs to another calendar', async () => {
+  const world = installApptoto({ external_id: 'Event.example', calendar_id: '99' })
+
+  await syncAppointment(
+    { entity: 'Event', action: 'remove', data: { id: 'Event.example' } },
+    fakeClient(),
+    config,
+    secrets
+  )
+
+  expect(world.events).toHaveLength(1)
+  expect(world.requests.map(({ method }) => method)).toEqual(['GET'])
+  expect(console.log).toHaveBeenCalledWith(expect.stringContaining('not configured calendar 42'))
 })
 
 test('stops on a 429 instead of consuming more of the minute or daily quota', async () => {
@@ -165,4 +188,11 @@ test('honors the disabled and dry-run switches without writing', async () => {
   await syncAppointment(event, fakeClient(), { ...config, dryRun: true }, secrets)
   expect(world.requests.map(({ method }) => method)).toEqual(['GET'])
   expect(world.events).toHaveLength(0)
+  expect(console.log).toHaveBeenLastCalledWith(
+    'DRY RUN: would upsert Apptoto event for Terros event Event.example on calendar 42'
+  )
+  const logs = vi.mocked(console.log).mock.calls.flat().join(' ')
+  expect(logs).not.toContain('Pat Example')
+  expect(logs).not.toContain('+15555550100')
+  expect(logs).not.toContain('user@example.test')
 })
