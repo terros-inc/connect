@@ -1,11 +1,15 @@
 import type { AppId } from '../app'
 
-export type ConfigSchemaField = {
+type ConfigSchemaFieldBase = {
   name: string
-  type: 'string' | 'number' | 'mapping'
   description?: string
   dataType?: 'None' | 'Account' | 'User' | 'Event'
 }
+
+export type ConfigSchemaField =
+  | (ConfigSchemaFieldBase & { type: 'string'; customFieldAccess?: 'read' | 'write' })
+  | (ConfigSchemaFieldBase & { type: 'number' | 'mapping' | 'boolean' | 'team' | 'workflow-stage' | 'user' })
+  | (ConfigSchemaFieldBase & { type: 'select'; options: [string, ...string[]] })
 
 export type AuthSchemaField =
   | string

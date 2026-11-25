@@ -99,6 +99,133 @@
                       },
                       "required": ["name", "type"],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["boolean"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["select"]
+                        },
+                        "options": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type", "options"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["team"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["workflow-stage"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["user"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
                     }
                   ]
                 }
@@ -335,6 +462,133 @@
                         "type": {
                           "type": "string",
                           "enum": ["mapping"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["boolean"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["select"]
+                        },
+                        "options": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type", "options"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["team"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["workflow-stage"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["user"]
                         },
                         "customFieldAccess": {
                           "not": {}
@@ -582,6 +836,133 @@
                         "type": {
                           "type": "string",
                           "enum": ["mapping"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["boolean"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["select"]
+                        },
+                        "options": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type", "options"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["team"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["workflow-stage"]
+                        },
+                        "customFieldAccess": {
+                          "not": {}
+                        }
+                      },
+                      "required": ["name", "type"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "dataType": {
+                          "type": "string",
+                          "enum": ["None", "Account", "User", "Event"]
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["user"]
                         },
                         "customFieldAccess": {
                           "not": {}
