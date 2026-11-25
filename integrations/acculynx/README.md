@@ -55,6 +55,8 @@ So the webhook treats an event as a hint. It takes only the job ID from the body
 
 The company representative becomes the closer only when AccuLynx returns an email and it matches a Terros user email case-insensitively. A missing representative, missing email, or unmatched email leaves the existing closer unchanged; the webhook never clears it and never reads the AccuLynx sales-owner role.
 
+If the company-representative lookup, representative-user lookup, or Terros user-list lookup fails with a retryable error, the webhook first updates the account's stage and source status without a closer, then fails the delivery. A typed Terros API error or HTTP 401/403 from the user-list lookup is logged and leaves the closer unchanged without failing the delivery.
+
 ## Retries
 
 A delivery can fail partway and be retried, so Send looks for what an earlier attempt created before creating anything:

@@ -321,7 +321,7 @@ describe('receiveWebhook', () => {
         'GET /users/user-1': { status: 500 },
       },
     ],
-  ])('fails the delivery when %s fails', async (_case, replies) => {
+  ])('updates the account before failing the delivery when %s fails', async (_case, replies) => {
     const { client } = fakeAccuLynx(replies)
     const { terros, upserts } = fakeTerros()
 
@@ -329,10 +329,12 @@ describe('receiveWebhook', () => {
       receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'update' }, client, terros)
     ).rejects.toThrow()
 
-    expect(upserts).toEqual([])
+    expect(upserts).toHaveLength(1)
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved', sourceStatus: 'Approved' } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
   })
 
-  test('fails the delivery when the Terros user lookup has a retryable failure', async () => {
+  test('updates the account before failing the delivery when the Terros user lookup has a retryable failure', async () => {
     const { client } = fakeAccuLynx({
       ...linked,
       'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
@@ -354,7 +356,23 @@ describe('receiveWebhook', () => {
       )
     ).rejects.toThrow('user lookup failed')
 
-    expect(upserts).toEqual([])
+    expect(upserts).toHaveLength(1)
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved', sourceStatus: 'Approved' } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
+  })
+
+  test('propagates an account upsert failure instead of a pending closer lookup failure', async () => {
+    const { client } = fakeAccuLynx({
+      ...linked,
+      'GET /jobs/job-1/representatives/company': { status: 500 },
+    })
+    const { terros, upserts } = fakeTerros('error')
+
+    await expect(
+      receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'update' }, client, terros)
+    ).rejects.toThrow('Terros account upsert failed')
+
+    expect(upserts).toHaveLength(1)
   })
 
   test.each([

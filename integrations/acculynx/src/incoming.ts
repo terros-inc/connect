@@ -75,7 +75,15 @@ export async function receiveWebhook(
     return
   }
 
-  const closer = await resolveCloser(change.jobId, accuLynx, terros)
+  let closer: SmallUser | undefined
+  let closerLookupError: unknown
+  let closerLookupFailed = false
+  try {
+    closer = await resolveCloser(change.jobId, accuLynx, terros)
+  } catch (error) {
+    closerLookupFailed = true
+    closerLookupError = error
+  }
 
   const jobDetails = accountId ? {} : fromAccuLynxJob(await accuLynx.getJob(change.jobId))
   const changedAt = getChangedAt(change.topic, milestone.duration?.startDate, currentStatus?.duration?.startDate)
@@ -99,6 +107,7 @@ export async function receiveWebhook(
   })
 
   if (result.type !== 'success') throw Error(`Terros account upsert failed for AccuLynx job ${change.jobId}`)
+  if (closerLookupFailed) throw closerLookupError
   console.log(`Updated Terros account ${result.account?.accountId} from AccuLynx job ${change.jobId}`)
 }
 
