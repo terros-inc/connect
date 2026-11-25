@@ -332,16 +332,17 @@ describe('receiveWebhook', () => {
     expect(upserts).toEqual([])
   })
 
-  test('fails the delivery when the Terros user lookup fails', async () => {
+  test('fails the delivery when the Terros user lookup has a retryable failure', async () => {
     const { client } = fakeAccuLynx({
       ...linked,
       'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
       'GET /users/user-1': { body: { email: 'user@example.test' } },
     })
     const { terros, upserts } = fakeTerros()
+    const serverError = Object.assign(new Error('user lookup failed'), { status: 500 })
     const failingTerros = {
       ...(terros as object),
-      user: { list: async () => Promise.reject(new Error('user lookup failed')) },
+      user: { list: async () => Promise.reject(serverError) },
     }
 
     await expect(
@@ -356,7 +357,18 @@ describe('receiveWebhook', () => {
     expect(upserts).toEqual([])
   })
 
-  test('logs a Terros user API error and leaves the closer unchanged', async () => {
+  test.each([
+    [
+      'a typed API error',
+      Object.assign(new Error('not_authorized'), {
+        name: 'TerrosApiError',
+        code: 'not_authorized',
+        response: { type: 'error', error: 'not_authorized' },
+      }),
+    ],
+    ['HTTP 401', Object.assign(new Error('Invalid or unauthorized API key'), { status: 401 })],
+    ['HTTP 403', Object.assign(new Error('Invalid or unauthorized API key'), { status: 403 })],
+  ])('logs %s and leaves the closer unchanged', async (_case, userListError) => {
     const { client } = fakeAccuLynx({
       ...linked,
       'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
@@ -365,7 +377,7 @@ describe('receiveWebhook', () => {
     const { terros, upserts } = fakeTerros()
     const failingTerros = {
       ...(terros as object),
-      user: { list: async () => ({ type: 'error', error: 'not_authorized' }) },
+      user: { list: async () => Promise.reject(userListError) },
     }
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
@@ -376,7 +388,8 @@ describe('receiveWebhook', () => {
       failingTerros as never
     )
 
-    expect(log).toHaveBeenCalledWith('Terros user lookup failed: not_authorized')
+    expect(log).toHaveBeenCalledWith(`Terros user lookup failed: ${userListError.message}`)
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved', sourceStatus: 'Approved' } })
     expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
     log.mockRestore()
   })

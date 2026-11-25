@@ -116,14 +116,30 @@ async function resolveCloser(
 }
 
 async function findTerrosUser(email: string, terros: Pick<TerrosClient, 'user'>): Promise<SmallUser | undefined> {
-  const response = await terros.user.list({ showArchived: false })
-  if (response.type !== 'success') {
-    const error = (response as unknown as { error?: string }).error ?? 'unknown error'
-    console.log(`Terros user lookup failed: ${error}`)
+  try {
+    const response = await terros.user.list({ showArchived: false })
+    const normalizedEmail = email.trim().toLowerCase()
+    return response.users.find((user: SmallUser) => user.email.trim().toLowerCase() === normalizedEmail)
+  } catch (error) {
+    if (!isTerrosApiError(error) && !isAuthorizationError(error)) throw error
+    console.log(`Terros user lookup failed: ${error instanceof Error ? error.message : String(error)}`)
     return undefined
   }
-  const normalizedEmail = email.trim().toLowerCase()
-  return response.users.find((user: SmallUser) => user.email.trim().toLowerCase() === normalizedEmail)
+}
+
+function isTerrosApiError(error: unknown): error is Error & { code: string; response: { type: 'error' } } {
+  if (!(error instanceof Error) || error.name !== 'TerrosApiError') return false
+  if (!('code' in error) || typeof error.code !== 'string' || !('response' in error)) return false
+  return (
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    (error.response as { type?: unknown }).type === 'error'
+  )
+}
+
+function isAuthorizationError(error: unknown): error is Error & { status: 401 | 403 } {
+  if (!(error instanceof Error) || !('status' in error)) return false
+  return error.status === 401 || error.status === 403
 }
 
 function getChangedAt(
