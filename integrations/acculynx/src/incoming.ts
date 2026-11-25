@@ -1,5 +1,5 @@
-import { type AccountId, type TerrosClient, type WorkflowId, wrapConnectHandler } from '@terros-inc/sdk'
-import { fromAccuLynxJob, parseMilestoneChange } from './records.ts'
+import { type AccountId, type SmallUser, type TerrosClient, type WorkflowId, wrapConnectHandler } from '@terros-inc/sdk'
+import { fromAccuLynxJob, parseJobChange } from './records.ts'
 import { AccuLynxClient } from './acculynx.ts'
 
 export type AccuLynxWebhookConfig = {
@@ -31,13 +31,13 @@ export async function receiveWebhook(
   body: unknown,
   config: AccuLynxWebhookConfig,
   accuLynx: AccuLynxClient,
-  terros: Pick<TerrosClient, 'account'>
+  terros: Pick<TerrosClient, 'account' | 'user'>
 ): Promise<void> {
   const workflowId = config.workflowId
   if (!workflowId) throw Error('No workflowId')
   const requestType = getRequestType(config.requestType)
 
-  const change = parseMilestoneChange(body)
+  const change = parseJobChange(body)
   if (!change) {
     console.log(`Ignoring AccuLynx webhook topic ${(body as { topicName?: string })?.topicName}`)
     return
@@ -50,19 +50,26 @@ export async function receiveWebhook(
   }
 
   // AccuLynx does not sign webhooks and Connect gives this script only the body, so anyone with the URL could post
-  // one. The body is therefore only a hint: the milestone is read back from AccuLynx with this location's key. A
-  // forged event can at most re-apply a real job's current milestone, and a job this key cannot see is ignored.
-  const milestone = await accuLynx.getCurrentJobMilestone(change.jobId)
+  // one. The body is therefore only a hint: current job data is read back from AccuLynx with this location's key.
+  const [milestone, representative] = await Promise.all([
+    accuLynx.getCurrentJobMilestone(change.jobId),
+    accuLynx.getJobCompanyRepresentative(change.jobId),
+  ])
   if (!milestone?.name) {
     console.log(`Ignoring AccuLynx job ${change.jobId}: this location's key cannot read its current milestone`)
     return
   }
-  const workflowTarget = getWorkflowTarget(milestone.name, config.milestoneStageMapping)
-  if (!workflowTarget) {
-    console.log(`Skipping AccuLynx job ${change.jobId}: milestone ${milestone.name} has no configured stage mapping`)
-    return
-  }
+  const milestoneName = milestone.name.trim()
+  const statusName = milestone.statuses?.find((status) => status.isCurrent)?.name?.trim()
+  const sourceStatus = statusName ? `${milestoneName} > ${statusName}` : milestoneName
+  const workflowTarget = getWorkflowTarget(milestoneName, statusName, config.milestoneStageMapping)
+  if (!workflowTarget)
+    console.log(`Skipping stage update for AccuLynx job ${change.jobId}: ${sourceStatus} has no configured mapping`)
   const changedAt = Date.parse(milestone.duration?.startDate ?? '')
+
+  const representativeUserId = representative?.user?.id
+  const representativeUser = representativeUserId ? await accuLynx.getUser(representativeUserId) : undefined
+  const closer = representativeUser?.email ? await findTerrosUser(representativeUser.email, terros) : undefined
 
   const references = await accuLynx.getJobExternalReferences(change.jobId)
   const accountId = references.find((reference) => reference.projectId)?.projectId as AccountId | undefined
@@ -74,7 +81,7 @@ export async function receiveWebhook(
 
   const jobDetails = accountId ? {} : fromAccuLynxJob(await accuLynx.getJob(change.jobId))
 
-  console.log(`Sending AccuLynx job ${change.jobId} milestone ${milestone.name} to Terros (${requestType})`)
+  console.log(`Sending AccuLynx job ${change.jobId} status ${sourceStatus} to Terros (${requestType})`)
 
   const result = await terros.account.upsert({
     requestType: accountId ? 'update' : 'upsert',
@@ -82,9 +89,10 @@ export async function receiveWebhook(
       ...jobDetails,
       accountId,
       workflowId: workflowId as WorkflowId,
-      workflowTarget,
+      ...(workflowTarget ? { workflowTarget } : {}),
       sourceId: change.jobId,
-      sourceStatus: milestone.name,
+      sourceStatus,
+      ...(closer ? { closer } : {}),
       accountSource: config.accountSource || 'AccuLynx',
       externalLeadId: change.jobId,
       lastActionDate: Number.isFinite(changedAt) ? changedAt : Date.now(),
@@ -95,15 +103,32 @@ export async function receiveWebhook(
   console.log(`Updated Terros account ${result.account?.accountId} from AccuLynx job ${change.jobId}`)
 }
 
-function getWorkflowTarget(milestoneName: string, mapping: Record<string, string> | undefined): string | undefined {
-  if (mapping === undefined) return milestoneName
+async function findTerrosUser(email: string, terros: Pick<TerrosClient, 'user'>): Promise<SmallUser | undefined> {
+  const response = await terros.user.list({ showArchived: false })
+  if (response.type !== 'success') return undefined
+  const normalizedEmail = email.trim().toLowerCase()
+  return response.users.find((user: SmallUser) => user.email.trim().toLowerCase() === normalizedEmail)
+}
 
-  const milestoneKey = normalizeMilestoneName(milestoneName)
-  const entry = Object.entries(mapping).find(([name]) => normalizeMilestoneName(name) === milestoneKey)
+function getWorkflowTarget(
+  milestoneName: string,
+  statusName: string | undefined,
+  mapping: Record<string, string> | undefined
+): string | undefined {
+  const sourceStatus = statusName ? `${milestoneName} > ${statusName}` : milestoneName
+  if (mapping === undefined) return sourceStatus
+
+  const sourceKey = normalizeMappingName(sourceStatus)
+  const milestoneKey = normalizeMappingName(milestoneName)
+  const entries = Object.entries(mapping)
+  const entry =
+    entries.find(([name]) => normalizeMappingName(name) === sourceKey) ??
+    (statusName ? entries.find(([name]) => normalizeMappingName(name) === milestoneKey) : undefined)
   return entry?.[1].trim() ? entry[1] : undefined
 }
 
-function normalizeMilestoneName(name: string): string {
-  const normalized = name.trim().toLowerCase()
-  return normalized === 'dead' ? 'cancelled' : normalized
+function normalizeMappingName(name: string): string {
+  const [milestone, ...status] = name.split('>').map((part) => part.trim().toLowerCase())
+  const normalizedMilestone = milestone === 'dead' ? 'cancelled' : (milestone ?? '')
+  return status.length ? `${normalizedMilestone} > ${status.join(' > ')}` : normalizedMilestone
 }

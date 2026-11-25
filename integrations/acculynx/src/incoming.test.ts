@@ -20,7 +20,10 @@ function milestoneEvent(overrides: Record<string, unknown> = {}) {
 }
 
 const current = {
-  'GET /jobs/job-1/milestones/current': { body: { name: 'Approved', duration: { startDate: '2026-01-05T19:00:00Z' } } },
+  'GET /jobs/job-1/milestones/current?includes=status': {
+    body: { name: 'Approved', duration: { startDate: '2026-01-05T19:00:00Z' } },
+  },
+  'GET /jobs/job-1/representatives/company': { status: 404 },
 }
 const linked = {
   ...current,
@@ -37,7 +40,11 @@ describe('receiveWebhook', () => {
 
     await receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'upsert' }, client, terros)
 
-    expect(calls.map((call) => call.path)).toEqual(['/jobs/job-1/milestones/current', '/jobs/external-references'])
+    expect(calls.map((call) => call.path)).toEqual([
+      '/jobs/job-1/milestones/current',
+      '/jobs/job-1/representatives/company',
+      '/jobs/external-references',
+    ])
     expect(upserts).toEqual([
       {
         requestType: 'update',
@@ -77,10 +84,151 @@ describe('receiveWebhook', () => {
     })
   })
 
+  test('trims and maps the current status inside a milestone', async () => {
+    const withStatus = {
+      ...linked,
+      'GET /jobs/job-1/milestones/current?includes=status': {
+        body: {
+          name: ' Lead ',
+          duration: { startDate: '2026-01-05T19:00:00Z' },
+          statuses: [
+            { name: 'Old status', isCurrent: false },
+            { name: ' Appointment Scheduled  ', isCurrent: true },
+          ],
+        },
+      },
+    }
+    const { client } = fakeAccuLynx(withStatus)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.milestone.status.current_changed' }),
+      {
+        workflowId: 'WF.example',
+        requestType: 'update',
+        milestoneStageMapping: { 'lead > appointment scheduled': 'Appointment Set' },
+      },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({
+      account: { workflowTarget: 'Appointment Set', sourceStatus: 'Lead > Appointment Scheduled' },
+    })
+  })
+
+  test('falls back to a milestone-only mapping when a current status is present', async () => {
+    const withStatus = {
+      ...linked,
+      'GET /jobs/job-1/milestones/current?includes=status': {
+        body: {
+          name: 'Lead',
+          duration: { startDate: '2026-01-05T19:00:00Z' },
+          statuses: [{ name: 'Appointment Scheduled', isCurrent: true }],
+        },
+      },
+    }
+    const { client } = fakeAccuLynx(withStatus)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.milestone.status.current_changed' }),
+      { workflowId: 'WF.example', requestType: 'update', milestoneStageMapping: { Lead: 'New Lead' } },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({
+      account: { workflowTarget: 'New Lead', sourceStatus: 'Lead > Appointment Scheduled' },
+    })
+  })
+
+  test('uses the combined milestone and status when no mapping is configured', async () => {
+    const withStatus = {
+      ...linked,
+      'GET /jobs/job-1/milestones/current?includes=status': {
+        body: {
+          name: 'Prospect',
+          duration: { startDate: '2026-01-05T19:00:00Z' },
+          statuses: [{ name: 'Inspected - No demo', isCurrent: true }],
+        },
+      },
+    }
+    const { client } = fakeAccuLynx(withStatus)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.milestone.status.current_changed' }),
+      { workflowId: 'WF.example', requestType: 'update' },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({
+      account: {
+        workflowTarget: 'Prospect > Inspected - No demo',
+        sourceStatus: 'Prospect > Inspected - No demo',
+      },
+    })
+  })
+
+  test('matches the company representative to a Terros closer by email case-insensitively', async () => {
+    const representative = {
+      ...linked,
+      'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
+      'GET /users/user-1': { body: { email: 'USER@EXAMPLE.TEST' } },
+    }
+    const { client } = fakeAccuLynx(representative)
+    const closer = {
+      userId: 'U.example' as const,
+      firstName: 'Pat',
+      lastName: 'Example',
+      email: 'user@example.test',
+    }
+    const { terros, upserts } = fakeTerros('success', [closer])
+
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.representatives.company_assigned' }),
+      { workflowId: 'WF.example', requestType: 'update' },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({ account: { closer } })
+  })
+
+  test.each([
+    ['the representative has no email', { body: {} }, [{ email: 'user@example.test' }]],
+    ['the email matches no Terros user', { body: { email: 'other@example.test' } }, []],
+  ])('leaves the closer unchanged when %s', async (_case, userReply, users) => {
+    const representative = {
+      ...linked,
+      'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
+      'GET /users/user-1': userReply,
+    }
+    const { client } = fakeAccuLynx(representative)
+    const terrosUsers = users.map((user) => ({
+      userId: 'U.example' as const,
+      firstName: 'Pat',
+      lastName: 'Example',
+      ...user,
+    }))
+    const { terros, upserts } = fakeTerros('success', terrosUsers)
+
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.representatives.company_changed' }),
+      { workflowId: 'WF.example', requestType: 'update' },
+      client,
+      terros
+    )
+
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
+  })
+
   test('treats Dead and Cancelled as the same milestone when mapping', async () => {
     const dead = {
       ...linked,
-      'GET /jobs/job-1/milestones/current': {
+      'GET /jobs/job-1/milestones/current?includes=status': {
         body: { name: 'Dead', duration: { startDate: '2026-01-05T19:00:00Z' } },
       },
     }
@@ -101,8 +249,8 @@ describe('receiveWebhook', () => {
     expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Closed Lost', sourceStatus: 'Dead' } })
   })
 
-  // Prevents a new job's default milestone from moving an account to a stage that the install did not opt into.
-  test('skips an unmapped milestone without reading or writing the Terros account', async () => {
+  // Prevents an unmapped status from selecting a stage while still keeping source status and representative changes.
+  test('omits the stage for an unmapped status without dropping the rest of the update', async () => {
     const { client, calls } = fakeAccuLynx(linked)
     const { terros, upserts } = fakeTerros()
 
@@ -113,8 +261,13 @@ describe('receiveWebhook', () => {
       terros
     )
 
-    expect(calls.map((call) => call.path)).toEqual(['/jobs/job-1/milestones/current'])
-    expect(upserts).toEqual([])
+    expect(calls.map((call) => call.path)).toEqual([
+      '/jobs/job-1/milestones/current',
+      '/jobs/job-1/representatives/company',
+      '/jobs/external-references',
+    ])
+    expect(upserts[0]).toMatchObject({ account: { sourceStatus: 'Approved' } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('workflowTarget')
   })
 
   // Prevents 'update' mode from creating accounts for jobs that were never sent from Terros.
@@ -174,7 +327,10 @@ describe('receiveWebhook', () => {
       account: { workflowTarget: 'Approved', lastActionDate: Date.parse('2026-01-05T19:00:00Z') },
     })
 
-    const unknown = fakeAccuLynx({ 'GET /jobs/job-2/milestones/current': { status: 404 } })
+    const unknown = fakeAccuLynx({
+      'GET /jobs/job-2/milestones/current?includes=status': { status: 404 },
+      'GET /jobs/job-2/representatives/company': { status: 404 },
+    })
     const unknownTerros = fakeTerros()
     const event = milestoneEvent({ event: { job: { id: 'job-2', milestone: { name: 'Approved' } } } })
     await receiveWebhook(
@@ -184,7 +340,10 @@ describe('receiveWebhook', () => {
       unknownTerros.terros
     )
 
-    expect(unknown.calls.map((call) => call.path)).toEqual(['/jobs/job-2/milestones/current'])
+    expect(unknown.calls.map((call) => call.path)).toEqual([
+      '/jobs/job-2/milestones/current',
+      '/jobs/job-2/representatives/company',
+    ])
     expect(unknownTerros.upserts).toEqual([])
   })
 

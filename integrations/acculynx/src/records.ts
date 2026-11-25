@@ -174,25 +174,29 @@ export function toAccuLynxPhone(phone: unknown): string | undefined {
   return undefined
 }
 
-export const milestoneChangedTopic = 'job.milestone.current_changed'
+export const jobChangeTopics = [
+  'job.milestone.current_changed',
+  'job.milestone.status.current_changed',
+  'job.representatives.company_assigned',
+  'job.representatives.company_changed',
+] as const
 
-export type MilestoneChange = {
+export type JobChange = {
   subscriptionId?: string
   jobId: string
 }
 
-// Reads a job.milestone.current_changed webhook. Returns undefined for any other topic. AccuLynx does not sign
-// webhooks, so only the job ID is taken from the body; the milestone itself is read back from AccuLynx.
-export function parseMilestoneChange(body: unknown): MilestoneChange | undefined {
+// AccuLynx does not sign webhooks, so only routing data and the job ID are taken from an accepted event.
+export function parseJobChange(body: unknown): JobChange | undefined {
   const payload = (body || {}) as {
     topicName?: string
     subscriptionId?: string
     event?: { job?: { id?: string } }
   }
-  if (payload.topicName !== milestoneChangedTopic) return undefined
+  if (!jobChangeTopics.includes(payload.topicName as (typeof jobChangeTopics)[number])) return undefined
 
   const jobId = payload.event?.job?.id
-  if (!jobId) throw Error('AccuLynx milestone webhook has no job id')
+  if (!jobId) throw Error('AccuLynx job webhook has no job id')
 
   return { subscriptionId: payload.subscriptionId, jobId }
 }

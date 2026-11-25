@@ -59,19 +59,19 @@
     },
     {
       "name": "AccuLynx Webhook",
-      "description": "AccuLynx to Terros. Subscribe this URL to the job.milestone.current_changed topic for one AccuLynx location.",
+      "description": "AccuLynx to Terros. Subscribe this URL to milestone, milestone-status, and company-representative changes for one AccuLynx location.",
       "entrypoint": "src/incoming.ts",
       "type": "incoming",
       "configSchema": [
         {
           "name": "workflowId",
           "type": "string",
-          "description": "Required. Terros workflow ID (WF.*) whose stage is set from the AccuLynx milestone name"
+          "description": "Required. Terros workflow ID (WF.*) whose stage is set from the AccuLynx milestone and current status"
         },
         {
           "name": "requestType",
           "type": "string",
-          "description": "Required, no default. 'update' moves only accounts linked to the job by AccuLynx Send; 'upsert' also creates an account for a job started in AccuLynx."
+          "description": "Required, no default. 'update' (recommended) moves only accounts linked to the job by AccuLynx Send; 'upsert' also creates an account for a job started in AccuLynx."
         },
         {
           "name": "subscriptionId",
@@ -87,13 +87,13 @@
           "name": "milestoneStageMapping",
           "type": "mapping",
           "dataType": "None",
-          "description": "Optional mapping from AccuLynx milestone names to Terros stage names. Matching ignores case; Dead and Cancelled are equivalent. When configured, milestones without a mapping are skipped. Without a mapping, the milestone name is used unchanged."
+          "description": "Optional mapping from 'Milestone > Status' or milestone-only AccuLynx names to Terros stage names. Names are trimmed and matching ignores case; a status key falls back to its milestone key. When configured, unmatched values do not change stage. Without a mapping, the combined name is used."
         }
       ],
       "authSchema": {
         "apiKey": "AccuLynx API key for the same location (Account Settings > API Keys)"
       },
-      "permissions": ["account:add", "account:list", "account:save"],
+      "permissions": ["account:add", "account:list", "account:save", "user:list"],
       "slug": "acculynx-webhook"
     }
   ]

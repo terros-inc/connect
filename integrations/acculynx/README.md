@@ -5,7 +5,7 @@ Connects a Terros company to AccuLynx through the [AccuLynx API v2](https://apid
 | Script           | Slug               | Direction         | What it does                                                                                                                                                                                                                     |
 | ---------------- | ------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | At configured trigger stages, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it (`recordType: job`), and saves the new ID as the account's `externalLeadId`. Linked accounts are not sent again. |
-| AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives `job.milestone.current_changed` events and sets the Terros account's stage (`workflowTarget`) from the configured milestone mapping. Other topics and unmapped milestones are logged and ignored.                       |
+| AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives milestone, milestone-status, and company-representative events, then updates the linked account's stage, source status, and matched closer. Other topics are logged and ignored.                                        |
 
 ## Install and configure
 
@@ -22,12 +22,12 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
    - `testMode` (optional, off by default): turn on to validate the API key and preview Send without writing anything. Existing installs with a legacy text value continue to accept `true`, `yes`, `on`, or `1` as on and `false`, `no`, `off`, or `0` as off, ignoring case and surrounding whitespace. Any other legacy text is treated as on and logged so a typo cannot accidentally enable writes.
 3. **AccuLynx Webhook** config:
    - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
-   - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)).
+   - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)). Use `update` so only jobs already linked by Send can move an account.
    - `accountSource` (optional): defaults to `AccuLynx`.
-   - `milestoneStageMapping` (optional): maps AccuLynx milestone names to Terros stage names. Milestone names match case-insensitively, and `Dead` and `Cancelled` are equivalent. When a mapping is configured, unmapped milestones are skipped; without one, the milestone name is used unchanged.
+   - `milestoneStageMapping` (optional): maps `Milestone > Status` names (for example, `Lead > Appointment Scheduled`) or milestone-only names to Terros stage names. Names are trimmed and match case-insensitively. A current status tries the combined key first, then the milestone-only key so existing mappings keep working. When a mapping is configured and neither key matches, stage is left unchanged. Without a mapping, the combined name is used when a current status exists and the milestone name otherwise.
    - `subscriptionId`: from step 5.
-4. **Webhook URL.** `https://<terros-api>/connect/incoming/<installId>/acculynx-webhook?apiKey=<dedicated low-privilege Terros key>`. The Webhook's Terros calls run as that key, so use a key owned by a user of the install's company, made for this webhook alone and limited to `account:list` and `account:save`, plus `account:add` when `requestType` is `upsert`; it travels in the URL, so it must grant nothing else.
-5. **Subscription.** Create the location's AccuLynx subscription to that URL for topic `job.milestone.current_changed` (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key), and copy the returned subscription ID into `subscriptionId`.
+4. **Webhook URL.** `https://<terros-api>/connect/incoming/<installId>/acculynx-webhook?apiKey=<dedicated low-privilege Terros key>`. The Webhook's Terros calls run as that key, so use a key owned by a user of the install's company, made for this webhook alone and limited to `account:list`, `account:save`, and `user:list`, plus `account:add` when `requestType` is `upsert`; it travels in the URL, so it must grant nothing else.
+5. **Subscription.** Create a new location-specific AccuLynx subscription to that URL for `job.milestone.current_changed`, `job.milestone.status.current_changed`, `job.representatives.company_assigned`, and `job.representatives.company_changed` (`POST https://api.acculynx.com/webhooks/v2/subscriptions` with the location's key), and copy the returned subscription ID into `subscriptionId`. Do not modify an existing non-Terros subscription: updating one replaces its entire topic list, and its `consumerUrl` cannot be changed after creation.
 
 ## Locations and API keys
 
@@ -51,7 +51,9 @@ After a normal-mode create, Send logs the returned ID and link, then reads the f
 
 AccuLynx API v2 documents no webhook signature or secret: a subscription returns only its ID, and every event carries that ID in its body, where anyone can write it. Connect also gives the script only the request body, not its headers or query string, so a shared secret in a header or in the URL cannot be checked here.
 
-So the webhook treats an event as a hint. It takes only the job ID from the body and reads the job's current milestone back from AccuLynx with the install's own key, and uses that, never the body's milestone or date. A forged event can at most make Terros show a real job's current AccuLynx milestone, which a genuine event would do anyway. A job ID the key cannot read (another location, a made-up ID) is logged and ignored. In `upsert` mode a forged event for a real, unlinked job of the location can create its Terros account early, as its next genuine milestone change would. The `subscriptionId` check routes events between locations; it is not authentication.
+So the webhook treats an event as a hint. It takes only the job ID from the body and reads the job's current milestone and status, company representative, and representative user back from AccuLynx with the install's own key. It never trusts those fields from the event body. A forged event can at most reapply a real job's current AccuLynx values, which a genuine event would do anyway. A job ID the key cannot read (another location or a made-up ID) is logged and ignored. In `upsert` mode a forged event for a real, unlinked job of the location can create its Terros account early, as its next genuine accepted event would. The `subscriptionId` check routes events between locations; it is not authentication.
+
+The company representative becomes the closer only when AccuLynx returns an email and it matches a Terros user email case-insensitively. A missing representative, missing email, or unmatched email leaves the existing closer unchanged; the webhook never clears it and never reads the AccuLynx sales-owner role.
 
 ## Retries
 
@@ -76,7 +78,7 @@ AccuLynx allows 10 requests per second per key. Every call waits for a slot in a
 
 With `recordType: job`, Send also adds an AccuLynx job external reference (source `Terros`, project ID = Terros account ID). The webhook reads that reference to find the account.
 
-- `requestType: update`: only jobs with a reference (jobs Send created) move an account. Others are skipped.
+- `requestType: update` (recommended): only jobs with a reference (jobs Send created) move an account. Others are skipped.
 - `requestType: upsert`: a job without a reference creates a Terros account, named from the job's primary contact and placed at the job address when AccuLynx returns the job. New AccuLynx jobs are unassigned, and AccuLynx does not return unassigned jobs, so such an account can start without a name or address.
 
 ## Not covered yet
