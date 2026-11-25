@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.ZvYy5KZ6nHyT0Kb79kDIu",
+  "repository": {
+    "url": "https://github.com/terros-inc/connect",
+    "directory": "integrations/servicetitan"
+  },
   "scripts": [
     {
       "name": "ServiceTitan Appointment Sync",

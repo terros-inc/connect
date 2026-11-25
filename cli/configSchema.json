@@ -5,6 +5,22 @@
     "appId": {
       "type": "string"
     },
+    "repository": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https:\\/\\/"
+        },
+        "directory": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    },
     "scripts": {
       "type": "array",
       "items": {

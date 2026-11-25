@@ -8,6 +8,18 @@ it.each(readdirSync(integrations))('accepts the %s manifest', (name) => {
   expect(ConnectConfig.safeParse(manifest).error).toBeUndefined()
 })
 
+it.each(['http://example.test/repo', 'git://example.test/repo', 'git@example.test:repo.git'])(
+  'rejects the non-https repository URL %s',
+  (url) => {
+    const manifest = { appId: 'App.example', repository: { url }, scripts: [] }
+    expect(ConnectConfig.safeParse(manifest).success).toBe(false)
+  }
+)
+
+it('keeps repository optional', () => {
+  expect(ConnectConfig.safeParse({ appId: 'App.example', scripts: [] }).success).toBe(true)
+})
+
 it.each(['account/update', 'account.save', 'account', 'Account:save'])('rejects the permission %s', (permission) => {
   const script = { name: 'Send', entrypoint: 'src/outgoing.ts', type: 'outgoing', dataType: 'Account' }
   const manifest = {

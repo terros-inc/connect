@@ -20,9 +20,9 @@ export async function publishConnectScripts(): Promise<void> {
   if (!existingVersion) console.log('Created new app version')
   await Promise.all(scripts.map((s) => uploadScript(client, appId, version, s)))
   const documentation = await readDocumentation(cwd())
-  if (documentation !== undefined) {
-    await client.connect.app.update({ app: { appId, documentation } })
-    console.log('Updated app documentation')
+  if (documentation !== undefined || config.repository !== undefined) {
+    await client.connect.app.update({ app: { appId, documentation, repository: config.repository } })
+    console.log('Updated app details')
   }
   await new Promise((resolve) => setTimeout(resolve, 5000))
   await client.connect.version.update({

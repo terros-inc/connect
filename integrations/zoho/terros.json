@@ -1,6 +1,10 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.aDFcRGDoKMcD2hK-qY6on",
+  "repository": {
+    "url": "https://github.com/terros-inc/connect",
+    "directory": "integrations/zoho"
+  },
   "scripts": [
     {
       "name": "Zoho Lead Sync",
