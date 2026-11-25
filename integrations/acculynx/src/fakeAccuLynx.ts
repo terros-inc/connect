@@ -59,7 +59,8 @@ export function contactTypes(...items: { id: string; name: string; isDefault: bo
 // Records Terros account calls and answers success.
 export function fakeTerros(
   type: 'success' | 'error' = 'success',
-  usersOrCustomFields: SmallUser[] | Record<string, unknown> = []
+  usersOrCustomFields: SmallUser[] | Record<string, unknown> = [],
+  initialAccount: Record<string, unknown> = {}
 ) {
   const updates: unknown[] = []
   const upserts: unknown[] = []
@@ -67,7 +68,7 @@ export function fakeTerros(
   const initialCustomFields = Array.isArray(usersOrCustomFields) ? {} : usersOrCustomFields
   const customFields = { ...initialCustomFields }
   const account = {
-    get: async () => ({ account: { customFields } }),
+    get: async () => ({ account: { ...initialAccount, customFields } }),
     update: async (input: unknown) => {
       updates.push(input)
       const patch = (input as { account?: { customFieldsPatch?: Record<string, unknown> } }).account?.customFieldsPatch

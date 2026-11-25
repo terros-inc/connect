@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.Z1lgaiSrm75DMY_VlJvks",
+  "repository": { "url": "https://github.com/terros-inc/connect/tree/main/integrations/acculynx" },
   "scripts": [
     {
       "name": "AccuLynx Send",
@@ -12,12 +13,12 @@
         {
           "name": "recordType",
           "type": "string",
-          "description": "Required, no default. 'contact' creates an AccuLynx contact; 'job' creates a contact and a job for it. The new ID is saved as the account's externalLeadId and the account is not sent again."
+          "description": "Required, no default. 'contact' creates an AccuLynx contact; 'job' creates a contact and a job for it. The new ID is saved as the account's externalLeadId and the account is not sent again unless syncUpdates is on."
         },
         {
           "name": "contactTypeId",
           "type": "string",
-          "description": "Optional. AccuLynx contact type ID for new contacts."
+          "description": "Optional. AccuLynx contact type ID for new contacts. When blank, Send uses the location's default type, preferring a default named Customer."
         },
         {
           "name": "leadSourceId",
@@ -27,7 +28,7 @@
         {
           "name": "triggerStages",
           "type": "string",
-          "description": "Optional comma-separated Terros stage IDs (S.*), recommended because IDs survive renames. Existing stage-name values remain supported and match without case or surrounding whitespace. Blank sends accounts at any stage."
+          "description": "Optional comma-separated Terros stage IDs (S.*), recommended because IDs survive renames. Existing stage-name values remain supported and match without case or surrounding whitespace. These stages gate only the first create; linked-account updates are sent outside them when syncUpdates is on. Blank sends new accounts at any stage."
         },
         {
           "name": "accountFilterField",
@@ -46,8 +47,8 @@
         },
         {
           "name": "testMode",
-          "type": "string",
-          "description": "Safety switch, off by default. Type true to check the API key and log qualifying accounts, team-routing paths and values, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros. Blank, false, no, off, or 0 runs normally; any other text counts as on so a typo cannot enable writes."
+          "type": "boolean",
+          "description": "Safety switch, off by default. Turn on to check the API key and log qualifying accounts, team-routing paths and values, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros."
         },
         {
           "name": "syncUpdates",
@@ -63,7 +64,7 @@
       "authSchema": {
         "apiKey": "AccuLynx API key for one location (Account Settings > API Keys)"
       },
-      "permissions": ["account:save"],
+      "permissions": ["account:list", "account:save"],
       "slug": "acculynx-send"
     },
     {

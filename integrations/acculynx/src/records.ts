@@ -11,7 +11,7 @@ export type AccuLynxSendConfig = {
   accountFilterValues?: string
   triggerStages?: string
   addressCountry?: string
-  testMode?: string
+  testMode?: boolean | string
   syncUpdates?: string
   syncStateFieldId?: string
 }
@@ -22,7 +22,7 @@ const teamFilterFields = new Set(['owner.teamIds', 'owner.memberOf', 'teamId', '
 const unassignedTeamId = 'Team.unassigned'
 
 // Unknown values fail safe: a misspelled test-mode value must never enable writes.
-export function isTestModeOn(value: string | boolean | undefined): boolean {
+export function isTestModeOn(value: boolean | string | null | undefined): boolean {
   if (typeof value === 'boolean') return value
   const text = (value ?? '').trim().toLowerCase()
   if (offSwitchValues.includes(text)) return false
@@ -105,7 +105,7 @@ export function matchesTriggerStage(account: AccountWebhookData, config: AccuLyn
   )
 }
 
-export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxSendConfig): Record<string, unknown> {
+export function toAccuLynxContact(account: AccountWebhookData, contactTypeId: string): Record<string, unknown> {
   const resident = account.resident || {}
   const address = account.address
   const phone = toAccuLynxPhone(resident.phone)
@@ -115,7 +115,7 @@ export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxS
     lastName: resident.lastName,
     companyName: resident.businessName,
     crossReference: account.id,
-    contactTypeIds: config.contactTypeId ? [config.contactTypeId] : undefined,
+    contactTypeIds: [contactTypeId],
     phoneNumbers: phone ? [{ number: phone, type: 'Home', primary: true }] : undefined,
     emailAddresses: resident.email ? [{ address: resident.email, type: 'Personal', primary: true }] : undefined,
     // A contact's state and country are AccuLynx numeric IDs, which the account does not carry, so they are left out.
