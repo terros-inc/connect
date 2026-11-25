@@ -1,10 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.e8sApZ32j4u_H_OMJUYAn",
-  "repository": {
-    "url": "https://github.com/terros-inc/connect",
-    "directory": "integrations/gohighlevel"
-  },
   "scripts": [
     {
       "name": "GoHighLevel Account Sync",

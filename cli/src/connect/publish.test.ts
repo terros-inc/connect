@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { readDocumentation } from './publish'
+import { buildAppUpdate, readDocumentation } from './publish'
 
 const { client } = vi.hoisted(() => ({ client: vi.fn() }))
 vi.mock('@terros-inc/sdk', () => ({ TerrosClient: client }))
@@ -16,6 +16,28 @@ test.each<{ files: Record<string, string>; documentation: string | undefined }>(
   for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content)
   await expect(readDocumentation(dir)).resolves.toBe(documentation)
   rmSync(dir, { recursive: true, force: true })
+})
+
+it('includes repository metadata when the manifest declares it', () => {
+  const config = {
+    appId: 'App.example',
+    repository: { url: 'https://example.test/repository', directory: 'integrations/example' },
+    scripts: [],
+  }
+
+  expect(buildAppUpdate('App.example', config, undefined)).toEqual({
+    app: { appId: 'App.example', repository: config.repository },
+  })
+})
+
+it('does not update app details when the manifest omits repository and documentation is missing', () => {
+  expect(buildAppUpdate('App.example', { appId: 'App.example', scripts: [] }, undefined)).toBeUndefined()
+})
+
+it('omits repository from a documentation update when the manifest does not declare it', () => {
+  expect(buildAppUpdate('App.example', { appId: 'App.example', scripts: [] }, '# Documentation')).toEqual({
+    app: { appId: 'App.example', documentation: '# Documentation' },
+  })
 })
 
 it('makes no API client when validation fails', async () => {

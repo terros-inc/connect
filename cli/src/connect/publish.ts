@@ -2,9 +2,16 @@ import { cwd } from 'node:process'
 import { join } from 'node:path'
 import { readFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { type AppId, type AppVersionData, TerrosClient, type VersionAddSuccess } from '@terros-inc/sdk'
+import {
+  type AppId,
+  type AppUpdateInput,
+  type AppVersionData,
+  TerrosClient,
+  type VersionAddSuccess,
+} from '@terros-inc/sdk'
 import { buildScriptPayload } from './validate'
 import { packageScripts, type ScriptZip } from './package'
+import { type ConnectConfig } from './configSchema'
 
 export async function publishConnectScripts(): Promise<void> {
   const { scripts, config } = await packageScripts()
@@ -20,8 +27,9 @@ export async function publishConnectScripts(): Promise<void> {
   if (!existingVersion) console.log('Created new app version')
   await Promise.all(scripts.map((s) => uploadScript(client, appId, version, s)))
   const documentation = await readDocumentation(cwd())
-  if (documentation !== undefined || config.repository !== undefined) {
-    await client.connect.app.update({ app: { appId, documentation, repository: config.repository } })
+  const appUpdate = buildAppUpdate(appId, config, documentation)
+  if (appUpdate) {
+    await client.connect.app.update(appUpdate)
     console.log('Updated app details')
   }
   await new Promise((resolve) => setTimeout(resolve, 5000))
@@ -32,6 +40,21 @@ export async function publishConnectScripts(): Promise<void> {
     },
   })
   console.log(`Published new version ${version}`)
+}
+
+export function buildAppUpdate(
+  appId: AppId,
+  config: ConnectConfig,
+  documentation: string | undefined
+): AppUpdateInput | undefined {
+  if (documentation === undefined && config.repository === undefined) return undefined
+  return {
+    app: {
+      appId,
+      ...(documentation === undefined ? {} : { documentation }),
+      ...(config.repository === undefined ? {} : { repository: config.repository }),
+    },
+  }
 }
 
 // DOCS.md lets an integration keep developer notes in README.md out of the customer-facing docs.

@@ -1,10 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.Z1lgaiSrm75DMY_VlJvks",
-  "repository": {
-    "url": "https://github.com/terros-inc/connect",
-    "directory": "integrations/acculynx"
-  },
   "scripts": [
     {
       "name": "AccuLynx Send",

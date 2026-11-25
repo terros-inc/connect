@@ -1,10 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.FvbSC5ZJ_brTaEg-4d7FR",
-  "repository": {
-    "url": "https://github.com/terros-inc/connect",
-    "directory": "integrations/jobnimbus"
-  },
   "scripts": [
     {
       "name": "JobNimbus Send",

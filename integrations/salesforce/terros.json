@@ -1,10 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.V4e58Ae4xGKprjYSNQU23",
-  "repository": {
-    "url": "https://github.com/terros-inc/connect",
-    "directory": "integrations/salesforce"
-  },
   "scripts": [
     {
       "name": "Salesforce Lead Sync",
