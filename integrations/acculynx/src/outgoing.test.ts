@@ -1,5 +1,5 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
-import { isTestModeOn, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
+import { isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
 import { sendAccount } from './outgoing.ts'
 import { fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
 
@@ -17,6 +17,18 @@ function account(overrides: Partial<AccountWebhookData> = {}): AccountWebhookDat
       postal1: '62701',
       latlng: { latitude: 0, longitude: 0 },
     },
+    ...overrides,
+  }
+}
+
+function owner(
+  overrides: Partial<NonNullable<AccountWebhookData['owner']>> = {}
+): NonNullable<AccountWebhookData['owner']> {
+  return {
+    userId: 'U.example',
+    firstName: 'Pat',
+    lastName: 'Example',
+    email: 'user@example.test',
     ...overrides,
   }
 }
@@ -320,6 +332,100 @@ describe('sendAccount', () => {
     expect(matching.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
     expect(wrongStage.calls).toEqual([])
     expect(wrongMarket.calls).toEqual([])
+  })
+
+  // Prevents one account from qualifying for two location installs when its owner belongs to both markets, while
+  // preserving owner-team routing for accounts that have not been assigned a team.
+  test.each([
+    {
+      name: 'assigned account team matches',
+      account: account({
+        teamId: 'Team.market',
+        owner: owner({ teamIds: ['Team.other'] }),
+      }),
+      field: 'owner.teamIds',
+      values: 'Team.market',
+      expected: true,
+    },
+    {
+      name: 'assigned account team rejects without owner fallback',
+      account: account({
+        teamId: 'Team.other',
+        owner: owner({ teamIds: ['Team.market'] }),
+      }),
+      field: 'owner.teamIds',
+      values: 'Team.market',
+      expected: false,
+    },
+    {
+      name: 'missing account team falls back to a matching owner team',
+      account: account({
+        owner: owner({ teamIds: ['Team.market'] }),
+      }),
+      field: 'owner.teamIds',
+      values: 'Team.market',
+      expected: true,
+    },
+    {
+      name: 'missing account team rejects a nonmatching owner team',
+      account: account({
+        owner: owner({ teamIds: ['Team.other'] }),
+      }),
+      field: 'owner.teamIds',
+      values: 'Team.market',
+      expected: false,
+    },
+    {
+      name: 'unassigned account team falls back to the owner',
+      account: account({
+        teamId: 'Team.unassigned',
+        owner: owner({ teamIds: ['Team.market'] }),
+      }),
+      field: 'owner.teamIds',
+      values: 'Team.market',
+      expected: true,
+    },
+    {
+      name: 'unassigned sentinel is not a matchable account team',
+      account: account({ teamId: 'Team.unassigned' }),
+      field: 'teamId',
+      values: 'Team.unassigned',
+      expected: false,
+    },
+    {
+      name: 'non-team filter remains unchanged',
+      account: account({ teamId: 'Team.other' }),
+      field: 'workflowState.workflowId',
+      values: 'WF.north',
+      expected: true,
+    },
+  ])('$name', ({ account: input, field, values, expected }) => {
+    expect(matchesAccountFilter(input, { accountFilterField: field, accountFilterValues: values })).toBe(expected)
+  })
+
+  test('test mode logs whether account-team or owner-team routing matched', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    matchesAccountFilter(
+      account({ teamId: 'Team.other' }),
+      {
+        accountFilterField: 'owner.teamIds',
+        accountFilterValues: 'Team.market',
+      },
+      true
+    )
+    matchesAccountFilter(
+      account({
+        owner: owner({ memberOf: [{ teamId: 'Team.market', name: 'Market A' }] }),
+      }),
+      { accountFilterField: 'owner.memberOf', accountFilterValues: 'Market A' },
+      true
+    )
+
+    const output = log.mock.calls.flat().join('\n')
+    expect(output).toContain('used account team; team=["Team.other"]; rejected')
+    expect(output).toContain('used owner teams from owner.memberOf; team=["Team.market","Market A"]; matched')
+    log.mockRestore()
   })
 
   // Prevents linking the account to a job that does not exist.

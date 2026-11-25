@@ -32,7 +32,7 @@
         {
           "name": "accountFilterField",
           "type": "string",
-          "description": "Optional. Dotted Terros account field, such as owner.memberOf or owner.teamIds, that decides which AccuLynx location an account belongs to. Lists match when any team ID or name is allowed. Blank sends every account."
+          "description": "Optional. Dotted Terros account field that decides which AccuLynx location an account belongs to. For team fields (owner.teamIds, owner.memberOf, teamId, or team), an assigned account team is matched alone; otherwise the configured field is used as the fallback. Lists match when any team ID or name is allowed. Blank sends every account."
         },
         {
           "name": "accountFilterValues",
@@ -47,7 +47,7 @@
         {
           "name": "testMode",
           "type": "string",
-          "description": "Safety switch, off by default. Type true to check the API key and log qualifying accounts, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros. Blank, false, no, off, or 0 runs normally; any other text counts as on so a typo cannot enable writes."
+          "description": "Safety switch, off by default. Type true to check the API key and log qualifying accounts, team-routing paths and values, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros. Blank, false, no, off, or 0 runs normally; any other text counts as on so a typo cannot enable writes."
         }
       ],
       "authSchema": {

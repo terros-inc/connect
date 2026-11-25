@@ -1,4 +1,4 @@
-import type { SmallUser, UserId, UserProfileData } from './user'
+import type { SmallUser, TeamId, UserId, UserProfileData } from './user'
 import type { SmallAddress } from './location'
 import type { CustomFieldMap } from './customFields'
 import type { CompanyData, CompanyId } from './company'
@@ -65,6 +65,7 @@ export type AccountWebhookWorkflowState = {
 export type AccountWebhookData = WebhookAuditProps & {
   id: AccountId
   accountStatus?: string
+  teamId?: TeamId
   workflowState?: AccountWebhookWorkflowState
   owner?: SmallUser
   closer?: SmallUser

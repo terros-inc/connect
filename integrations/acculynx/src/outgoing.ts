@@ -67,7 +67,7 @@ export async function sendAccount(
     return
   }
 
-  if (!matchesAccountFilter(account, config)) {
+  if (!matchesAccountFilter(account, config, testMode)) {
     console.log(`Skipping account ${account.id}: ${config.accountFilterField} is not one of this install's values`)
     return
   }
