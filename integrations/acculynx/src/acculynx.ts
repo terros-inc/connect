@@ -37,7 +37,7 @@ export type AccuLynxCompanySettings = {
 export type AccuLynxMilestone = {
   name?: string
   duration?: { startDate?: string }
-  statuses?: { name?: string; isCurrent?: boolean }[]
+  statuses?: { name?: string; isCurrent?: boolean; duration?: { startDate?: string } }[]
 }
 export type AccuLynxCompanyRepresentative = { user?: { id?: string } }
 export type AccuLynxUser = { email?: string }

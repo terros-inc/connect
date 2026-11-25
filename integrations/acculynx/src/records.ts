@@ -184,6 +184,7 @@ export const jobChangeTopics = [
 export type JobChange = {
   subscriptionId?: string
   jobId: string
+  topic: (typeof jobChangeTopics)[number]
 }
 
 // AccuLynx does not sign webhooks, so only routing data and the job ID are taken from an accepted event.
@@ -198,7 +199,11 @@ export function parseJobChange(body: unknown): JobChange | undefined {
   const jobId = payload.event?.job?.id
   if (!jobId) throw Error('AccuLynx job webhook has no job id')
 
-  return { subscriptionId: payload.subscriptionId, jobId }
+  return {
+    subscriptionId: payload.subscriptionId,
+    jobId,
+    topic: payload.topicName as (typeof jobChangeTopics)[number],
+  }
 }
 
 // The Terros account fields that a job fetched from AccuLynx can fill in when the webhook creates an account.

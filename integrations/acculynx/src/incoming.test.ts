@@ -42,8 +42,8 @@ describe('receiveWebhook', () => {
 
     expect(calls.map((call) => call.path)).toEqual([
       '/jobs/job-1/milestones/current',
-      '/jobs/job-1/representatives/company',
       '/jobs/external-references',
+      '/jobs/job-1/representatives/company',
     ])
     expect(upserts).toEqual([
       {
@@ -93,7 +93,11 @@ describe('receiveWebhook', () => {
           duration: { startDate: '2026-01-05T19:00:00Z' },
           statuses: [
             { name: 'Old status', isCurrent: false },
-            { name: ' Appointment Scheduled  ', isCurrent: true },
+            {
+              name: ' Appointment Scheduled  ',
+              isCurrent: true,
+              duration: { startDate: '2026-01-06T20:00:00Z' },
+            },
           ],
         },
       },
@@ -113,7 +117,11 @@ describe('receiveWebhook', () => {
     )
 
     expect(upserts[0]).toMatchObject({
-      account: { workflowTarget: 'Appointment Set', sourceStatus: 'Lead > Appointment Scheduled' },
+      account: {
+        workflowTarget: 'Appointment Set',
+        sourceStatus: 'Lead > Appointment Scheduled',
+        lastActionDate: Date.parse('2026-01-06T20:00:00Z'),
+      },
     })
   })
 
@@ -195,6 +203,7 @@ describe('receiveWebhook', () => {
     )
 
     expect(upserts[0]).toMatchObject({ account: { closer } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('lastActionDate')
   })
 
   test.each([
@@ -263,11 +272,27 @@ describe('receiveWebhook', () => {
 
     expect(calls.map((call) => call.path)).toEqual([
       '/jobs/job-1/milestones/current',
-      '/jobs/job-1/representatives/company',
       '/jobs/external-references',
+      '/jobs/job-1/representatives/company',
     ])
     expect(upserts[0]).toMatchObject({ account: { sourceStatus: 'Approved' } })
     expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('workflowTarget')
+  })
+
+  // Prevents an unmapped new AccuLynx job from creating a stage-less Terros account in upsert mode.
+  test("'upsert' skips an unlinked job when its milestone and status have no configured mapping", async () => {
+    const { client, calls } = fakeAccuLynx(unlinked)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent(),
+      { workflowId: 'WF.example', requestType: 'upsert', milestoneStageMapping: { Completed: 'Work Complete' } },
+      client,
+      terros
+    )
+
+    expect(calls.map((call) => call.path)).toEqual(['/jobs/job-1/milestones/current', '/jobs/external-references'])
+    expect(upserts).toEqual([])
   })
 
   // Prevents 'update' mode from creating accounts for jobs that were never sent from Terros.
@@ -278,6 +303,55 @@ describe('receiveWebhook', () => {
     await receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'update' }, client, terros)
 
     expect(upserts).toEqual([])
+  })
+
+  test.each([
+    [
+      'company representative lookup',
+      {
+        ...linked,
+        'GET /jobs/job-1/representatives/company': { status: 500 },
+      },
+    ],
+    [
+      'representative user lookup',
+      {
+        ...linked,
+        'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
+        'GET /users/user-1': { status: 500 },
+      },
+    ],
+  ])('still applies the account update when %s fails', async (_case, replies) => {
+    const { client } = fakeAccuLynx(replies)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(milestoneEvent(), { workflowId: 'WF.example', requestType: 'update' }, client, terros)
+
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved' } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
+  })
+
+  test('still applies the account update when the Terros user lookup fails', async () => {
+    const { client } = fakeAccuLynx({
+      ...linked,
+      'GET /jobs/job-1/representatives/company': { body: { user: { id: 'user-1' } } },
+      'GET /users/user-1': { body: { email: 'user@example.test' } },
+    })
+    const { terros, upserts } = fakeTerros()
+    const failingTerros = {
+      ...(terros as object),
+      user: { list: async () => Promise.reject(new Error('user lookup failed')) },
+    }
+
+    await receiveWebhook(
+      milestoneEvent(),
+      { workflowId: 'WF.example', requestType: 'update' },
+      client,
+      failingTerros as never
+    )
+
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Approved' } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('closer')
   })
 
   // Prevents creating blank accounts for jobs started in AccuLynx.
@@ -340,10 +414,7 @@ describe('receiveWebhook', () => {
       unknownTerros.terros
     )
 
-    expect(unknown.calls.map((call) => call.path)).toEqual([
-      '/jobs/job-2/milestones/current',
-      '/jobs/job-2/representatives/company',
-    ])
+    expect(unknown.calls.map((call) => call.path)).toEqual(['/jobs/job-2/milestones/current'])
     expect(unknownTerros.upserts).toEqual([])
   })
 

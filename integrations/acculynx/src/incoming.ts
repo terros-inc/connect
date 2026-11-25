@@ -51,26 +51,18 @@ export async function receiveWebhook(
 
   // AccuLynx does not sign webhooks and Connect gives this script only the body, so anyone with the URL could post
   // one. The body is therefore only a hint: current job data is read back from AccuLynx with this location's key.
-  const [milestone, representative] = await Promise.all([
-    accuLynx.getCurrentJobMilestone(change.jobId),
-    accuLynx.getJobCompanyRepresentative(change.jobId),
-  ])
+  const milestone = await accuLynx.getCurrentJobMilestone(change.jobId)
   if (!milestone?.name) {
     console.log(`Ignoring AccuLynx job ${change.jobId}: this location's key cannot read its current milestone`)
     return
   }
   const milestoneName = milestone.name.trim()
-  const statusName = milestone.statuses?.find((status) => status.isCurrent)?.name?.trim()
+  const currentStatus = milestone.statuses?.find((status) => status.isCurrent)
+  const statusName = currentStatus?.name?.trim()
   const sourceStatus = statusName ? `${milestoneName} > ${statusName}` : milestoneName
   const workflowTarget = getWorkflowTarget(milestoneName, statusName, config.milestoneStageMapping)
   if (!workflowTarget)
     console.log(`Skipping stage update for AccuLynx job ${change.jobId}: ${sourceStatus} has no configured mapping`)
-  const changedAt = Date.parse(milestone.duration?.startDate ?? '')
-
-  const representativeUserId = representative?.user?.id
-  const representativeUser = representativeUserId ? await accuLynx.getUser(representativeUserId) : undefined
-  const closer = representativeUser?.email ? await findTerrosUser(representativeUser.email, terros) : undefined
-
   const references = await accuLynx.getJobExternalReferences(change.jobId)
   const accountId = references.find((reference) => reference.projectId)?.projectId as AccountId | undefined
 
@@ -78,8 +70,15 @@ export async function receiveWebhook(
     console.log(`Skipping AccuLynx job ${change.jobId}: it is not linked to a Terros account`)
     return
   }
+  if (!accountId && !workflowTarget) {
+    console.log(`Skipping AccuLynx job ${change.jobId}: it is unlinked and ${sourceStatus} has no configured mapping`)
+    return
+  }
+
+  const closer = await resolveCloser(change.jobId, accuLynx, terros)
 
   const jobDetails = accountId ? {} : fromAccuLynxJob(await accuLynx.getJob(change.jobId))
+  const changedAt = getChangedAt(change.topic, milestone.duration?.startDate, currentStatus?.duration?.startDate)
 
   console.log(`Sending AccuLynx job ${change.jobId} status ${sourceStatus} to Terros (${requestType})`)
 
@@ -95,7 +94,7 @@ export async function receiveWebhook(
       ...(closer ? { closer } : {}),
       accountSource: config.accountSource || 'AccuLynx',
       externalLeadId: change.jobId,
-      lastActionDate: Number.isFinite(changedAt) ? changedAt : Date.now(),
+      ...(changedAt === undefined ? {} : { lastActionDate: changedAt }),
     },
   })
 
@@ -103,11 +102,40 @@ export async function receiveWebhook(
   console.log(`Updated Terros account ${result.account?.accountId} from AccuLynx job ${change.jobId}`)
 }
 
+async function resolveCloser(
+  jobId: string,
+  accuLynx: AccuLynxClient,
+  terros: Pick<TerrosClient, 'user'>
+): Promise<SmallUser | undefined> {
+  try {
+    const representative = await accuLynx.getJobCompanyRepresentative(jobId)
+    const representativeUserId = representative?.user?.id
+    if (!representativeUserId) return undefined
+
+    const representativeUser = await accuLynx.getUser(representativeUserId)
+    return representativeUser?.email ? await findTerrosUser(representativeUser.email, terros) : undefined
+  } catch {
+    console.log(`Skipping closer update for AccuLynx job ${jobId}: representative lookup failed`)
+    return undefined
+  }
+}
+
 async function findTerrosUser(email: string, terros: Pick<TerrosClient, 'user'>): Promise<SmallUser | undefined> {
   const response = await terros.user.list({ showArchived: false })
   if (response.type !== 'success') return undefined
   const normalizedEmail = email.trim().toLowerCase()
   return response.users.find((user: SmallUser) => user.email.trim().toLowerCase() === normalizedEmail)
+}
+
+function getChangedAt(
+  topic: string,
+  milestoneStart: string | undefined,
+  statusStart: string | undefined
+): number | undefined {
+  if (topic.startsWith('job.representatives.')) return undefined
+  const start = topic === 'job.milestone.current_changed' ? milestoneStart : statusStart
+  const changedAt = Date.parse(start ?? '')
+  return Number.isFinite(changedAt) ? changedAt : Date.now()
 }
 
 function getWorkflowTarget(
