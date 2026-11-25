@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.Z1lgaiSrm75DMY_VlJvks",
-  "repository": { "url": "https://github.com/terros-inc/connect/tree/main/integrations/acculynx" },
   "scripts": [
     {
       "name": "AccuLynx Send",
@@ -18,7 +17,7 @@
         {
           "name": "contactTypeId",
           "type": "string",
-          "description": "Optional. AccuLynx contact type ID for new contacts. When blank, Send uses the location's default type, preferring a default named Customer."
+          "description": "Optional. AccuLynx contact type ID for new contacts."
         },
         {
           "name": "leadSourceId",
@@ -47,8 +46,18 @@
         },
         {
           "name": "testMode",
-          "type": "boolean",
-          "description": "Safety switch, off by default. Turn on to check the API key and log qualifying accounts, team-routing paths and values, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros."
+          "type": "string",
+          "description": "Safety switch, off by default. Type true to check the API key and log qualifying accounts, team-routing paths and values, skip reasons, exact payloads, and API diagnostics without writing to AccuLynx or Terros. Blank, false, no, off, or 0 runs normally; any other text counts as on so a typo cannot enable writes."
+        },
+        {
+          "name": "syncUpdates",
+          "type": "string",
+          "description": "Off by default. Type true, yes, on, or 1 to sync later changes to an account that is already linked. Blank, false, no, off, 0, or unrecognized text is off. Requires syncStateFieldId."
+        },
+        {
+          "name": "syncStateFieldId",
+          "type": "string",
+          "description": "Required when syncUpdates is on. Terros account text custom field ID used privately by Send to remember the last synced fields and sent note IDs."
         }
       ],
       "authSchema": {

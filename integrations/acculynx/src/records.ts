@@ -11,7 +11,9 @@ export type AccuLynxSendConfig = {
   accountFilterValues?: string
   triggerStages?: string
   addressCountry?: string
-  testMode?: boolean | string
+  testMode?: string
+  syncUpdates?: string
+  syncStateFieldId?: string
 }
 
 const offSwitchValues = ['', 'false', 'no', 'off', '0']
@@ -20,7 +22,7 @@ const teamFilterFields = new Set(['owner.teamIds', 'owner.memberOf', 'teamId', '
 const unassignedTeamId = 'Team.unassigned'
 
 // Unknown values fail safe: a misspelled test-mode value must never enable writes.
-export function isTestModeOn(value: boolean | string | null | undefined): boolean {
+export function isTestModeOn(value: string | boolean | undefined): boolean {
   if (typeof value === 'boolean') return value
   const text = (value ?? '').trim().toLowerCase()
   if (offSwitchValues.includes(text)) return false
@@ -28,6 +30,24 @@ export function isTestModeOn(value: boolean | string | null | undefined): boolea
     console.error(`Config testMode is "${value}", expected true or false; treating it as true`)
   }
   return true
+}
+
+// Update sync fails closed: unlike test mode, a typo must never enable vendor writes.
+export function isSyncUpdatesOn(value: string | boolean | undefined): boolean {
+  if (typeof value === 'boolean') return value
+  const text = (value ?? '').trim().toLowerCase()
+  if (offSwitchValues.includes(text)) return false
+  if (onSwitchValues.includes(text)) return true
+  console.error(`Config syncUpdates is "${value}", expected true or false; treating it as false`)
+  return false
+}
+
+export function getSyncStateFieldId(value: string | undefined): `CF.${string}` {
+  const fieldId = String(value ?? '').trim()
+  if (!fieldId.startsWith('CF.') || fieldId.length <= 3) {
+    throw Error('syncStateFieldId must be a Terros account custom field ID beginning with CF.')
+  }
+  return fieldId as `CF.${string}`
 }
 
 // Neither record type is a default: the install must say which one it sends.
@@ -85,7 +105,7 @@ export function matchesTriggerStage(account: AccountWebhookData, config: AccuLyn
   )
 }
 
-export function toAccuLynxContact(account: AccountWebhookData, contactTypeId: string): Record<string, unknown> {
+export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxSendConfig): Record<string, unknown> {
   const resident = account.resident || {}
   const address = account.address
   const phone = toAccuLynxPhone(resident.phone)
@@ -95,7 +115,7 @@ export function toAccuLynxContact(account: AccountWebhookData, contactTypeId: st
     lastName: resident.lastName,
     companyName: resident.businessName,
     crossReference: account.id,
-    contactTypeIds: [contactTypeId],
+    contactTypeIds: config.contactTypeId ? [config.contactTypeId] : undefined,
     phoneNumbers: phone ? [{ number: phone, type: 'Home', primary: true }] : undefined,
     emailAddresses: resident.email ? [{ address: resident.email, type: 'Personal', primary: true }] : undefined,
     // A contact's state and country are AccuLynx numeric IDs, which the account does not carry, so they are left out.

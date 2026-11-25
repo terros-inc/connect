@@ -2,10 +2,10 @@
 
 Connects a Terros company to AccuLynx through the [AccuLynx API v2](https://apidocs.acculynx.com). Two scripts; a company turns on the direction(s) it needs. Neither direction is on by default.
 
-| Script           | Slug               | Direction         | What it does                                                                                                                                                                                                                     |
-| ---------------- | ------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | At configured trigger stages, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it (`recordType: job`), and saves the new ID as the account's `externalLeadId`. Linked accounts are not sent again. |
-| AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives milestone, milestone-status, and company-representative events, then updates the linked account's stage, source status, and matched closer. Other topics are logged and ignored.                                        |
+| Script           | Slug               | Direction         | What it does                                                                                                                                                                      |
+| ---------------- | ------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | At configured trigger stages, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it, then optionally keeps the linked record updated.                   |
+| AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives milestone, milestone-status, and company-representative events, then updates the linked account's stage, source status, and matched closer. Other topics are ignored. |
 
 ## Install and configure
 
@@ -19,7 +19,9 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
    - `triggerStages` (optional): comma-separated Terros stage IDs (`S.*`) at which accounts are sent. IDs remain stable when a stage is renamed and are recommended for new configuration. Existing stage-name values remain supported and match case-insensitively after trimming. Blank preserves the previous behavior of sending at any stage.
    - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location. For a team field (`owner.teamIds`, `owner.memberOf`, `teamId`, or `team`), an assigned account `teamId` is matched by itself. If the account has no assigned team, the configured field is used as the fallback. A list field matches when any team ID or name exactly matches a configured value.
    - `addressCountry`: an optional fallback two-letter country code, such as `US`, for Account webhooks that omit country.
-   - `testMode` (optional, off by default): turn on to validate the API key and preview Send without writing anything. Existing installs with a legacy text value continue to accept `true`, `yes`, `on`, or `1` as on and `false`, `no`, `off`, or `0` as off, ignoring case and surrounding whitespace. Any other legacy text is treated as on and logged so a typo cannot accidentally enable writes.
+   - `testMode` (optional, off by default): type `true`, `yes`, `on`, or `1` to validate the API key and preview Send without writing anything. Blank, `false`, `no`, `off`, or `0` is off. Any other text is treated as on and logged so a typo cannot accidentally enable writes.
+   - `syncUpdates` (optional, off by default): type `true`, `yes`, `on`, or `1` to update a linked AccuLynx record after later Terros changes. Blank, `false`, `no`, `off`, `0`, and all unrecognized text are off; an unrecognized value is logged. This switch deliberately fails closed so a typo cannot enable vendor writes.
+   - `syncStateFieldId`: required when `syncUpdates` is on. Create a Terros account text custom field for integration state and put its `CF.*` ID here. Do not edit this field manually. Send stores a fingerprint of its last synced snapshot and the sent Terros note IDs there, which makes note appends idempotent and lets inbound-only changes stop before any AccuLynx request without duplicating account details in the state field.
 3. **AccuLynx Webhook** config:
    - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
    - `requestType` (required): `update` or `upsert` ([Linking jobs and accounts](#linking-jobs-and-accounts)). Use `update` so only jobs already linked by Send can move an account.
@@ -34,7 +36,7 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
 
 AccuLynx API keys are created per location by an AccuLynx admin (Account Settings > API Keys). Install the app once per location, with that location's key as the `apiKey` secret on both scripts.
 
-- **Send:** with more than one location, set `accountFilterField` to a team field (`owner.teamIds`, `owner.memberOf`, `teamId`, or `team`) and `accountFilterValues` to the comma-separated team IDs (or available names) for that location. When the account has an assigned `teamId`, Send matches only that ID and never falls back to the owner, even when the owner belongs to another location's team. `Team.unassigned` is treated as no account team. When the account has no assigned team, Send preserves the configured-field behavior: a list matches when any element's team ID or name is allowed, and a plain value matches exactly. Non-team filter fields retain their prior behavior. Without a filter an install sends every account. `triggerStages` is a separate condition, so an account must pass both settings when both are configured.
+- **Send:** with more than one location, set `accountFilterField` to a team field (`owner.teamIds`, `owner.memberOf`, `teamId`, or `team`) and `accountFilterValues` to the comma-separated team IDs (or available names) for that location. When the account has an assigned `teamId`, Send matches only that ID and never falls back to the owner, even when the owner belongs to another location's team. `Team.unassigned` is treated as no account team. When the account has no assigned team, Send preserves the configured-field behavior: a list matches when any element's team ID or name is allowed, and a plain value matches exactly. Non-team filter fields retain their prior behavior. Without a filter an install sends every account. `triggerStages` gates only the first create; once an account is linked, `syncUpdates` continues outside those stages. The account filter still gates both creates and updates.
 
   Account webhooks currently populate `owner.teamIds` from the owner's direct team memberships and do not normally populate `owner.memberOf`. Those memberships do not automatically include ancestor teams, so an owner who belongs only to a child team does not match a parent-team value. Add the owner directly to every parent team that should be a fallback match; Send does not expand the hierarchy.
 
@@ -44,9 +46,21 @@ Job addresses: AccuLynx needs a country with every job address. Account webhooks
 
 ## Test mode and send confirmation
 
-Turn `testMode` on for a safe install check. Each Send run makes a read-only request to check the API key. When `contactTypeId` is blank and the webhook could create a contact, it also lists the location's available contact types, logging each type's name and default status and which type Send selected. Configured IDs and Account removes skip that list because they do not need default-type discovery. Test mode then logs the stage, filter and linked-record decisions for the account. For team filters, the log identifies the account-team or owner-team fallback path and the team ID or name that matched or was rejected. A qualifying account is prefixed with `DRY RUN:` and includes the exact contact payload and, for `recordType: job`, the job payload with `<created-contact-id>` standing in for the ID AccuLynx would return. Skipped accounts log their reason. Test mode makes no AccuLynx or Terros writes, including no `externalLeadId` update. Request summaries contain only the method, path, status and a short response-body summary; credentials and authorization headers are never logged.
+Turn `testMode` on for a safe install check. Each Send run makes one read-only `GET /company-settings` request and logs whether the key works and the AccuLynx company/location it belongs to. It then logs the stage, filter and linked-record decisions for the account. For team filters, the log identifies the account-team or owner-team fallback path and the team ID or name that matched or was rejected. A qualifying account is prefixed with `DRY RUN:` and includes the exact contact payload and, for `recordType: job`, the job payload with `<created-contact-id>` standing in for the ID AccuLynx would return. Skipped accounts log their reason. Test mode makes no AccuLynx or Terros writes, including no `externalLeadId` update. Request summaries contain only the method, path, status and a short response-body summary; credentials and authorization headers are never logged.
 
 After a normal-mode create, Send logs the returned ID and link, then reads the final contact or job back. A new unassigned job may not be returned by AccuLynx yet; Send logs that likely-unassigned case and still saves `externalLeadId`. Any other read-back failure is also diagnostic only and does not fail an otherwise successful delivery.
+
+For linked accounts, test mode reads the existing AccuLynx record and logs each contact, job, phone, email, or note write that would occur. It does not make those writes and does not update the Terros sync-state field.
+
+## Linked-account updates
+
+With `syncUpdates` off, linked accounts keep the original create-once behavior. With it on, Send compares the account with the snapshot in `syncStateFieldId` before calling AccuLynx. A stage, closer, or `sourceStatus` change written by AccuLynx Webhook is outside that snapshot, so it cannot echo back. Any event with no changed synced field and no new note also stops without an AccuLynx request.
+
+When a synced value changed, Send reads the linked contact and updates first name, last name, company name, and mailing address only when their current values differ. It reads email addresses and phone numbers before using AccuLynx's add-only endpoints, so an existing value is never added twice. For `recordType: job`, it resolves the job from `externalLeadId`, loads its primary contact, and also updates a changed job location address and the configured `leadSourceId`. The job address includes the webhook country or `addressCountry` fallback used on create.
+
+Notes present when Send first records its sync state are treated as the create-time baseline. Each later nonempty Terros note is appended once with its `Note.*` ID in the text: a job message for `recordType: job`, or a contact note truncated to AccuLynx's 1,000-character limit for `recordType: contact`. Send never rewrites the job's create-time `notes` field. After successful writes it stores the new snapshot and sent note IDs in the Terros state field; the state-field webhook is therefore a no-op.
+
+AccuLynx's public changelog announces an “Update contact” operation but its API reference index does not currently expose the endpoint schema. Send uses the conventional `PUT /api/v2/contacts/{contactId}` path with the changed basic contact fields; unlike phone and email, this path has not been verified with a live write.
 
 ## Webhook authentication
 
@@ -71,7 +85,7 @@ A delivery can fail partway and be retried, so Send looks for what an earlier at
 
 3. A new or unreferenced job gets the `Terros` reference. A failure here fails the delivery.
 
-`externalLeadId` is saved on the account last, so a linked account always has its reference and a failed save is repaired by the retry without a second contact or job.
+`externalLeadId` and the first sync snapshot are saved on the account last, so a linked account always has its reference and a failed save is repaired by the retry without a second contact or job.
 
 ## Rate limit
 
@@ -86,7 +100,6 @@ With `recordType: job`, Send also adds an AccuLynx job external reference (sourc
 
 ## Not covered yet
 
-- Changes to an account after it is linked are not sent; AccuLynx owns the record from then on.
 - Contact mailing addresses go without state and country, which AccuLynx takes as numeric IDs.
 - Retry lookups rely on behavior the AccuLynx docs do not state and that was not tried against a live account: that contact search finds a contact created moments earlier and pages by page number, and that a contact's jobs include a new, unassigned job. If a lookup misses, a retry creates a second record as before. A retry also creates a second job when the job it created earlier has no reference and someone added another job to the contact meanwhile.
 - A webhook for a job AccuLynx does not return through the current-milestone endpoint (it may hide unassigned jobs, as `GET /jobs/{id}` does) is ignored.

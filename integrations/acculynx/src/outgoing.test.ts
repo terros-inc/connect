@@ -1,13 +1,8 @@
+import { createHash } from 'node:crypto'
 import type { AccountWebhookData } from '@terros-inc/sdk'
-import manifest from '../terros.json' with { type: 'json' }
-import { isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
-import { handler, sendAccount as sendAccountWithConfig } from './outgoing.ts'
-import { contactTypes, fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
-
-async function sendAccount(...args: Parameters<typeof sendAccountWithConfig>): Promise<void> {
-  args[1] = { contactTypeId: 'type-configured', ...args[1] }
-  return sendAccountWithConfig(...args)
-}
+import { isSyncUpdatesOn, isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
+import { sendAccount } from './outgoing.ts'
+import { fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
 
 function account(overrides: Partial<AccountWebhookData> = {}): AccountWebhookData {
   return {
@@ -46,6 +41,41 @@ const created = {
   'POST /jobs/external-references': { status: 201, body: {} },
 }
 
+function savedState(
+  sentNoteIds: string[] = [],
+  extra: { job?: boolean; leadSourceId?: string; country?: string } = {}
+): string {
+  const fields = {
+    contact: {
+      firstName: 'Pat',
+      lastName: 'Example',
+      companyName: '',
+      mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+      phone: '3125550100',
+      email: 'pat@example.test',
+    },
+    ...(extra.job
+      ? {
+          job: {
+            locationAddress: {
+              street1: '1 Main St',
+              city: 'Springfield',
+              state: 'IL',
+              country: extra.country ?? 'US',
+              zipCode: '62701',
+            },
+            ...(extra.leadSourceId ? { leadSourceId: extra.leadSourceId } : {}),
+          },
+        }
+      : {}),
+  }
+  return JSON.stringify({
+    version: 1,
+    fingerprint: createHash('sha256').update(JSON.stringify(fields)).digest('base64url'),
+    sentNoteIds,
+  })
+}
+
 describe('sendAccount', () => {
   // Prevents a job without its contact, an unlinked account (sent again on every change), or a job the
   // webhook cannot trace back to the account.
@@ -73,7 +103,6 @@ describe('sendAccount', () => {
       firstName: 'Pat',
       lastName: 'Example',
       crossReference: 'Account.example',
-      contactTypeIds: ['type-configured'],
       phoneNumbers: [{ number: '3125550100', type: 'Home', primary: true }],
       emailAddresses: [{ address: 'pat@example.test', type: 'Personal', primary: true }],
       mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
@@ -96,98 +125,25 @@ describe('sendAccount', () => {
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
   })
 
-  test('configured contactTypeId is trimmed before contact creation', async () => {
-    const { client, calls } = fakeAccuLynx(created)
-
-    await sendAccountWithConfig(
-      account(),
-      { recordType: 'contact', contactTypeId: '  type-configured  ' },
+  // Prevents a note that existed at first send from being appended again when update sync handles the link event.
+  test('an update-enabled create saves its field fingerprint and initial note IDs with the link', async () => {
+    const { client } = fakeAccuLynx(created)
+    const { terros, updates } = fakeTerros()
+    await sendAccount(
+      account({
+        notes: [{ noteId: 'Note.example', text: 'Initial note', timestamp: 1, userId: 'U.example' }],
+      }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
       client,
-      fakeTerros().terros
+      terros
     )
 
-    expect(calls.find((call) => call.path === '/contacts')?.body).toMatchObject({
-      contactTypeIds: ['type-configured'],
-    })
-  })
-
-  test.each([
-    {
-      name: 'one default',
-      types: [
-        { id: 'type-general', name: 'General Contact', isDefault: false },
-        { id: 'type-customer', name: 'Customer', isDefault: true },
-      ],
-      expected: 'type-customer',
-    },
-    {
-      name: 'Customer and another default',
-      types: [
-        { id: 'type-general', name: 'General Contact', isDefault: true },
-        { id: 'type-customer', name: 'cUsToMeR', isDefault: true },
-      ],
-      expected: 'type-customer',
-    },
-    {
-      name: 'several defaults without Customer',
-      types: [
-        { id: 'type-first', name: 'Primary', isDefault: true },
-        { id: 'type-second', name: 'Secondary', isDefault: true },
-      ],
-      expected: 'type-first',
-    },
-  ])('blank contactTypeId uses $name', async ({ types, expected }) => {
-    const { client, calls } = fakeAccuLynx({
-      ...created,
-      'GET /contacts/contact-types': contactTypes(...types),
-    })
-
-    await sendAccount(account(), { recordType: 'contact', contactTypeId: '' }, client, fakeTerros().terros)
-
-    expect(calls.filter((call) => call.path === '/contacts/contact-types')).toHaveLength(1)
-    expect(calls.find((call) => call.path === '/contacts')?.body).toMatchObject({ contactTypeIds: [expected] })
-  })
-
-  // Prevents a partial write when the install has no usable configured or default contact type.
-  test.each([
-    ['an empty list', contactTypes()],
-    ['no marked default', contactTypes({ id: 'type-general', name: 'General Contact', isDefault: false })],
-    ['a failed list call', { status: 500, body: { title: 'Unavailable' } }],
-  ])('blank contactTypeId fails before creating anything for %s', async (_name, reply) => {
-    const { client, calls } = fakeAccuLynx({ ...created, 'GET /contacts/contact-types': reply })
-
-    await expect(
-      sendAccount(account(), { recordType: 'job', contactTypeId: '' }, client, fakeTerros().terros)
-    ).rejects.toThrow('contactTypeId')
-
-    expect(calls.filter((call) => call.method === 'POST')).toEqual([])
-  })
-
-  // Prevents silently selecting no type when the location's default is beyond the first API page.
-  test('contact types after the first page are considered', async () => {
-    const firstPage = Array.from({ length: 25 }, (_, index) => ({
-      id: `type-${index}`,
-      name: `Type ${index}`,
-      isDefault: false,
-    }))
-    const { client, calls } = fakeAccuLynx({
-      ...created,
-      'GET /contacts/contact-types?pageSize=25&pageStartIndex=0': contactTypes(...firstPage),
-      'GET /contacts/contact-types?pageSize=25&pageStartIndex=1': contactTypes({
-        id: 'type-later',
-        name: 'Customer',
-        isDefault: true,
-      }),
-    })
-
-    await sendAccount(account(), { recordType: 'contact', contactTypeId: '' }, client, fakeTerros().terros)
-
-    expect(calls.filter((call) => call.path === '/contacts/contact-types').map((call) => call.query)).toEqual([
-      '?pageSize=25&pageStartIndex=0',
-      '?pageSize=25&pageStartIndex=1',
-    ])
-    expect(calls.find((call) => call.path === '/contacts')?.body).toMatchObject({
-      contactTypeIds: ['type-later'],
+    const saved = updates[0] as { account: { externalLeadId: string; customFieldsPatch: Record<string, string> } }
+    expect(saved.account.externalLeadId).toBe('contact-1')
+    expect(JSON.parse(saved.account.customFieldsPatch['CF.syncstate']!)).toMatchObject({
+      version: 1,
+      fingerprint: expect.any(String),
+      sentNoteIds: ['Note.example'],
     })
   })
 
@@ -252,14 +208,12 @@ describe('sendAccount', () => {
     expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
   })
 
-  // Prevents an optional diagnostic endpoint from breaking a valid configured-ID install check, while ensuring the
-  // check cannot create a customer-visible record or mark the Terros account as linked.
-  test('test mode with a configured ID skips contact-type listing and logs exact payloads without any write', async () => {
+  // Prevents an install check from creating a customer-visible record or marking the Terros account as linked.
+  test('test mode checks the connection and logs exact payloads without any write', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { client, calls } = fakeAccuLynx(
       {
         'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
-        'GET /contacts/contact-types': { status: 500, body: { title: 'Unavailable' } },
       },
       true
     )
@@ -267,7 +221,7 @@ describe('sendAccount', () => {
 
     await sendAccount(
       account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Sold' } }),
-      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: true },
+      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: 'true' },
       client,
       terros
     )
@@ -278,8 +232,6 @@ describe('sendAccount', () => {
     expect(output).toContain('connection check succeeded')
     expect(output).toContain('DRY RUN: account Account.example qualifies')
     expect(output).toContain('DRY RUN: contact payload')
-    expect(output).toContain('Using configured AccuLynx contact type')
-    expect(output).toContain('"contactTypeIds":["type-configured"]')
     expect(output).toContain('"crossReference":"Account.example"')
     expect(output).toContain('DRY RUN: job payload')
     expect(output).toContain('"id":"<created-contact-id>"')
@@ -287,84 +239,10 @@ describe('sendAccount', () => {
     log.mockRestore()
   })
 
-  // Prevents an Account remove dry run from failing on contact-type discovery even though it cannot create a contact.
-  test('test-mode remove checks only the API key', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const fake = fakeAccuLynx(
-      {
-        'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
-        'GET /contacts/contact-types': { status: 500, body: { title: 'Unavailable' } },
-      },
-      true
-    )
-    vi.stubGlobal('fetch', fake.fetch)
-
-    await handler({
-      runId: 'ConnectRun.example',
-      context: {
-        payload: { entity: 'Account', action: 'remove', data: 'Account.example' },
-        config: {
-          scriptConfig: { testMode: 'true', contactTypeId: '' },
-          secrets: { apiKey: 'key-example' },
-        },
-      },
-    })
-
-    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /company-settings'])
-    expect(log.mock.calls.flat().join('\n')).toContain('Skipping AccuLynx send for Account remove')
-    vi.unstubAllGlobals()
-    log.mockRestore()
-  })
-
-  test.each([
-    {
-      types: [
-        { id: 'type-general', name: 'General Contact', isDefault: true },
-        { id: 'type-customer', name: 'Customer', isDefault: true },
-      ],
-      expected: 'type-customer',
-      reason: 'default named Customer',
-    },
-    {
-      types: [
-        { id: 'type-primary', name: 'Primary', isDefault: true },
-        { id: 'type-secondary', name: 'Secondary', isDefault: true },
-      ],
-      expected: 'type-primary',
-      reason: 'first default',
-    },
-  ])('test mode reuses connection-check types and logs $reason', async ({ types, expected, reason }) => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, calls } = fakeAccuLynx(
-      {
-        'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
-        'GET /contacts/contact-types': contactTypes(...types),
-      },
-      true
-    )
-
-    await sendAccount(
-      account(),
-      { recordType: 'contact', contactTypeId: '', testMode: 'true' },
-      client,
-      fakeTerros().terros
-    )
-
-    expect(calls.filter((call) => call.path === '/contacts/contact-types')).toHaveLength(1)
-    expect(calls.every((call) => call.method === 'GET')).toBe(true)
-    const output = log.mock.calls.flat().join('\n')
-    expect(output).toContain(reason)
-    expect(output).toContain(`"contactTypeIds":["${expected}"]`)
-    log.mockRestore()
-  })
-
   // Prevents test mode from hiding why an account would not send, which would make rollout validation ambiguous.
   test('test mode logs every existing account skip reason and still makes no write', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const connection = {
-      'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
-      'GET /contacts/contact-types': contactTypes({ id: 'type-customer', name: 'Customer', isDefault: true }),
-    }
+    const connection = { 'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } } }
     const fake = fakeAccuLynx(connection, true)
     const terros = fakeTerros()
 
@@ -392,7 +270,7 @@ describe('sendAccount', () => {
       terros.terros
     )
 
-    expect(fake.calls.every((call) => call.method === 'GET')).toBe(true)
+    expect(fake.calls.every((call) => call.method === 'GET' && call.path === '/company-settings')).toBe(true)
     expect(terros.updates).toEqual([])
     const output = log.mock.calls.flat().join('\n')
     expect(output).toContain('current stage is not one of')
@@ -422,25 +300,7 @@ describe('sendAccount', () => {
     error.mockRestore()
   })
 
-  // Prevents migrated and unsaved install values from changing the safety switch's behavior.
-  test.each([
-    { value: true, expected: true },
-    { value: false, expected: false },
-    { value: undefined, expected: false },
-    { value: null, expected: false },
-    { value: ' TRUE ', expected: true },
-    { value: 'Yes', expected: true },
-    { value: ' ON ', expected: true },
-    { value: '1', expected: true },
-    { value: ' FALSE ', expected: false },
-    { value: 'No', expected: false },
-    { value: ' OFF ', expected: false },
-    { value: '0', expected: false },
-  ])('reads testMode $value as $expected', ({ value, expected }) => {
-    expect(isTestModeOn(value)).toBe(expected)
-  })
-
-  // Prevents a misspelled legacy safety switch from silently enabling live writes.
+  // Prevents a misspelled safety switch from silently enabling live writes.
   test('an unknown testMode value is logged and treated as on', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     expect(isTestModeOn('ture')).toBe(true)
@@ -790,6 +650,286 @@ describe('sendAccount', () => {
     expect(output).toContain('created but is not yet readable (likely unassigned)')
     log.mockRestore()
   })
+
+  // Prevents a webhook-originated stage/closer update from echoing back to AccuLynx. The persisted snapshot lets
+  // this decision happen before any vendor read.
+  test('a linked account with only inbound fields changed makes no AccuLynx call', async () => {
+    const fake = fakeAccuLynx({})
+    const terros = fakeTerros()
+    await sendAccount(
+      account({
+        externalLeadId: 'contact-1',
+        workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Approved' },
+        closer: owner(),
+        customFieldMap: { 'CF.syncstate': savedState() },
+      }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls).toEqual([])
+    expect(terros.updates).toEqual([])
+  })
+
+  // Prevents duplicate contacts while applying every supported contact change, and avoids add-only phone/email
+  // duplicates by reading those collections first.
+  test('updates an existing contact and saves a snapshot that makes the next event a no-op', async () => {
+    const changed = account({
+      externalLeadId: 'contact-1',
+      resident: {
+        firstName: 'Taylor',
+        lastName: 'Example',
+        businessName: 'Acme Roofing',
+        email: 'user@example.test',
+        phone: '312-555-0199',
+      },
+      address: { ...account().address!, line1: '2 Main St' },
+      customFieldMap: { 'CF.syncstate': savedState() },
+    })
+    const fake = fakeAccuLynx({
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'PUT /contacts/contact-1': { status: 204 },
+      'POST /contacts/contact-1/email-addresses': { status: 201 },
+      'POST /contacts/contact-1/phone-numbers': { status: 201 },
+    })
+    const terros = fakeTerros()
+
+    await sendAccount(
+      changed,
+      { recordType: 'contact', syncUpdates: 'yes', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      'GET /contacts/contact-1',
+      'PUT /contacts/contact-1',
+      'GET /contacts/contact-1/email-addresses',
+      'GET /contacts/contact-1/phone-numbers',
+      'POST /contacts/contact-1/email-addresses',
+      'POST /contacts/contact-1/phone-numbers',
+    ])
+    expect(fake.calls.find((call) => call.method === 'PUT')?.body).toMatchObject({
+      firstName: 'Taylor',
+      companyName: 'Acme Roofing',
+      mailingAddress: { street1: '2 Main St' },
+    })
+    const state = (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account
+      .customFieldsPatch['CF.syncstate']
+
+    const second = fakeAccuLynx({})
+    await sendAccount(
+      { ...changed, customFieldMap: { 'CF.syncstate': state! } },
+      { recordType: 'contact', syncUpdates: 'on', syncStateFieldId: 'CF.syncstate' },
+      second.client,
+      fakeTerros().terros
+    )
+    expect(second.calls).toEqual([])
+  })
+
+  // Prevents triggerStages from stranding linked jobs after they advance, while retaining the location filter.
+  test('updates a linked job outside the trigger stage and skips one outside the account filter', async () => {
+    const changed = account({
+      externalLeadId: 'job-1',
+      workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Installed' },
+      address: { ...account().address!, line1: '2 Main St', country: 'US' },
+      customFieldMap: { 'CF.syncstate': savedState([], { job: true, leadSourceId: 'source-old' }) },
+    })
+    const replies = {
+      'GET /jobs/job-1': {
+        body: {
+          id: 'job-1',
+          contacts: [{ isPrimary: true, contact: { id: 'contact-1', firstName: 'Pat', lastName: 'Example' } }],
+          locationAddress: {
+            street1: '1 Main St',
+            city: 'Springfield',
+            state: { abbreviation: 'IL' },
+            country: { abbreviation: 'US' },
+            zipCode: '62701',
+          },
+          leadSource: { id: 'source-old' },
+        },
+      },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'PUT /contacts/contact-1': { status: 204 },
+      'PUT /jobs/job-1/address': { status: 204 },
+      'PUT /jobs/job-1/lead-source': { status: 204 },
+    }
+    const fake = fakeAccuLynx(replies)
+    await sendAccount(
+      changed,
+      {
+        recordType: 'job',
+        syncUpdates: '1',
+        syncStateFieldId: 'CF.syncstate',
+        triggerStages: 'Sold',
+        leadSourceId: 'source-new',
+      },
+      fake.client,
+      fakeTerros().terros
+    )
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /jobs/job-1/address')
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /jobs/job-1/lead-source')
+
+    const filtered = fakeAccuLynx(replies)
+    await sendAccount(
+      changed,
+      {
+        recordType: 'job',
+        syncUpdates: 'true',
+        syncStateFieldId: 'CF.syncstate',
+        accountFilterField: 'workflowState.workflowId',
+        accountFilterValues: 'WF.south',
+      },
+      filtered.client,
+      fakeTerros().terros
+    )
+    expect(filtered.calls).toEqual([])
+  })
+
+  // Prevents retrying every historical note and proves each new note is persisted after one append.
+  test.each([
+    { recordType: 'job' as const, linkedId: 'job-1', writePath: '/jobs/job-1/messages' },
+    { recordType: 'contact' as const, linkedId: 'contact-1', writePath: '/contacts/contact-1/notes' },
+  ])('posts a new $recordType note once and includes its noteId', async ({ recordType, linkedId, writePath }) => {
+    const oldNote = {
+      noteId: 'Note.example-old' as const,
+      text: 'Already sent',
+      timestamp: 1,
+      userId: 'U.example' as const,
+    }
+    const newNote = {
+      noteId: 'Note.example-new' as const,
+      text: recordType === 'contact' ? 'x'.repeat(1100) : 'New note',
+      timestamp: 2,
+      userId: 'U.example' as const,
+    }
+    const input = account({
+      externalLeadId: linkedId,
+      notes: [oldNote, newNote],
+      customFieldMap: {
+        'CF.syncstate': savedState(['Note.example-old'], recordType === 'job' ? { job: true, country: 'US' } : {}),
+      },
+    })
+    const replies = {
+      ...(recordType === 'job'
+        ? {
+            'GET /jobs/job-1': {
+              body: {
+                id: 'job-1',
+                contacts: [{ isPrimary: true, contact: { id: 'contact-1', firstName: 'Pat', lastName: 'Example' } }],
+                locationAddress: {
+                  street1: '1 Main St',
+                  city: 'Springfield',
+                  state: { abbreviation: 'IL' },
+                  country: { abbreviation: 'US' },
+                  zipCode: '62701',
+                },
+              },
+            },
+          }
+        : {
+            'GET /contacts/contact-1': {
+              body: {
+                id: 'contact-1',
+                firstName: 'Pat',
+                lastName: 'Example',
+                mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+              },
+            },
+          }),
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      ...(recordType === 'job'
+        ? {
+            'GET /contacts/contact-1': {
+              body: {
+                id: 'contact-1',
+                firstName: 'Pat',
+                lastName: 'Example',
+                companyName: '',
+                mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+              },
+            },
+          }
+        : {}),
+      [`POST ${writePath}`]: { status: 201 },
+    }
+    const fake = fakeAccuLynx(replies)
+    const terros = fakeTerros()
+    await sendAccount(
+      input,
+      { recordType, syncUpdates: 'true', syncStateFieldId: 'CF.syncstate', addressCountry: 'US' },
+      fake.client,
+      terros.terros
+    )
+
+    const noteCall = fake.calls.find((call) => call.path === writePath)
+    if (recordType === 'job') {
+      expect(noteCall?.body).toEqual({ message: 'Terros note Note.example-new\nNew note' })
+    } else {
+      const posted = (noteCall?.body as { note: string }).note
+      expect(posted).toHaveLength(1000)
+      expect(posted).toMatch(/^Terros note Note\.example-new\n/)
+    }
+    const state = (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account
+      .customFieldsPatch['CF.syncstate']
+    const second = fakeAccuLynx({})
+    await sendAccount(
+      { ...input, customFieldMap: { 'CF.syncstate': state! } },
+      { recordType, syncUpdates: 'true', syncStateFieldId: 'CF.syncstate', addressCountry: 'US' },
+      second.client,
+      fakeTerros().terros
+    )
+    expect(second.calls).toEqual([])
+  })
+
+  // Prevents dry-run validation from writing either system while still showing the exact planned update.
+  test('test mode logs linked-account writes without performing them', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const fake = fakeAccuLynx({
+      'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
+      'GET /contacts/contact-1': { body: { id: 'contact-1', firstName: 'Pat' } },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [] } },
+    })
+    const terros = fakeTerros()
+    await sendAccount(
+      account({
+        externalLeadId: 'contact-1',
+        resident: { ...account().resident, firstName: 'Taylor' },
+        customFieldMap: { 'CF.syncstate': savedState() },
+      }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate', testMode: 'true' },
+      fake.client,
+      terros.terros
+    )
+    expect(fake.calls.every((call) => call.method === 'GET')).toBe(true)
+    expect(terros.updates).toEqual([])
+    expect(log.mock.calls.flat().join('\n')).toContain('DRY RUN: would update AccuLynx')
+    log.mockRestore()
+  })
 })
 
 describe('AccuLynx record mapping', () => {
@@ -799,6 +939,15 @@ describe('AccuLynx record mapping', () => {
     expect(toAccuLynxPhone('312.555.0100')).toBe('3125550100')
     expect(toAccuLynxPhone('+44 20 555 0100')).toBeUndefined()
     expect(toAccuLynxPhone(undefined)).toBeUndefined()
+  })
+
+  test('syncUpdates accepts only explicit on values and fails closed on unknown text', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(['true', 'yes', 'on', '1'].every((value) => isSyncUpdatesOn(value))).toBe(true)
+    expect(['', 'false', 'no', 'off', '0'].every((value) => !isSyncUpdatesOn(value))).toBe(true)
+    expect(isSyncUpdatesOn('ture')).toBe(false)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('treating it as false'))
+    error.mockRestore()
   })
 
   // Prevents a location's configured fallback from filing a webhook address under the wrong country.

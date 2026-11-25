@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { type AccountWebhook, type AccountWebhookData, type TerrosClient, wrapConnectHandler } from '@terros-inc/sdk'
 import {
   type AccuLynxSendConfig,
@@ -5,13 +6,15 @@ import {
   getContactSearchStart,
   getContactSearchTerm,
   getRecordType,
+  getSyncStateFieldId,
+  isSyncUpdatesOn,
   isTestModeOn,
   matchesAccountFilter,
   matchesTriggerStage,
   toAccuLynxContact,
   toAccuLynxJob,
 } from './records.ts'
-import { AccuLynxClient, AccuLynxError, type AccuLynxContactType } from './acculynx.ts'
+import { AccuLynxClient, AccuLynxError } from './acculynx.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook, void, AccuLynxSendConfig>(async (input, client) => {
   const payload = input.context.payload
@@ -50,7 +53,7 @@ export async function sendAccount(
   terros: Pick<TerrosClient, 'account'>,
   testMode = isTestModeOn(config.testMode)
 ): Promise<void> {
-  const availableContactTypes = testMode ? await checkConnection(accuLynx, !config.contactTypeId?.trim()) : undefined
+  if (testMode) await checkConnection(accuLynx)
 
   const recordType = getRecordType(config.recordType)
   getAddressCountry(undefined, config.addressCountry) // Refuses a bad fallback before anything is created.
@@ -63,8 +66,12 @@ export async function sendAccount(
   }
 
   if (!matchesTriggerStage(account, config)) {
-    console.log(`Skipping account ${account.id}: current stage is not one of this install's trigger stages`)
-    return
+    if (account.externalLeadId && isSyncUpdatesOn(config.syncUpdates)) {
+      console.log(`Account ${account.id} is linked; triggerStages does not gate AccuLynx updates`)
+    } else {
+      console.log(`Skipping account ${account.id}: current stage is not one of this install's trigger stages`)
+      return
+    }
   }
 
   if (!matchesAccountFilter(account, config, testMode)) {
@@ -73,14 +80,16 @@ export async function sendAccount(
   }
 
   if (account.externalLeadId) {
-    console.log(`Skipping account ${account.id}: already linked to AccuLynx record ${account.externalLeadId}`)
+    if (!isSyncUpdatesOn(config.syncUpdates)) {
+      console.log(`Skipping account ${account.id}: already linked to AccuLynx record ${account.externalLeadId}`)
+      return
+    }
+    await updateLinkedAccount(account, config, recordType, accuLynx, terros, testMode)
     return
   }
 
-  const contactTypeId = await resolveContactTypeId(config.contactTypeId, accuLynx, availableContactTypes, testMode)
-
   if (testMode) {
-    const contact = toAccuLynxContact(account, contactTypeId)
+    const contact = toAccuLynxContact(account, config)
     console.log(`DRY RUN: account ${account.id} qualifies for AccuLynx ${recordType}`)
     console.log(`DRY RUN: contact payload ${JSON.stringify(contact)}`)
     if (recordType === 'job') {
@@ -89,45 +98,269 @@ export async function sendAccount(
     return
   }
 
-  const contact = await findOrCreateContact(account, contactTypeId, accuLynx)
+  const contact = await findOrCreateContact(account, config, accuLynx)
   const externalLeadId = recordType === 'job' ? await findOrCreateJob(account, contact, config, accuLynx) : contact.id
   await readBackCreatedRecord(recordType, externalLeadId, accuLynx)
-  const updated = await terros.account.update({ account: { accountId: account.id, externalLeadId } })
+  const syncStateFieldId = isSyncUpdatesOn(config.syncUpdates)
+    ? getSyncStateFieldId(config.syncStateFieldId)
+    : undefined
+  const updated = await terros.account.update({
+    account: {
+      accountId: account.id,
+      externalLeadId,
+      ...(syncStateFieldId
+        ? { customFieldsPatch: { [syncStateFieldId]: serializeSyncState(toSyncState(account, config, recordType)) } }
+        : {}),
+    },
+  })
   if (updated.type !== 'success') {
     throw Error(`Failed to save AccuLynx ${recordType} ${externalLeadId} on Terros account ${account.id}`)
   }
   console.log(`Saved AccuLynx ${recordType} ${externalLeadId} on Terros account ${account.id}`)
 }
 
-export async function checkConnection(
+type SyncFields = {
+  contact: {
+    firstName: string
+    lastName: string
+    companyName: string
+    mailingAddress?: Record<string, unknown>
+    phone?: string
+    email?: string
+  }
+  job?: { locationAddress?: Record<string, unknown>; leadSourceId?: string }
+}
+
+type SyncState = { version: 1; fingerprint: string; sentNoteIds: string[] }
+
+function toSyncState(
+  account: AccountWebhookData,
+  config: AccuLynxSendConfig,
+  recordType: 'contact' | 'job',
+  sentNoteIds = getNoteIds(account)
+): SyncState {
+  const fields = toSyncFields(account, config, recordType)
+  const fingerprint = createHash('sha256').update(JSON.stringify(fields)).digest('base64url')
+  return { version: 1, fingerprint, sentNoteIds: [...new Set(sentNoteIds)].sort() }
+}
+
+function toSyncFields(
+  account: AccountWebhookData,
+  config: AccuLynxSendConfig,
+  recordType: 'contact' | 'job'
+): SyncFields {
+  const contact = toAccuLynxContact(account, config) as {
+    firstName?: string
+    lastName?: string
+    companyName?: string
+    mailingAddress?: Record<string, unknown>
+    phoneNumbers?: { number?: string }[]
+    emailAddresses?: { address?: string }[]
+  }
+  const fields: SyncFields = {
+    contact: {
+      firstName: String(contact.firstName ?? ''),
+      lastName: String(contact.lastName ?? ''),
+      companyName: String(contact.companyName ?? ''),
+      ...(contact.mailingAddress ? { mailingAddress: contact.mailingAddress } : {}),
+      ...(contact.phoneNumbers?.[0]?.number ? { phone: contact.phoneNumbers[0].number } : {}),
+      ...(contact.emailAddresses?.[0]?.address ? { email: contact.emailAddresses[0].address } : {}),
+    },
+  }
+  if (recordType === 'job') {
+    const job = toAccuLynxJob(account, '<contact-id>', config) as {
+      locationAddress?: Record<string, unknown>
+      leadSource?: { id?: string }
+    }
+    fields.job = {
+      ...(job.locationAddress ? { locationAddress: job.locationAddress } : {}),
+      ...(job.leadSource?.id ? { leadSourceId: job.leadSource.id } : {}),
+    }
+  }
+  return fields
+}
+
+function getNoteIds(account: AccountWebhookData): string[] {
+  return (account.notes ?? []).filter((note) => note.noteId && note.text.trim()).map((note) => note.noteId)
+}
+
+function parseSyncState(value: unknown): SyncState | undefined {
+  if (typeof value !== 'string' || !value) return undefined
+  try {
+    const state = JSON.parse(value) as Partial<SyncState>
+    if (state.version !== 1 || typeof state.fingerprint !== 'string' || !Array.isArray(state.sentNoteIds)) {
+      return undefined
+    }
+    return state as SyncState
+  } catch {
+    return undefined
+  }
+}
+
+function serializeSyncState(state: SyncState): string {
+  return JSON.stringify(state)
+}
+
+async function updateLinkedAccount(
+  account: AccountWebhookData,
+  config: AccuLynxSendConfig,
+  recordType: 'contact' | 'job',
   accuLynx: AccuLynxClient,
-  listContactTypes = false
-): Promise<AccuLynxContactType[]> {
+  terros: Pick<TerrosClient, 'account'>,
+  testMode: boolean
+): Promise<void> {
+  const stateFieldId = getSyncStateFieldId(config.syncStateFieldId)
+  const previous = parseSyncState(account.customFieldMap?.[stateFieldId])
+  if (account.customFieldMap?.[stateFieldId] && !previous) {
+    console.error(
+      `Account ${account.id} has invalid AccuLynx sync state; rebuilding it without reposting existing notes`
+    )
+  }
+
+  const alreadySent = new Set(previous?.sentNoteIds ?? getNoteIds(account))
+  const newNotes = (account.notes ?? []).filter(
+    (note) => note.noteId && note.text.trim() && !alreadySent.has(note.noteId)
+  )
+  const next = toSyncState(account, config, recordType, [...alreadySent, ...newNotes.map((note) => note.noteId)])
+  const desired = toSyncFields(account, config, recordType)
+  const fieldsChanged = !previous || previous.fingerprint !== next.fingerprint
+
+  if (!fieldsChanged && newNotes.length === 0) {
+    console.log(`Skipping account ${account.id}: no AccuLynx-synced fields or notes changed`)
+    return
+  }
+
+  const linkedId = account.externalLeadId!
+  const job = recordType === 'job' ? await accuLynx.getJob(linkedId) : undefined
+  if (recordType === 'job' && !job) throw Error(`Linked AccuLynx job ${linkedId} could not be read`)
+  const contactId =
+    recordType === 'contact'
+      ? linkedId
+      : (job!.contacts?.find((item) => item.isPrimary) ?? job!.contacts?.[0])?.contact?.id
+  if (!contactId) throw Error(`Linked AccuLynx job ${linkedId} has no contact`)
+
+  const currentContact = await accuLynx.getContact(contactId)
+  if (!currentContact) throw Error(`Linked AccuLynx contact ${contactId} could not be read`)
+  const contactPayload = {
+    firstName: desired.contact.firstName,
+    lastName: desired.contact.lastName,
+    companyName: desired.contact.companyName,
+    ...(desired.contact.mailingAddress ? { mailingAddress: desired.contact.mailingAddress } : {}),
+  }
+  if (!sameContact(currentContact, contactPayload)) {
+    await writeOrLog(testMode, `contact ${contactId}`, contactPayload, () =>
+      accuLynx.updateContact(contactId, contactPayload)
+    )
+  }
+
+  const [emails, phones] = await Promise.all([
+    accuLynx.getContactEmailAddresses(contactId),
+    accuLynx.getContactPhoneNumbers(contactId),
+  ])
+  const email = desired.contact.email
+  if (email && !emails.some((item) => item.address?.trim().toLowerCase() === email.trim().toLowerCase())) {
+    await writeOrLog(testMode, `email for contact ${contactId}`, { address: email }, () =>
+      accuLynx.createContactEmailAddress(contactId, email)
+    )
+  }
+  const phone = desired.contact.phone
+  if (phone && !phones.some((item) => item.number?.replace(/\D/g, '') === phone)) {
+    await writeOrLog(testMode, `phone for contact ${contactId}`, { number: phone }, () =>
+      accuLynx.createContactPhoneNumber(contactId, phone)
+    )
+  }
+
+  if (recordType === 'job') {
+    const desiredAddress = desired.job?.locationAddress
+    if (desiredAddress && !sameAddress(job!.locationAddress, desiredAddress)) {
+      await writeOrLog(testMode, `address for job ${linkedId}`, desiredAddress, () =>
+        accuLynx.updateJobAddress(linkedId, desiredAddress)
+      )
+    }
+    const leadSourceId = desired.job?.leadSourceId
+    if (leadSourceId && job!.leadSource?.id !== leadSourceId) {
+      await writeOrLog(testMode, `lead source for job ${linkedId}`, { id: leadSourceId }, () =>
+        accuLynx.updateJobLeadSource(linkedId, leadSourceId)
+      )
+    }
+  }
+
+  for (const note of newNotes) {
+    const text = `Terros note ${note.noteId}\n${note.text}`
+    if (recordType === 'job') {
+      await writeOrLog(testMode, `message for job ${linkedId}`, { message: text }, () =>
+        accuLynx.createJobMessage(linkedId, text)
+      )
+    } else {
+      const truncated = text.slice(0, 1000)
+      await writeOrLog(testMode, `note for contact ${contactId}`, { note: truncated }, () =>
+        accuLynx.createContactNote(contactId, truncated)
+      )
+    }
+    if (!testMode) {
+      alreadySent.add(note.noteId)
+      await saveSyncState(account.id, stateFieldId, toSyncState(account, config, recordType, [...alreadySent]), terros)
+    }
+  }
+
+  if (testMode) {
+    console.log(`DRY RUN: would save AccuLynx sync state on account ${account.id}`)
+    return
+  }
+  if (newNotes.length > 0) return
+  await saveSyncState(account.id, stateFieldId, next, terros)
+}
+
+async function saveSyncState(
+  accountId: AccountWebhookData['id'],
+  stateFieldId: `CF.${string}`,
+  state: SyncState,
+  terros: Pick<TerrosClient, 'account'>
+): Promise<void> {
+  const updated = await terros.account.update({
+    account: { accountId, customFieldsPatch: { [stateFieldId]: serializeSyncState(state) } },
+  })
+  if (updated.type !== 'success') throw Error(`Failed to save AccuLynx sync state on Terros account ${accountId}`)
+}
+
+async function writeOrLog(testMode: boolean, target: string, body: unknown, write: () => Promise<void>): Promise<void> {
+  if (testMode) {
+    console.log(`DRY RUN: would update AccuLynx ${target}: ${JSON.stringify(body)}`)
+    return
+  }
+  await write()
+}
+
+function sameContact(current: Record<string, unknown>, desired: Record<string, unknown>): boolean {
+  return (
+    String(current.firstName ?? '') === desired.firstName &&
+    String(current.lastName ?? '') === desired.lastName &&
+    String(current.companyName ?? '') === desired.companyName &&
+    (!desired.mailingAddress || sameAddress(current.mailingAddress, desired.mailingAddress as Record<string, unknown>))
+  )
+}
+
+function sameAddress(current: unknown, desired: Record<string, unknown>): boolean {
+  const address = (current ?? {}) as Record<string, unknown>
+  const state = address.state as { abbreviation?: string } | string | undefined
+  const country = address.country as { abbreviation?: string } | string | undefined
+  return (
+    String(address.street1 ?? '') === String(desired.street1 ?? '') &&
+    String(address.street2 ?? '') === String(desired.street2 ?? '') &&
+    String(address.city ?? '') === String(desired.city ?? '') &&
+    String(typeof state === 'object' ? state?.abbreviation : (state ?? '')) === String(desired.state ?? '') &&
+    String(typeof country === 'object' ? country?.abbreviation : (country ?? '')) === String(desired.country ?? '') &&
+    String(address.zipCode ?? '') === String(desired.zipCode ?? '')
+  )
+}
+
+export async function checkConnection(accuLynx: AccuLynxClient): Promise<void> {
   try {
     const settings = await accuLynx.getCompanySettings()
     console.log(
       `TEST MODE: AccuLynx connection check succeeded for company/location ${accuLynx.safeLogValue(settings.name ?? '<unnamed>')} ` +
         `(${accuLynx.safeLogValue(settings.companyId ?? '<no company id>')})`
     )
-    if (!listContactTypes) return []
-
-    let contactTypes: AccuLynxContactType[]
-    try {
-      contactTypes = await accuLynx.listContactTypes()
-    } catch (error) {
-      throw Error(
-        `Cannot resolve required contactTypeId setting: AccuLynx contact types could not be listed; ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        { cause: error }
-      )
-    }
-    console.log(
-      `TEST MODE: available AccuLynx contact types ${accuLynx.safeLogValue(
-        contactTypes.map(({ name, isDefault }) => ({ name: name ?? '<unnamed>', isDefault: Boolean(isDefault) }))
-      )}`
-    )
-    return contactTypes
   } catch (error) {
     if (error instanceof AccuLynxError && error.status === 401) {
       console.error('TEST MODE: AccuLynx connection check failed: API key is missing, invalid, or deactivated (401)')
@@ -138,57 +371,6 @@ export async function checkConnection(
     }
     throw error
   }
-}
-
-type ContactTypeChoice = { id: string; reason: 'default named Customer' | 'first default' }
-
-async function resolveContactTypeId(
-  configuredId: string | undefined,
-  accuLynx: AccuLynxClient,
-  availableContactTypes?: AccuLynxContactType[],
-  diagnostics = false
-): Promise<string> {
-  const trimmedConfiguredId = configuredId?.trim()
-  if (trimmedConfiguredId) {
-    if (diagnostics) {
-      console.log(
-        `Using configured AccuLynx contact type ${accuLynx.safeLogValue(trimmedConfiguredId)} (configured ID)`
-      )
-    }
-    return trimmedConfiguredId
-  }
-
-  let contactTypes: AccuLynxContactType[]
-  try {
-    contactTypes = availableContactTypes ?? (await accuLynx.listContactTypes())
-  } catch (error) {
-    throw Error(
-      `Cannot resolve required contactTypeId setting: AccuLynx contact types could not be listed; ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      { cause: error }
-    )
-  }
-
-  const choice = chooseDefaultContactType(contactTypes)
-  if (!choice) {
-    throw Error('Cannot resolve required contactTypeId setting: AccuLynx returned no default contact type')
-  }
-  if (diagnostics) {
-    console.log(`Using AccuLynx contact type ${accuLynx.safeLogValue(choice.id)} (${choice.reason})`)
-  }
-  return choice.id
-}
-
-function chooseDefaultContactType(contactTypes: AccuLynxContactType[]): ContactTypeChoice | undefined {
-  const defaults = contactTypes.filter(
-    (contactType): contactType is AccuLynxContactType & { id: string } =>
-      contactType.isDefault === true && !!contactType.id
-  )
-  const customer = defaults.find((contactType) => contactType.name?.trim().toLowerCase() === 'customer')
-  if (customer) return { id: customer.id, reason: 'default named Customer' }
-  if (defaults[0]) return { id: defaults[0].id, reason: 'first default' }
-  return undefined
 }
 
 async function readBackCreatedRecord(
@@ -216,10 +398,10 @@ type Found = { id: string; existed: boolean }
 
 async function findOrCreateContact(
   account: AccountWebhookData,
-  contactTypeId: string,
+  config: AccuLynxSendConfig,
   accuLynx: AccuLynxClient
 ): Promise<Found> {
-  const contact = toAccuLynxContact(account, contactTypeId)
+  const contact = toAccuLynxContact(account, config)
   const existing = await accuLynx.findContactByCrossReference(
     account.id,
     getContactSearchTerm(contact),
