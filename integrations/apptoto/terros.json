@@ -1,0 +1,71 @@
+{
+  "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
+  "appId": "App.example",
+  "scripts": [
+    {
+      "name": "Apptoto Appointment Sync",
+      "entrypoint": "src/outgoing.ts",
+      "type": "outgoing",
+      "dataType": "Event",
+      "configSchema": [
+        {
+          "name": "calendarId",
+          "type": "string",
+          "description": "Apptoto calendar ID for this install. Required. Each install syncs one calendar."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "description": "Kill switch. Enable to make this script do nothing."
+        },
+        {
+          "name": "dryRun",
+          "type": "boolean",
+          "description": "Enable to log the changes this script would make without writing them."
+        }
+      ],
+      "authSchema": {
+        "username": "Apptoto account email",
+        "apiKey": "API key from Apptoto Settings → Integrations"
+      },
+      "permissions": ["event:read"],
+      "slug": "apptoto-appointment-sync"
+    },
+    {
+      "name": "Apptoto Appointment Webhook",
+      "entrypoint": "src/incoming.ts",
+      "type": "incoming",
+      "configSchema": [
+        {
+          "name": "calendarId",
+          "type": "string",
+          "description": "Apptoto calendar ID for this install. Required. Each install syncs one calendar."
+        },
+        {
+          "name": "responseStageMappings",
+          "type": "mapping",
+          "dataType": "None",
+          "description": "Optional. Map participant_confirmed, participant_not_coming and participant_needs_reschedule to Terros account stages. Leave a mapping blank to keep the current stage for that response."
+        },
+        {
+          "name": "webhookSecret",
+          "type": "string",
+          "description": "Required secret that the webhook must provide as a query token because Apptoto webhooks are unsigned."
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "description": "Kill switch. Enable to make this script do nothing."
+        },
+        {
+          "name": "dryRun",
+          "type": "boolean",
+          "description": "Enable to log the changes this script would make without writing them."
+        }
+      ],
+      "authSchema": {},
+      "permissions": ["account:save", "event:read", "event:save"],
+      "slug": "apptoto-appointment-webhook"
+    }
+  ]
+}
