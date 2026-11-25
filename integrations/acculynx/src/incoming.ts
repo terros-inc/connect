@@ -62,7 +62,7 @@ export async function receiveWebhook(
   const sourceStatus = statusName ? `${milestoneName} > ${statusName}` : milestoneName
   const workflowTarget = getWorkflowTarget(milestoneName, statusName, config.milestoneStageMapping)
   if (!workflowTarget)
-    console.log(`Skipping stage update for AccuLynx job ${change.jobId}: ${sourceStatus} has no configured mapping`)
+    console.log(`Skipping stage update for AccuLynx job ${change.jobId}: ${sourceStatus} has no valid ID mapping`)
   const references = await accuLynx.getJobExternalReferences(change.jobId)
   const accountId = references.find((reference) => reference.projectId)?.projectId as AccountId | undefined
 
@@ -173,10 +173,11 @@ function getWorkflowTarget(
   const sourceKey = normalizeMappingName(sourceStatus)
   const milestoneKey = normalizeMappingName(milestoneName)
   const entries = Object.entries(mapping)
-  const entry =
-    entries.find(([name]) => normalizeMappingName(name) === sourceKey) ??
-    (statusName ? entries.find(([name]) => normalizeMappingName(name) === milestoneKey) : undefined)
-  return entry?.[1].trim() ? entry[1] : undefined
+  const targetFor = (key: string): string | undefined => {
+    const target = entries.find(([name]) => normalizeMappingName(name) === key)?.[1].trim()
+    return target && /^(?:S|A)\.[^\s]+$/.test(target) ? target : undefined
+  }
+  return targetFor(sourceKey) ?? (statusName ? targetFor(milestoneKey) : undefined)
 }
 
 function normalizeMappingName(name: string): string {

@@ -64,7 +64,7 @@ describe('receiveWebhook', () => {
 
   // Prevents a vendor milestone from selecting a same-named but unrelated Terros stage; sourceStatus still records
   // the vendor's original value.
-  test('maps a milestone to the configured stage case-insensitively', async () => {
+  test('matches a milestone name case-insensitively and sends the configured stage ID', async () => {
     const { client } = fakeAccuLynx(linked)
     const { terros, upserts } = fakeTerros()
 
@@ -73,14 +73,14 @@ describe('receiveWebhook', () => {
       {
         workflowId: 'WF.example',
         requestType: 'update',
-        milestoneStageMapping: { approved: 'Contract Signed' },
+        milestoneStageMapping: { approved: 'S.contract' },
       },
       client,
       terros
     )
 
     expect(upserts[0]).toMatchObject({
-      account: { workflowTarget: 'Contract Signed', sourceStatus: 'Approved' },
+      account: { workflowTarget: 'S.contract', sourceStatus: 'Approved' },
     })
   })
 
@@ -110,7 +110,7 @@ describe('receiveWebhook', () => {
       {
         workflowId: 'WF.example',
         requestType: 'update',
-        milestoneStageMapping: { 'lead > appointment scheduled': 'Appointment Set' },
+        milestoneStageMapping: { 'lead > appointment scheduled': 'A.appointment' },
       },
       client,
       terros
@@ -118,7 +118,7 @@ describe('receiveWebhook', () => {
 
     expect(upserts[0]).toMatchObject({
       account: {
-        workflowTarget: 'Appointment Set',
+        workflowTarget: 'A.appointment',
         sourceStatus: 'Lead > Appointment Scheduled',
         lastActionDate: Date.parse('2026-01-06T20:00:00Z'),
       },
@@ -141,13 +141,13 @@ describe('receiveWebhook', () => {
 
     await receiveWebhook(
       milestoneEvent({ topicName: 'job.milestone.status.current_changed' }),
-      { workflowId: 'WF.example', requestType: 'update', milestoneStageMapping: { Lead: 'New Lead' } },
+      { workflowId: 'WF.example', requestType: 'update', milestoneStageMapping: { Lead: 'S.new-lead' } },
       client,
       terros
     )
 
     expect(upserts[0]).toMatchObject({
-      account: { workflowTarget: 'New Lead', sourceStatus: 'Lead > Appointment Scheduled' },
+      account: { workflowTarget: 'S.new-lead', sourceStatus: 'Lead > Appointment Scheduled' },
     })
   })
 
@@ -156,9 +156,9 @@ describe('receiveWebhook', () => {
       ...linked,
       'GET /jobs/job-1/milestones/current?includes=status': {
         body: {
-          name: 'Prospect',
+          name: 'Lead',
           duration: { startDate: '2026-01-05T19:00:00Z' },
-          statuses: [{ name: 'Inspected - No demo', isCurrent: true }],
+          statuses: [{ name: 'Appointment Scheduled', isCurrent: true }],
         },
       },
     }
@@ -174,8 +174,8 @@ describe('receiveWebhook', () => {
 
     expect(upserts[0]).toMatchObject({
       account: {
-        workflowTarget: 'Prospect > Inspected - No demo',
-        sourceStatus: 'Prospect > Inspected - No demo',
+        workflowTarget: 'Lead > Appointment Scheduled',
+        sourceStatus: 'Lead > Appointment Scheduled',
       },
     })
   })
@@ -249,23 +249,49 @@ describe('receiveWebhook', () => {
       {
         workflowId: 'WF.example',
         requestType: 'update',
-        milestoneStageMapping: { Cancelled: 'Closed Lost' },
+        milestoneStageMapping: { Cancelled: 'S.closed-lost' },
       },
       client,
       terros
     )
 
-    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'Closed Lost', sourceStatus: 'Dead' } })
+    expect(upserts[0]).toMatchObject({ account: { workflowTarget: 'S.closed-lost', sourceStatus: 'Dead' } })
   })
 
-  // Prevents an unmapped status from selecting a stage while still keeping source status and representative changes.
-  test('omits the stage for an unmapped status without dropping the rest of the update', async () => {
-    const { client, calls } = fakeAccuLynx(linked)
+  // Prevents an obsolete name-valued mapping from sending a target that the account API cannot resolve as a stage.
+  test('ignores a name-valued mapping while still updating source status', async () => {
+    const { client } = fakeAccuLynx(linked)
     const { terros, upserts } = fakeTerros()
 
     await receiveWebhook(
       milestoneEvent(),
-      { workflowId: 'WF.example', requestType: 'upsert', milestoneStageMapping: { Completed: 'Work Complete' } },
+      { workflowId: 'WF.example', requestType: 'update', milestoneStageMapping: { Approved: 'Contract Signed' } },
+      client,
+      terros
+    )
+
+    expect(upserts[0]).toMatchObject({ account: { sourceStatus: 'Approved' } })
+    expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('workflowTarget')
+  })
+
+  // Prevents an unmapped status from selecting a stage while still keeping source status and representative changes.
+  test('omits the stage for an unmapped status without dropping the rest of the update', async () => {
+    const withStatus = {
+      ...linked,
+      'GET /jobs/job-1/milestones/current?includes=status': {
+        body: {
+          name: 'Lead',
+          duration: { startDate: '2026-01-05T19:00:00Z' },
+          statuses: [{ name: 'Appointment Scheduled', isCurrent: true }],
+        },
+      },
+    }
+    const { client, calls } = fakeAccuLynx(withStatus)
+    const { terros, upserts } = fakeTerros()
+
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.milestone.status.current_changed' }),
+      { workflowId: 'WF.example', requestType: 'upsert', milestoneStageMapping: { Completed: 'S.complete' } },
       client,
       terros
     )
@@ -275,7 +301,7 @@ describe('receiveWebhook', () => {
       '/jobs/external-references',
       '/jobs/job-1/representatives/company',
     ])
-    expect(upserts[0]).toMatchObject({ account: { sourceStatus: 'Approved' } })
+    expect(upserts[0]).toMatchObject({ account: { sourceStatus: 'Lead > Appointment Scheduled' } })
     expect((upserts[0] as { account: Record<string, unknown> }).account).not.toHaveProperty('workflowTarget')
   })
 
@@ -286,7 +312,7 @@ describe('receiveWebhook', () => {
 
     await receiveWebhook(
       milestoneEvent(),
-      { workflowId: 'WF.example', requestType: 'upsert', milestoneStageMapping: { Completed: 'Work Complete' } },
+      { workflowId: 'WF.example', requestType: 'upsert', milestoneStageMapping: { Completed: 'S.complete' } },
       client,
       terros
     )

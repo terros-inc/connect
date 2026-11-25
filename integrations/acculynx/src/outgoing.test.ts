@@ -453,9 +453,9 @@ describe('sendAccount', () => {
     expect(send?.configSchema.find((field) => field.name === 'testMode')?.type).toBe('boolean')
   })
 
-  // Prevents early-stage accounts from being irreversibly created in AccuLynx while preserving stage names that
-  // differ only in case or accidental surrounding whitespace.
-  test('sends only at a configured trigger stage, matched case-insensitively after trimming', async () => {
+  // Prevents early-stage accounts from being irreversibly created in AccuLynx while preserving name-valued settings
+  // on existing installs.
+  test('sends at a configured stage ID or legacy stage name', async () => {
     const skipped = fakeAccuLynx(created)
     const skippedTerros = fakeTerros()
     await sendAccount(
@@ -465,18 +465,28 @@ describe('sendAccount', () => {
       skippedTerros.terros
     )
 
-    const sent = fakeAccuLynx(created)
-    const sentTerros = fakeTerros()
+    const sentById = fakeAccuLynx(created)
+    const sentByIdTerros = fakeTerros()
+    await sendAccount(
+      account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Renamed' } }),
+      { recordType: 'contact', triggerStages: 'S.example' },
+      sentById.client,
+      sentByIdTerros.terros
+    )
+
+    const sentByName = fakeAccuLynx(created)
+    const sentByNameTerros = fakeTerros()
     await sendAccount(
       account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: '  SOLD  ' } }),
       { recordType: 'contact', triggerStages: 'Appointment Set, sold' },
-      sent.client,
-      sentTerros.terros
+      sentByName.client,
+      sentByNameTerros.terros
     )
 
     expect(skipped.calls).toEqual([])
     expect(skippedTerros.updates).toEqual([])
-    expect(sent.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
+    expect(sentById.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
+    expect(sentByName.calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
   })
 
   // Prevents an account belonging to several teams from being skipped or routed to the wrong location, and proves

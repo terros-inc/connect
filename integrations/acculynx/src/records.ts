@@ -76,9 +76,13 @@ export function matchesAccountFilter(
 }
 
 export function matchesTriggerStage(account: AccountWebhookData, config: AccuLynxSendConfig): boolean {
-  const stages = splitList(config.triggerStages).map(normalizeName)
+  const stages = splitList(config.triggerStages)
   if (stages.length === 0) return true
-  return stages.includes(normalizeName(account.workflowState?.stageName))
+  return stages.some((stage) =>
+    stage.startsWith('S.')
+      ? stage === account.workflowState?.stageId
+      : normalizeName(stage) === normalizeName(account.workflowState?.stageName)
+  )
 }
 
 export function toAccuLynxContact(account: AccountWebhookData, contactTypeId: string): Record<string, unknown> {

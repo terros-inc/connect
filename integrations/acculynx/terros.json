@@ -28,7 +28,7 @@
         {
           "name": "triggerStages",
           "type": "string",
-          "description": "Optional comma-separated Terros stage names. Only accounts currently at one of these stages are sent. Matching ignores case and surrounding whitespace. Blank sends accounts at any stage."
+          "description": "Optional comma-separated Terros stage IDs (S.*), recommended because IDs survive renames. Existing stage-name values remain supported and match without case or surrounding whitespace. Blank sends accounts at any stage."
         },
         {
           "name": "accountFilterField",
@@ -87,7 +87,7 @@
           "name": "milestoneStageMapping",
           "type": "mapping",
           "dataType": "None",
-          "description": "Optional mapping from 'Milestone > Status' or milestone-only AccuLynx names to Terros stage names. Names are trimmed and matching ignores case; a status key falls back to its milestone key. When configured, unmatched values do not change stage. Without a mapping, the combined name is used."
+          "description": "Optional legacy override from 'Milestone > Status' or milestone-only AccuLynx names to Terros stage/action IDs (S.* / A.*). Name-valued targets are ignored. A status key falls back to its milestone key. Without this override, the AccuLynx source value is resolved through the workflow Integration Mapping."
         }
       ],
       "authSchema": {
