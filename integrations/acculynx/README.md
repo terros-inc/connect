@@ -56,11 +56,14 @@ For linked accounts, test mode reads the existing AccuLynx record and logs each 
 
 With `syncUpdates` off, linked accounts keep the original create-once behavior. With it on, Send compares the account with the snapshot in `syncStateFieldId` before calling AccuLynx. A stage, closer, or `sourceStatus` change written by AccuLynx Webhook is outside that snapshot, so it cannot echo back. Any event with no changed synced field and no new note also stops without an AccuLynx request.
 
+An account that was linked before it had stored sync state is reconciled on its first event after update sync is enabled, even when that event is an inbound stage-only upsert. Later inbound-only events are no-ops once that initial snapshot exists.
+
 When a synced value changed, Send reads the linked contact and updates first name, last name, company name, and mailing address only when their current values differ. It reads email addresses and phone numbers before using AccuLynx's add-only endpoints, so an existing value is never added twice. For `recordType: job`, it resolves the job from `externalLeadId`, loads its primary contact, and also updates a changed job location address and the configured `leadSourceId`. The job address includes the webhook country or `addressCountry` fallback used on create.
 
 Notes present when Send first records its sync state are treated as the create-time baseline. Each later nonempty Terros note is appended once with its `Note.*` ID in the text: a job message for `recordType: job`, or a contact note truncated to AccuLynx's 1,000-character limit for `recordType: contact`. Send never rewrites the job's create-time `notes` field. After successful writes it stores the new snapshot and sent note IDs in the Terros state field; the state-field webhook is therefore a no-op.
 
 AccuLynx's public changelog announces an “Update contact” operation but its API reference index does not currently expose the endpoint schema. Send uses the conventional `PUT /api/v2/contacts/{contactId}` path with the changed basic contact fields; unlike phone and email, this path has not been verified with a live write.
+If that basic contact update fails, Send logs the failure and continues independent phone, email, job, and note writes. It retains the prior field fingerprint so a later event retries the basic contact fields without reposting notes that succeeded.
 
 ## Webhook authentication
 

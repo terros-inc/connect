@@ -53,10 +53,12 @@ export async function sendAccount(
   terros: Pick<TerrosClient, 'account'>,
   testMode = isTestModeOn(config.testMode)
 ): Promise<void> {
-  if (testMode) await checkConnection(accuLynx)
-
   const recordType = getRecordType(config.recordType)
   getAddressCountry(undefined, config.addressCountry) // Refuses a bad fallback before anything is created.
+  const syncUpdates = isSyncUpdatesOn(config.syncUpdates)
+  const syncStateFieldId = syncUpdates ? getSyncStateFieldId(config.syncStateFieldId) : undefined
+
+  if (testMode) await checkConnection(accuLynx)
 
   if (testMode) {
     console.log(
@@ -66,7 +68,7 @@ export async function sendAccount(
   }
 
   if (!matchesTriggerStage(account, config)) {
-    if (account.externalLeadId && isSyncUpdatesOn(config.syncUpdates)) {
+    if (account.externalLeadId && syncUpdates) {
       console.log(`Account ${account.id} is linked; triggerStages does not gate AccuLynx updates`)
     } else {
       console.log(`Skipping account ${account.id}: current stage is not one of this install's trigger stages`)
@@ -80,11 +82,11 @@ export async function sendAccount(
   }
 
   if (account.externalLeadId) {
-    if (!isSyncUpdatesOn(config.syncUpdates)) {
+    if (!syncUpdates) {
       console.log(`Skipping account ${account.id}: already linked to AccuLynx record ${account.externalLeadId}`)
       return
     }
-    await updateLinkedAccount(account, config, recordType, accuLynx, terros, testMode)
+    await updateLinkedAccount(account, config, recordType, syncStateFieldId!, accuLynx, terros, testMode)
     return
   }
 
@@ -101,15 +103,12 @@ export async function sendAccount(
   const contact = await findOrCreateContact(account, config, accuLynx)
   const externalLeadId = recordType === 'job' ? await findOrCreateJob(account, contact, config, accuLynx) : contact.id
   await readBackCreatedRecord(recordType, externalLeadId, accuLynx)
-  const syncStateFieldId = isSyncUpdatesOn(config.syncUpdates)
-    ? getSyncStateFieldId(config.syncStateFieldId)
-    : undefined
   const updated = await terros.account.update({
     account: {
       accountId: account.id,
       externalLeadId,
       ...(syncStateFieldId
-        ? { customFieldsPatch: { [syncStateFieldId]: serializeSyncState(toSyncState(account, config, recordType)) } }
+        ? { customFieldsPatch: { [syncStateFieldId]: JSON.stringify(toSyncState(account, config, recordType)) } }
         : {}),
     },
   })
@@ -133,7 +132,7 @@ type SyncFields = {
 
 type SyncState = { version: 1; fingerprint: string; sentNoteIds: string[] }
 
-function toSyncState(
+export function toSyncState(
   account: AccountWebhookData,
   config: AccuLynxSendConfig,
   recordType: 'contact' | 'job',
@@ -197,21 +196,19 @@ function parseSyncState(value: unknown): SyncState | undefined {
   }
 }
 
-function serializeSyncState(state: SyncState): string {
-  return JSON.stringify(state)
-}
-
 async function updateLinkedAccount(
   account: AccountWebhookData,
   config: AccuLynxSendConfig,
   recordType: 'contact' | 'job',
+  stateFieldId: `CF.${string}`,
   accuLynx: AccuLynxClient,
   terros: Pick<TerrosClient, 'account'>,
   testMode: boolean
 ): Promise<void> {
-  const stateFieldId = getSyncStateFieldId(config.syncStateFieldId)
-  const previous = parseSyncState(account.customFieldMap?.[stateFieldId])
-  if (account.customFieldMap?.[stateFieldId] && !previous) {
+  const { account: storedAccount } = await terros.account.get({ accountId: account.id })
+  const storedValue = storedAccount.customFields?.[stateFieldId]
+  const previous = parseSyncState(storedValue)
+  if (storedValue && !previous) {
     console.error(
       `Account ${account.id} has invalid AccuLynx sync state; rebuilding it without reposting existing notes`
     )
@@ -245,12 +242,22 @@ async function updateLinkedAccount(
     firstName: desired.contact.firstName,
     lastName: desired.contact.lastName,
     companyName: desired.contact.companyName,
+    crossReference: currentContact.crossReference,
+    contactTypeIds: currentContact.contactTypeIds,
     ...(desired.contact.mailingAddress ? { mailingAddress: desired.contact.mailingAddress } : {}),
   }
+  let contactFieldsSynced = true
   if (!sameContact(currentContact, contactPayload)) {
-    await writeOrLog(testMode, `contact ${contactId}`, contactPayload, () =>
-      accuLynx.updateContact(contactId, contactPayload)
-    )
+    try {
+      await writeOrLog(testMode, `contact ${contactId}`, contactPayload, () =>
+        accuLynx.updateContact(contactId, contactPayload)
+      )
+    } catch (error) {
+      contactFieldsSynced = false
+      console.error(
+        `Could not update basic fields on AccuLynx contact ${contactId}; continuing with independent updates: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   }
 
   const [emails, phones] = await Promise.all([
@@ -299,7 +306,9 @@ async function updateLinkedAccount(
     }
     if (!testMode) {
       alreadySent.add(note.noteId)
-      await saveSyncState(account.id, stateFieldId, toSyncState(account, config, recordType, [...alreadySent]), terros)
+      const checkpoint = toSyncState(account, config, recordType, [...alreadySent])
+      if (!contactFieldsSynced) checkpoint.fingerprint = previous?.fingerprint ?? ''
+      await saveSyncState(account.id, stateFieldId, checkpoint, terros)
     }
   }
 
@@ -308,6 +317,7 @@ async function updateLinkedAccount(
     return
   }
   if (newNotes.length > 0) return
+  if (!contactFieldsSynced) next.fingerprint = previous?.fingerprint ?? ''
   await saveSyncState(account.id, stateFieldId, next, terros)
 }
 
@@ -318,7 +328,7 @@ async function saveSyncState(
   terros: Pick<TerrosClient, 'account'>
 ): Promise<void> {
   const updated = await terros.account.update({
-    account: { accountId, customFieldsPatch: { [stateFieldId]: serializeSyncState(state) } },
+    account: { accountId, customFieldsPatch: { [stateFieldId]: JSON.stringify(state) } },
   })
   if (updated.type !== 'success') throw Error(`Failed to save AccuLynx sync state on Terros account ${accountId}`)
 }
@@ -342,16 +352,13 @@ function sameContact(current: Record<string, unknown>, desired: Record<string, u
 
 function sameAddress(current: unknown, desired: Record<string, unknown>): boolean {
   const address = (current ?? {}) as Record<string, unknown>
-  const state = address.state as { abbreviation?: string } | string | undefined
-  const country = address.country as { abbreviation?: string } | string | undefined
-  return (
-    String(address.street1 ?? '') === String(desired.street1 ?? '') &&
-    String(address.street2 ?? '') === String(desired.street2 ?? '') &&
-    String(address.city ?? '') === String(desired.city ?? '') &&
-    String(typeof state === 'object' ? state?.abbreviation : (state ?? '')) === String(desired.state ?? '') &&
-    String(typeof country === 'object' ? country?.abbreviation : (country ?? '')) === String(desired.country ?? '') &&
-    String(address.zipCode ?? '') === String(desired.zipCode ?? '')
-  )
+  return Object.entries(desired).every(([key, desiredValue]) => {
+    const currentValue = address[key] as { abbreviation?: string } | string | undefined
+    return (
+      String(typeof currentValue === 'object' ? currentValue?.abbreviation : (currentValue ?? '')) ===
+      String(desiredValue ?? '')
+    )
+  })
 }
 
 export async function checkConnection(accuLynx: AccuLynxClient): Promise<void> {

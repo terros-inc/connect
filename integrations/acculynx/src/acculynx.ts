@@ -32,6 +32,7 @@ export type AccuLynxContact = {
   lastName?: string
   companyName?: string
   crossReference?: string
+  contactTypeIds?: string[]
   mailingAddress?: AccuLynxAddress
 }
 export type AccuLynxEmailAddress = { address?: string }
