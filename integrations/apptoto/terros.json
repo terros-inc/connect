@@ -28,7 +28,7 @@
         "username": "Apptoto account email",
         "apiKey": "API key from Apptoto Settings → Integrations"
       },
-      "permissions": ["event:read"],
+      "permissions": ["account:list", "event:read"],
       "slug": "apptoto-appointment-sync"
     },
     {
