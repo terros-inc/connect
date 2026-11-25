@@ -81,7 +81,7 @@ export function matchesTriggerStage(account: AccountWebhookData, config: AccuLyn
   return stages.includes(normalizeName(account.workflowState?.stageName))
 }
 
-export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxSendConfig): Record<string, unknown> {
+export function toAccuLynxContact(account: AccountWebhookData, contactTypeId: string): Record<string, unknown> {
   const resident = account.resident || {}
   const address = account.address
   const phone = toAccuLynxPhone(resident.phone)
@@ -91,7 +91,7 @@ export function toAccuLynxContact(account: AccountWebhookData, config: AccuLynxS
     lastName: resident.lastName,
     companyName: resident.businessName,
     crossReference: account.id,
-    contactTypeIds: config.contactTypeId ? [config.contactTypeId] : undefined,
+    contactTypeIds: [contactTypeId],
     phoneNumbers: phone ? [{ number: phone, type: 'Home', primary: true }] : undefined,
     emailAddresses: resident.email ? [{ address: resident.email, type: 'Personal', primary: true }] : undefined,
     // A contact's state and country are AccuLynx numeric IDs, which the account does not carry, so they are left out.

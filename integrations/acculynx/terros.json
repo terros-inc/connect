@@ -17,7 +17,7 @@
         {
           "name": "contactTypeId",
           "type": "string",
-          "description": "Optional. AccuLynx contact type ID for new contacts."
+          "description": "Optional. AccuLynx contact type ID for new contacts. When blank, Send uses the location's default type, preferring a default named Customer."
         },
         {
           "name": "leadSourceId",

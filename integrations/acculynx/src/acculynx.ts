@@ -10,6 +10,7 @@ const maxAttempts = 3
 const maxRetryWaitMs = 5000
 const searchPageSize = 25
 const maxSearchPages = 4
+const listPageSize = 25
 const dayMs = 24 * 60 * 60 * 1000
 
 function toUtcCalendarDate(timestamp: number): string {
@@ -26,6 +27,7 @@ export type AccuLynxAddress = {
   state?: { abbreviation?: string }
 }
 export type AccuLynxContact = { id?: string; crossReference?: string }
+export type AccuLynxContactType = { id?: string; name?: string; isDefault?: boolean }
 export type AccuLynxCompanySettings = {
   companyId?: string
   name?: string
@@ -75,6 +77,16 @@ export class AccuLynxClient {
     return this.request('GET', '/company-settings') as Promise<AccuLynxCompanySettings>
   }
 
+  async listContactTypes(): Promise<AccuLynxContactType[]> {
+    const contactTypes: AccuLynxContactType[] = []
+    for (let pageStartIndex = 0; ; pageStartIndex++) {
+      const query = new URLSearchParams({ pageSize: String(listPageSize), pageStartIndex: String(pageStartIndex) })
+      const page = await this.listContactTypesPage(query)
+      contactTypes.push(...page)
+      if (page.length < listPageSize) return contactTypes
+    }
+  }
+
   safeLogValue(value: unknown): string {
     return JSON.stringify(value).split(this.apiKey).join('[REDACTED]')
   }
@@ -118,6 +130,19 @@ export class AccuLynxClient {
   private async searchContactsPage(query: URLSearchParams, body: unknown): Promise<AccuLynxContact[]> {
     try {
       const result = (await this.request('POST', `/contacts/search?${query}`, body)) as { items?: AccuLynxContact[] }
+      return result?.items ?? []
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 416) return []
+      throw error
+    }
+  }
+
+  // AccuLynx answers 416, not an empty list, for a page past the end.
+  private async listContactTypesPage(query: URLSearchParams): Promise<AccuLynxContactType[]> {
+    try {
+      const result = (await this.request('GET', `/contacts/contact-types?${query}`)) as {
+        items?: AccuLynxContactType[]
+      }
       return result?.items ?? []
     } catch (error) {
       if (error instanceof AccuLynxError && error.status === 416) return []
