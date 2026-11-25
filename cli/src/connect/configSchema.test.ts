@@ -94,7 +94,6 @@ it('preserves exact, case-sensitive select option values', () => {
 
   expect(result.type === 'select' && result.options).toEqual(options)
 })
-
 function parseConfigField(field: object): ReturnType<typeof ConnectConfig.safeParse> {
   const script = { name: 'Sync', entrypoint: 'src/sync.ts', type: 'scheduled', cron: '0 * * * ? *' }
   return ConnectConfig.safeParse({

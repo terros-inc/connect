@@ -55,6 +55,7 @@
   "scripts": {
     "fetch-openapi": "rm -f terros.yml && curl -fsSL -o terros.yml https://docs.terros.com/openapi/terros.yml",
     "build": "tsdown",
+    "generate-config-schema": "node src/connect/generateSchemaJson.ts && oxfmt --write configSchema.json",
     "pretest": "test -f terros.yml || pnpm fetch-openapi",
     "test": "vitest run",
     "smoke": "node smoke/discovery.mjs",
