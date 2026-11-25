@@ -42,7 +42,7 @@
         {
           "name": "addressCountry",
           "type": "string",
-          "description": "Optional. Two-letter country code (such as US or CA) of this location's job addresses. Terros addresses carry no country and AccuLynx needs one, so without it jobs are created with no address."
+          "description": "Optional fallback two-letter country code (such as US or CA) for job addresses. Account webhooks historically omitted country; Send now uses the webhook country when present and this setting when it is missing. Without either, jobs are created with no address."
         },
         {
           "name": "testMode",

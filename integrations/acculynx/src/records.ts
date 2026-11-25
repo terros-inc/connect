@@ -112,14 +112,14 @@ export function toAccuLynxJob(
   config: AccuLynxSendConfig
 ): Record<string, unknown> {
   const address = account.address
-  const country = getAddressCountry(config.addressCountry)
+  const country = getAddressCountry(address?.country, config.addressCountry)
   const hasFullAddress = address?.line1 && address.locality && address.countrySubd && address.postal1 && country
 
   return removeEmpty({
     contact: { id: contactId },
     leadSource: config.leadSourceId ? { id: config.leadSourceId } : undefined,
-    // AccuLynx requires street, city, state, country and ZIP together. Terros addresses carry no country, so the
-    // address is sent only when the install names its country.
+    // AccuLynx requires street, city, state, country and ZIP together. Older Account webhooks omitted country, so
+    // the install setting remains the fallback when the webhook does not carry a valid code.
     locationAddress: hasFullAddress
       ? removeEmpty({
           street1: address.line1,
@@ -134,13 +134,23 @@ export function toAccuLynxJob(
   })
 }
 
-// An ISO 3166-1 alpha-2 code such as US or CA, or undefined when the install sets none.
-export function getAddressCountry(value: string | undefined): string | undefined {
-  const country = String(value || '')
+// Prefer a valid webhook code; older Account webhooks need the configured fallback.
+export function getAddressCountry(
+  webhookValue: string | undefined,
+  fallbackValue: string | undefined
+): string | undefined {
+  const webhookCountry = String(webhookValue || '')
+    .trim()
+    .toUpperCase()
+  if (/^[A-Z]{2}$/.test(webhookCountry)) return webhookCountry
+
+  const country = String(fallbackValue || '')
     .trim()
     .toUpperCase()
   if (!country) return undefined
-  if (!/^[A-Z]{2}$/.test(country)) throw Error(`addressCountry must be a two-letter country code, got "${value}"`)
+  if (!/^[A-Z]{2}$/.test(country)) {
+    throw Error(`addressCountry must be a two-letter country code, got "${fallbackValue}"`)
+  }
   return country
 }
 

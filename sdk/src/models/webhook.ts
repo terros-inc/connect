@@ -69,7 +69,7 @@ export type AccountWebhookData = WebhookAuditProps & {
   workflowState?: AccountWebhookWorkflowState
   owner?: SmallUser
   closer?: SmallUser
-  address?: SmallAddress
+  address?: SmallAddress & { country?: 'US' | 'CA' | 'PR' }
   resident?: TinyResidentData
   note?: string
   notes?: AccountNote[]

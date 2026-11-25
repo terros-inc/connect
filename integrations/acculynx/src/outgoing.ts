@@ -53,7 +53,7 @@ export async function sendAccount(
   if (testMode) await checkConnection(accuLynx)
 
   const recordType = getRecordType(config.recordType)
-  getAddressCountry(config.addressCountry) // Refuses a bad value before anything is created.
+  getAddressCountry(undefined, config.addressCountry) // Refuses a bad fallback before anything is created.
 
   if (testMode) {
     console.log(
