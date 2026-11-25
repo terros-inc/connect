@@ -161,8 +161,10 @@
                           "minItems": 1,
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
+                            "type": "string",
+                            "pattern": "\\S"
+                          },
+                          "uniqueItems": true
                         },
                         "customFieldAccess": {
                           "not": {}
@@ -531,8 +533,10 @@
                           "minItems": 1,
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
+                            "type": "string",
+                            "pattern": "\\S"
+                          },
+                          "uniqueItems": true
                         },
                         "customFieldAccess": {
                           "not": {}
@@ -905,8 +909,10 @@
                           "minItems": 1,
                           "type": "array",
                           "items": {
-                            "type": "string"
-                          }
+                            "type": "string",
+                            "pattern": "\\S"
+                          },
+                          "uniqueItems": true
                         },
                         "customFieldAccess": {
                           "not": {}

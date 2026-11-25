@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs'
-import { ConnectConfig } from './configSchema'
+import { ConfigSchemaField, ConnectConfig } from './configSchema'
 
 const integrations = new URL('../../../integrations/', import.meta.url)
 
@@ -73,3 +73,32 @@ it.each([
 
   expect(ConnectConfig.safeParse(manifest).success).toBe(false)
 })
+
+it.each(['', '   ', '\t\n'])('rejects the blank select option %j', (option) => {
+  const result = parseConfigField({ name: 'Region', type: 'select', options: ['North', option] })
+
+  expect(result.error?.issues).toContainEqual(
+    expect.objectContaining({ message: 'Select options cannot be blank or whitespace-only' })
+  )
+})
+
+it('rejects duplicate select options', () => {
+  const result = parseConfigField({ name: 'Region', type: 'select', options: ['North', 'South', 'North'] })
+
+  expect(result.error?.issues).toContainEqual(expect.objectContaining({ message: 'Select options must be unique' }))
+})
+
+it('preserves exact, case-sensitive select option values', () => {
+  const options = ['North', 'north', ' North ']
+  const result = ConfigSchemaField.parse({ name: 'Region', type: 'select', options })
+
+  expect(result.type === 'select' && result.options).toEqual(options)
+})
+
+function parseConfigField(field: object): ReturnType<typeof ConnectConfig.safeParse> {
+  const script = { name: 'Sync', entrypoint: 'src/sync.ts', type: 'scheduled', cron: '0 * * * ? *' }
+  return ConnectConfig.safeParse({
+    appId: 'App.example',
+    scripts: [{ ...script, configSchema: [field], authSchema: {}, permissions: [] }],
+  })
+}

@@ -4,6 +4,13 @@ Release notes for `@terros-inc/cli`. Each version's entry is its release notes.
 
 ## Unreleased
 
+## 3.2.0
+
+### New: Connect manifests support boolean, select, and entity picker settings
+
+Connect app manifests can declare boolean toggles, select fields with static options, and team, workflow-stage, and
+user pickers. Select options must be non-blank and unique; their exact values are otherwise preserved.
+
 ### New: root help says how to get started
 
 `terros`, `terros help` and `terros --help` now start with `terros auth login` to sign in, then `terros user profile`
