@@ -37,4 +37,5 @@ order metadata to sync:
 - the Gaiia account ID, account status, and account overview link when the order creates a Gaiia account; and
 - mapped order or account statuses to the configured Terros stages.
 
-Events without a matching Terros account or a configured status mapping will not change an account.
+Events without a matching Terros account will not change an account. A status without a configured mapping will not
+change an account's stage.
