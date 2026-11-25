@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.uH3CD5PtH3kcqBUy0ernY",
+  "repository": { "url": "https://github.com/terros-inc/connect/tree/main/integrations/docusign" },
   "scripts": [
     {
       "name": "Docusign Send",

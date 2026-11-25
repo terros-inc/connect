@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/@terros-inc/cli/configSchema.json",
   "appId": "App.v9jnn5vpXWIOdXjllXVRb",
+  "repository": { "url": "https://github.com/terros-inc/connect/tree/main/integrations/leadperfection" },
   "scripts": [
     {
       "name": "LeadPerfection Send",
