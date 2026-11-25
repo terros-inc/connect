@@ -588,9 +588,19 @@ describe('AccuLynx record mapping', () => {
     expect(toAccuLynxPhone(undefined)).toBeUndefined()
   })
 
-  // Prevents a non-US account's job being filed under the wrong country: AccuLynx needs a country with the
-  // address, Terros has none, so it comes from the install or the address is left out.
-  test('a job gets an address only when it is complete and the install names its country', () => {
+  // Prevents a location's configured fallback from filing a webhook address under the wrong country.
+  test('a job prefers the webhook country, falls back to config, and requires a complete address', () => {
+    const webhookCountry = account({ address: { ...account().address!, country: 'US' } })
+    expect(toAccuLynxJob(webhookCountry, 'contact-1', {}).locationAddress).toMatchObject({ country: 'US' })
+    expect(toAccuLynxJob(webhookCountry, 'contact-1', { addressCountry: 'CA' }).locationAddress).toMatchObject({
+      country: 'US',
+    })
+    const invalidWebhookCountry = account({
+      address: { ...account().address!, country: 'USA' as 'US' },
+    })
+    expect(toAccuLynxJob(invalidWebhookCountry, 'contact-1', { addressCountry: 'ca' }).locationAddress).toMatchObject({
+      country: 'CA',
+    })
     expect(toAccuLynxJob(account(), 'contact-1', { addressCountry: 'ca' }).locationAddress).toEqual({
       street1: '1 Main St',
       city: 'Springfield',
@@ -612,12 +622,13 @@ describe('AccuLynx record mapping', () => {
   })
 
   // Prevents creating a contact and then failing on the job because of a mistyped country.
-  test('a bad addressCountry is refused before anything is created', async () => {
+  test('a bad addressCountry is refused before anything is created, even with a webhook country', async () => {
     const { client, calls } = fakeAccuLynx(created)
     const { terros } = fakeTerros()
+    const webhookCountry = account({ address: { ...account().address!, country: 'US' } })
 
     await expect(
-      sendAccount(account(), { recordType: 'job', addressCountry: 'Canada' }, client, terros)
+      sendAccount(webhookCountry, { recordType: 'job', addressCountry: 'Canada' }, client, terros)
     ).rejects.toThrow('addressCountry')
     expect(calls).toEqual([])
   })

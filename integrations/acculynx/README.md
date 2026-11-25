@@ -17,7 +17,7 @@ Install the app once per AccuLynx location ([Locations and API keys](#locations-
    - `contactTypeId`, `leadSourceId` (optional): AccuLynx IDs for new contacts and jobs.
    - `triggerStages` (optional): comma-separated Terros stage names at which accounts are sent. Names match case-insensitively after trimming; blank preserves the previous behavior of sending at any stage.
    - `accountFilterField`, `accountFilterValues`: which accounts this location sends; needed with more than one location. For a team field (`owner.teamIds`, `owner.memberOf`, `teamId`, or `team`), an assigned account `teamId` is matched by itself. If the account has no assigned team, the configured field is used as the fallback. A list field matches when any team ID or name exactly matches a configured value.
-   - `addressCountry`: the location's two-letter country code, such as `US`, so jobs get an address.
+   - `addressCountry`: an optional fallback two-letter country code, such as `US`, for Account webhooks that omit country.
    - `testMode` (optional, off by default): type `true`, `yes`, `on`, or `1` to validate the API key and preview Send without writing anything. Blank, `false`, `no`, `off`, or `0` is off. Any other text is treated as on and logged so a typo cannot accidentally enable writes.
 3. **AccuLynx Webhook** config:
    - `workflowId` (required): the Terros workflow whose stage follows the AccuLynx milestone.
@@ -38,7 +38,7 @@ AccuLynx API keys are created per location by an AccuLynx admin (Account Setting
 
 - **Webhook:** each install has its own AccuLynx subscription ([Install and configure](#install-and-configure), step 5), and `subscriptionId` makes it refuse other subscriptions' events.
 
-Job addresses: AccuLynx needs a country with every job address and Terros addresses have none. Set `addressCountry` (such as `US` or `CA`) on each Send install to the country of that location's jobs. Without it, jobs are created with no address rather than a guessed country.
+Job addresses: AccuLynx needs a country with every job address. Account webhooks historically omitted country; Send now uses the webhook country when present and falls back to the install's `addressCountry` (such as `US` or `CA`) when it is missing. When neither source has a valid two-letter code, jobs are created with no address rather than a guessed country.
 
 ## Test mode and send confirmation
 
