@@ -39,6 +39,9 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      - name: Check generated Connect config schema
+        run: pnpm --filter @terros-inc/cli generate-config-schema && git diff --exit-code -- cli/configSchema.json
+
       - name: Download OpenAPI
         run: pnpm fetch-openapi
         working-directory: cli

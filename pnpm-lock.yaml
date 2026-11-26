@@ -266,6 +266,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.2
+      oxfmt:
+        specifier: 0.75.0
+        version: 0.75.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.3(typescript@6.0.3)
