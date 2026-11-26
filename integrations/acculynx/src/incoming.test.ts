@@ -84,7 +84,7 @@ describe('receiveWebhook', () => {
     })
   })
 
-  test('trims and maps the current status inside a milestone', async () => {
+  test('trims and maps the current status with its start date for either milestone topic', async () => {
     const withStatus = {
       ...linked,
       'GET /jobs/job-1/milestones/current?includes=status': {
@@ -116,13 +116,28 @@ describe('receiveWebhook', () => {
       terros
     )
 
-    expect(upserts[0]).toMatchObject({
-      account: {
-        workflowTarget: 'A.appointment',
-        sourceStatus: 'Lead > Appointment Scheduled',
-        lastActionDate: Date.parse('2026-01-06T20:00:00Z'),
+    // A delayed milestone event still represents the freshly re-read status, so it must not backdate that status.
+    await receiveWebhook(
+      milestoneEvent({ topicName: 'job.milestone.current_changed' }),
+      {
+        workflowId: 'WF.example',
+        requestType: 'update',
+        milestoneStageMapping: { 'lead > appointment scheduled': 'A.appointment' },
       },
-    })
+      client,
+      terros
+    )
+
+    expect(upserts).toHaveLength(2)
+    for (const upsert of upserts) {
+      expect(upsert).toMatchObject({
+        account: {
+          workflowTarget: 'A.appointment',
+          sourceStatus: 'Lead > Appointment Scheduled',
+          lastActionDate: Date.parse('2026-01-06T20:00:00Z'),
+        },
+      })
+    }
   })
 
   test('falls back to a milestone-only mapping when a current status is present', async () => {

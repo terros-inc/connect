@@ -157,7 +157,7 @@ function getChangedAt(
   statusStart: string | undefined
 ): number | undefined {
   if (topic.startsWith('job.representatives.')) return undefined
-  const start = topic === 'job.milestone.current_changed' ? milestoneStart : statusStart
+  const start = statusStart ?? milestoneStart
   const changedAt = Date.parse(start ?? '')
   return Number.isFinite(changedAt) ? changedAt : Date.now()
 }
