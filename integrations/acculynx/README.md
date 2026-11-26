@@ -2,9 +2,9 @@
 
 Connects a Terros company to AccuLynx through the [AccuLynx API v2](https://apidocs.acculynx.com). Two scripts; a company turns on the direction(s) it needs. Neither direction is on by default.
 
-| Script           | Slug               | Direction         | What it does                                                                                                                                                                      |
-| ---------------- | ------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | At configured trigger stages, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it, then optionally keeps the linked record updated.                   |
+| Script           | Slug               | Direction         | What it does                                                                                                                                                                   |
+| ---------------- | ------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| AccuLynx Send    | `acculynx-send`    | Terros → AccuLynx | At configured trigger stages, creates an AccuLynx contact (`recordType: contact`) or a contact and a job for it, then optionally keeps the linked record updated.              |
 | AccuLynx Webhook | `acculynx-webhook` | AccuLynx → Terros | Receives milestone, milestone-status, and company-representative events, then updates the linked account's stage, source status, and matched closer. Other topics are ignored. |
 
 ## Install and configure

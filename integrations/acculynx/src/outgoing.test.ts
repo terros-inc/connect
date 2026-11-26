@@ -63,16 +63,30 @@ function savedState(
   )
 }
 
-function fakeLinkedTerros(state: string, current = account()): ReturnType<typeof fakeTerros> {
+function fakeLinkedTerros(
+  state: string,
+  current = account({ externalLeadId: 'contact-1' })
+): ReturnType<typeof fakeTerros> {
+  const location = current.address ? { ...current.address } : undefined
+  if (location) {
+    delete location.country
+    delete location.line2
+  }
   return fakeTerros(
     'success',
     { 'CF.syncstate': state },
     {
       accountId: current.id,
-      homeowner: current.resident,
-      location: current.address,
+      homeowner: {
+        firstName: 'Location',
+        lastName: 'Resident',
+        email: 'location@example.test',
+        phone: '312-555-0188',
+      },
+      resident: current.resident,
+      location,
       notes: current.notes,
-      externalLeadId: current.externalLeadId,
+      externalLeadId: current.externalLeadId ?? 'contact-1',
     }
   )
 }
@@ -147,6 +161,21 @@ describe('sendAccount', () => {
       fingerprint: expect.any(String),
       sentNoteIds: ['Note.example'],
     })
+
+    const replay = fakeAccuLynx({})
+    const linked = account({
+      externalLeadId: 'contact-1',
+      notes: [{ noteId: 'Note.example', text: 'Initial note', timestamp: 1, userId: 'U.example' }],
+    })
+    const replayTerros = fakeLinkedTerros(saved.account.customFieldsPatch['CF.syncstate']!, linked)
+    await sendAccount(
+      linked,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      replay.client,
+      replayTerros.terros
+    )
+    expect(replay.calls).toEqual([])
+    expect(replayTerros.updates).toEqual([])
   })
 
   // Prevents a bad update-sync configuration from creating an unlinked vendor record on every retry.
@@ -837,8 +866,8 @@ describe('sendAccount', () => {
     log.mockRestore()
   })
 
-  // Prevents a webhook-originated stage/closer update from echoing back to AccuLynx. The persisted snapshot lets
-  // this decision happen before any vendor read.
+  // Prevents a webhook-originated stage/closer update from echoing back to AccuLynx when account/get returns the
+  // location's indexed homeowner instead of the account resident.
   test('a linked account with only inbound fields changed makes no AccuLynx call', async () => {
     const fake = fakeAccuLynx({})
     const terros = fakeLinkedTerros(savedState())
@@ -849,6 +878,27 @@ describe('sendAccount', () => {
         closer: owner(),
         customFieldMap: { 'CF.syncstate': savedState() },
       }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls).toEqual([])
+    expect(terros.updates).toEqual([])
+  })
+
+  // Prevents a queued delivery from writing to the former AccuLynx record after the durable link was cleared.
+  test('uses the re-read account link as authoritative', async () => {
+    const fake = fakeAccuLynx({})
+    const current = account({ externalLeadId: undefined })
+    const terros = fakeTerros(
+      'success',
+      { 'CF.syncstate': savedState() },
+      { resident: current.resident, location: current.address, externalLeadId: undefined }
+    )
+
+    await sendAccount(
+      account({ externalLeadId: 'contact-1', resident: { ...account().resident, firstName: 'Taylor' } }),
       { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
       fake.client,
       terros.terros
@@ -1077,6 +1127,7 @@ describe('sendAccount', () => {
     )
     expect(retry.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /contacts/contact-1')
     expect(retry.calls.map((call) => `${call.method} ${call.path}`)).not.toContain('POST /contacts/contact-1/notes')
+    expect(terros.updates).toHaveLength(1)
     error.mockRestore()
   })
 
@@ -1085,7 +1136,7 @@ describe('sendAccount', () => {
     const changed = account({
       externalLeadId: 'job-1',
       workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Installed' },
-      address: { ...account().address!, line1: '2 Main St', country: 'US' },
+      address: { ...account().address!, line1: '2 Main St', line2: 'Unit 2', country: 'CA' },
       customFieldMap: { 'CF.syncstate': savedState([], { job: true, leadSourceId: 'source-old' }) },
     })
     const replies = {
@@ -1133,6 +1184,11 @@ describe('sendAccount', () => {
     )
     expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /jobs/job-1/address')
     expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /jobs/job-1/lead-source')
+    expect(fake.calls.find((call) => call.path === '/jobs/job-1/address')?.body).toMatchObject({
+      street1: '2 Main St',
+      street2: 'Unit 2',
+      country: 'CA',
+    })
 
     const filtered = fakeAccuLynx(replies)
     await sendAccount(

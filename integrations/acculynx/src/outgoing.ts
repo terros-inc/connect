@@ -165,7 +165,9 @@ function toSyncFields(
       firstName: String(contact.firstName ?? ''),
       lastName: String(contact.lastName ?? ''),
       companyName: String(contact.companyName ?? ''),
-      ...(contact.mailingAddress ? { mailingAddress: contact.mailingAddress } : {}),
+      ...(contact.mailingAddress
+        ? { mailingAddress: { ...contact.mailingAddress, street2: account.address?.line2 ?? '' } }
+        : {}),
       ...(contact.phoneNumbers?.[0]?.number ? { phone: contact.phoneNumbers[0].number } : {}),
       ...(contact.emailAddresses?.[0]?.address ? { email: contact.emailAddresses[0].address } : {}),
     },
@@ -176,7 +178,9 @@ function toSyncFields(
       leadSource?: { id?: string }
     }
     fields.job = {
-      ...(job.locationAddress ? { locationAddress: job.locationAddress } : {}),
+      ...(job.locationAddress
+        ? { locationAddress: { ...job.locationAddress, street2: account.address?.line2 ?? '' } }
+        : {}),
       ...(job.leadSource?.id ? { leadSourceId: job.leadSource.id } : {}),
     }
   }
@@ -210,12 +214,23 @@ async function updateLinkedAccount(
   testMode: boolean
 ): Promise<void> {
   const { account: storedAccount } = await terros.account.get({ accountId: account.id })
+  if (!storedAccount.externalLeadId) {
+    console.log(`Skipping account ${account.id}: it is no longer linked to an AccuLynx record`)
+    return
+  }
+  const storedAddress = storedAccount.location as AccountWebhookData['address']
   const currentAccount: AccountWebhookData = {
     ...account,
-    resident: (storedAccount.homeowner ?? storedAccount.resident) as AccountWebhookData['resident'],
-    address: storedAccount.location as AccountWebhookData['address'],
+    resident: storedAccount.resident,
+    address: storedAddress
+      ? {
+          ...storedAddress,
+          line2: account.address?.line2,
+          country: account.address?.country,
+        }
+      : undefined,
     notes: storedAccount.notes,
-    externalLeadId: storedAccount.externalLeadId ?? account.externalLeadId,
+    externalLeadId: storedAccount.externalLeadId,
     customFieldMap: storedAccount.customFields,
   }
   const storedValue = storedAccount.customFields?.[stateFieldId]
@@ -320,7 +335,7 @@ async function updateLinkedAccount(
       alreadySent.add(note.noteId)
       const checkpoint = toSyncState(currentAccount, config, recordType, [...alreadySent])
       if (!contactFieldsSynced) checkpoint.fingerprint = previous?.fingerprint ?? ''
-      await saveSyncState(account.id, stateFieldId, checkpoint, terros)
+      await saveSyncState(account.id, stateFieldId, checkpoint, storedValue, terros)
     }
   }
 
@@ -330,17 +345,20 @@ async function updateLinkedAccount(
   }
   if (newNotes.length > 0) return
   if (!contactFieldsSynced) next.fingerprint = previous?.fingerprint ?? ''
-  await saveSyncState(account.id, stateFieldId, next, terros)
+  await saveSyncState(account.id, stateFieldId, next, storedValue, terros)
 }
 
 async function saveSyncState(
   accountId: AccountWebhookData['id'],
   stateFieldId: `CF.${string}`,
   state: SyncState,
+  storedValue: unknown,
   terros: Pick<TerrosClient, 'account'>
 ): Promise<void> {
+  const serialized = JSON.stringify(state)
+  if (serialized === storedValue) return
   const updated = await terros.account.update({
-    account: { accountId, customFieldsPatch: { [stateFieldId]: JSON.stringify(state) } },
+    account: { accountId, customFieldsPatch: { [stateFieldId]: serialized } },
   })
   if (updated.type !== 'success') throw Error(`Failed to save AccuLynx sync state on Terros account ${accountId}`)
 }
