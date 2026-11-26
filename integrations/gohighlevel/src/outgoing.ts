@@ -9,8 +9,9 @@ import {
   type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { ghlApi, isNotEmpty } from './util.ts'
-import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
+import { splitList } from './alerts.ts'
+import { isSwitchOn, toGhlStage, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
 import {
   findOpportunity,
   findStage,
@@ -22,9 +23,8 @@ import {
   toOpportunity,
   type GoHighLevelOpportunity,
 } from './gohighlevel.ts'
-import { checkConfig } from './configFields.ts'
-import { isSwitchOn, toGhlStage, type RunSwitches } from './config.ts'
-import { splitList } from './alerts.ts'
+import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
+import { ghlApi, isNotEmpty } from './util.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string

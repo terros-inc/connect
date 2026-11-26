@@ -1,4 +1,7 @@
 import type { AccountId, CalendarEventId, CustomFieldId, CustomFieldMap, SmallAddress } from '@terros-inc/sdk'
+import { toState, toZip } from './address.ts'
+import type { Config } from './config.ts'
+import { PermanentError } from './errors.ts'
 import {
   CREATE_RESERVE_MS,
   type Contact,
@@ -8,9 +11,6 @@ import {
   type ServiceTitanClient,
   type Technician,
 } from './servicetitan.ts'
-import { PermanentError } from './errors.ts'
-import type { Config } from './config.ts'
-import { toState, toZip } from './address.ts'
 
 type User = {
   firstName?: string

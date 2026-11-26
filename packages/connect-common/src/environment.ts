@@ -1,5 +1,5 @@
-import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 type TerrosEnvironment = {
   /** `prod`, `staging`, a developer's own stack name as the mobile apps' environment picker names it, or `localhost`. */

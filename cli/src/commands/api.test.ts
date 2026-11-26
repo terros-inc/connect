@@ -1,5 +1,5 @@
-import { loadEndpointsAfterRefresh } from '../loadEndpoints'
 import { clearOpenApiCache } from '../cache'
+import { loadEndpointsAfterRefresh } from '../loadEndpoints'
 import { apiCommands } from './api'
 
 vi.mock('../cache', () => ({ clearOpenApiCache: vi.fn() }))

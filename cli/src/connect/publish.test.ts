@@ -1,6 +1,6 @@
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { buildAppUpdate, readDocumentation } from './publish'
 
 const { client } = vi.hoisted(() => ({ client: vi.fn() }))

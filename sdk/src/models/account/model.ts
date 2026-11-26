@@ -1,6 +1,6 @@
-import type { RoleId, SmallUser, TeamId, UserId } from '../user'
-import type { LatLng, PinPlacement, SmallAddress } from '../location'
 import { type CustomFieldId, type CustomFieldMap, type CustomFieldType } from '../customFields'
+import type { LatLng, PinPlacement, SmallAddress } from '../location'
+import type { RoleId, SmallUser, TeamId, UserId } from '../user'
 
 export type AccountId = `Account:${string}` | `Account.${string}`
 export type AccountStatusId = `AS.${string}`

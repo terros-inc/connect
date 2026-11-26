@@ -1,10 +1,10 @@
-import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { execFile } from 'node:child_process'
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import { environmentApiKeyVariable, resolveEnvironment } from '../../packages/connect-common/src/environment.ts'
 
 const endpoint = process.env.TERROS_API_ENDPOINT?.trim()

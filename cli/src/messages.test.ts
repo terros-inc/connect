@@ -1,11 +1,11 @@
 import { expect } from 'vitest'
+import { STAFF_IMPERSONATION_HELP } from './impersonation'
 import {
   formatCommandsHelp,
   formatCommandUsage,
   formatSubcommandParametersHelp,
   formatSubcommandsHelp,
 } from './messages'
-import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 describe('formatCommandsHelp', () => {
   it('starts with sign-in and profile, and ends with version help and the staff impersonation guide', () => {

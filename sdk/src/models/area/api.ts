@@ -1,6 +1,6 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { TeamId, UserId } from '../user'
 import type { LatLng } from '../location'
+import type { TeamId, UserId } from '../user'
 import type { AreaData, AreaId, AreaRunType, AreaStateName, UnsavedArea } from './model'
 
 export type AreaSortCursor = string | number | boolean | (string | number | boolean)[]

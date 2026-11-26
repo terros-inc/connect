@@ -1,8 +1,8 @@
-import type { TinyTeam } from '../team'
-import type { AuditProps } from '../shared'
-import type { Address } from '../location'
-import { type CustomFieldMap } from '../customFields'
 import type { CompanyId } from '../company'
+import { type CustomFieldMap } from '../customFields'
+import type { Address } from '../location'
+import type { AuditProps } from '../shared'
+import type { TinyTeam } from '../team'
 
 export type UserId = `U:${string}` | `U.${string}`
 export type TeamId = `Team:${string}` | `Team.${string}`

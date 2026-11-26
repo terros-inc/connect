@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { parse } from 'yaml'
 import { loadEndpoints as loadCoreEndpoints, parseEndpoints, type EndpointGroups } from '@terros-inc/mcp-core'
-import { cacheKey, loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
+import { parse } from 'yaml'
 import { readCache, writeCache } from './cache'
+import { cacheKey, loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
 
 const PUBLIC_SCHEMA_URL = 'https://docs.terros.com/openapi/terros.yml'
 // A 304 takes about 130 ms, so a normal command checks at most once per interval and gives up after CHECK_TIMEOUT,

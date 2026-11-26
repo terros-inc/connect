@@ -8,8 +8,8 @@ import {
   type CommandNode,
   type EndpointGroups,
 } from '@terros-inc/mcp-core'
-import { formatSubcommandParametersHelp } from './messages'
 import type { CommandGroup, CommandRegistry, Subcommand } from './commands/types'
+import { formatSubcommandParametersHelp } from './messages'
 
 export type BuiltinMatch = {
   run: Subcommand['run']

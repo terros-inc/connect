@@ -1,7 +1,7 @@
 import { IntegrationError, PermanentError } from '@terros-inc/sdk'
-import { readSecrets } from './leadperfection.ts'
-import { jobStatusChangeRow } from './fixtures.ts'
 import { fakeLeadPerfection, fakeSecrets } from './fakeLeadPerfection.ts'
+import { jobStatusChangeRow } from './fixtures.ts'
+import { readSecrets } from './leadperfection.ts'
 
 const appointments = (lp: ReturnType<typeof fakeLeadPerfection>) =>
   lp.client.getSalesAppointments('11/16/2026', '11/18/2026')

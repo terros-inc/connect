@@ -1,7 +1,7 @@
-import { AuthRequiredError, getTokens, saveTokens } from '@terros-inc/connect-common/auth'
 import { interactiveSignInRefusal, resolveEnvironment } from '@terros-inc/connect-common'
-import { clearRuntimeCaches } from '../cache'
+import { AuthRequiredError, getTokens, saveTokens } from '@terros-inc/connect-common/auth'
 import { signInToAuth0 } from '../auth/auth0'
+import { clearRuntimeCaches } from '../cache'
 
 export const authCommands = {
   login: {

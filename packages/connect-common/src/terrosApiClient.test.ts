@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerrosApiClient } from './terrosApiClient.ts'
-import { getTokens } from './oauth/tokens.ts'
 import type { TerrosApiError } from './models.ts'
+import { getTokens } from './oauth/tokens.ts'
+import { TerrosApiClient } from './terrosApiClient.ts'
 
 vi.mock('./oauth/tokens.ts', () => ({ getTokens: vi.fn() }))
 

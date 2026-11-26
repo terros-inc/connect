@@ -1,6 +1,6 @@
 import type { SmallUser } from '@terros-inc/sdk'
-import { type Clock, RateLimiter } from './rateLimit.ts'
 import { AccuLynxClient } from './acculynx.ts'
+import { type Clock, RateLimiter } from './rateLimit.ts'
 
 export type FakeCall = { method: string; path: string; query: string; body?: unknown }
 type FakeReply = { status?: number; body?: unknown; headers?: Record<string, string> }

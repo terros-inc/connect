@@ -1,6 +1,6 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
-import { getAccountToSend, sendAccount } from './outgoing.ts'
 import { fakeJobNimbus, fakeTerros } from './fakeJobNimbus.ts'
+import { getAccountToSend, sendAccount } from './outgoing.ts'
 
 const users = [{ id: 'user-1', email: 'rep@example.test' }]
 const config = {

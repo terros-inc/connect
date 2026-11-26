@@ -1,6 +1,6 @@
 import { type AccountId, type SmallUser, type TerrosClient, type WorkflowId, wrapConnectHandler } from '@terros-inc/sdk'
-import { fromAccuLynxJob, parseJobChange } from './records.ts'
 import { AccuLynxClient } from './acculynx.ts'
+import { fromAccuLynxJob, parseJobChange } from './records.ts'
 
 export type AccuLynxWebhookConfig = {
   workflowId?: string

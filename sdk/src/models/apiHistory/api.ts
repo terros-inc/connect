@@ -1,6 +1,6 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { UserId } from '../user'
 import type { CompanyId } from '../company'
+import type { UserId } from '../user'
 import type { ApiHistoryItem } from './model'
 
 export type ApiHistoryStartInput = {

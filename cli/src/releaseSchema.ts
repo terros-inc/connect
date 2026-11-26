@@ -1,7 +1,7 @@
-import { parse } from 'yaml'
 import { parseEndpoints } from '@terros-inc/mcp-core'
-import { buildCliCommandTree } from './commandTree'
+import { parse } from 'yaml'
 import type { CommandRegistry } from './commands/types'
+import { buildCliCommandTree } from './commandTree'
 
 /** Where the OpenAPI document lists the built-in commands its own lint keeps endpoint paths away from. */
 export const BUILTINS_EXTENSION = 'x-terros-cli-builtins'

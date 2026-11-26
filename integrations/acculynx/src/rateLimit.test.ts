@@ -1,5 +1,5 @@
-import { limiterForKey, RateLimiter } from './rateLimit.ts'
 import { fakeAccuLynx, fakeClock } from './fakeAccuLynx.ts'
+import { limiterForKey, RateLimiter } from './rateLimit.ts'
 
 describe('RateLimiter', () => {
   // Prevents bursting past AccuLynx's 10 requests/second per key, which returns 429s.

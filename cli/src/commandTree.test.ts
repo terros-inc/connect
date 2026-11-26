@@ -1,4 +1,6 @@
 import { parseEndpoints } from '@terros-inc/mcp-core'
+import { apiLogParameters } from './commands/apiLogParams'
+import type { CommandRegistry } from './commands/types'
 import {
   buildCliCommandTree,
   checkBuiltinCollisions,
@@ -6,8 +8,6 @@ import {
   formatBuiltinHelp,
   matchCommand,
 } from './commandTree'
-import type { CommandRegistry } from './commands/types'
-import { apiLogParameters } from './commands/apiLogParams'
 
 const run = vi.fn()
 // Mirrors the shape of the real built-ins without loading their modules.

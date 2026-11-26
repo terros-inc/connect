@@ -1,5 +1,5 @@
-import { RunBudget, ServiceTitanClient } from './servicetitan.ts'
 import { fakeServiceTitan } from './fakeServiceTitan.ts'
+import { RunBudget, ServiceTitanClient } from './servicetitan.ts'
 
 afterEach(() => vi.useRealTimers())
 

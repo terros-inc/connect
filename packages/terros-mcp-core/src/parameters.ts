@@ -1,6 +1,6 @@
-import { splitTopLevelUnion } from './util.ts'
-import type { ObjectSchema, Schema } from './types.ts'
 import type { EndpointParameter } from './endpoint.ts'
+import type { ObjectSchema, Schema } from './types.ts'
+import { splitTopLevelUnion } from './util.ts'
 
 export type Components = {
   schemas: {

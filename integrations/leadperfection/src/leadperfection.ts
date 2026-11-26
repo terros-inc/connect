@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { DateTime } from 'luxon'
 import { IntegrationError, PermanentError } from '@terros-inc/sdk'
+import { DateTime } from 'luxon'
 
 export type LeadPerfectionSecrets = {
   server: string

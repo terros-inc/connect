@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
-import { loadInternalSpec } from '@terros-inc/mcp-core'
-import { AuthRequiredError, getTokens, readTokens } from '@terros-inc/connect-common/auth'
 import { environmentApiKey, resolveEnvironment } from '@terros-inc/connect-common'
-import { reportError } from '../reportError'
-import { readCache, writeCache } from '../cache'
+import { AuthRequiredError, getTokens, readTokens } from '@terros-inc/connect-common/auth'
+import { loadInternalSpec } from '@terros-inc/mcp-core'
 import { buildTerrosClient } from '../api/query'
+import { readCache, writeCache } from '../cache'
+import { reportError } from '../reportError'
 
 // JWT claims only partition local caches; the API still authenticates every request.
 function tokenIdentity(token: string | undefined): string | undefined {

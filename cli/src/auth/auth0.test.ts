@@ -1,10 +1,10 @@
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { afterEach, beforeEach, expect, vi } from 'vitest'
-import open from 'open'
-import { DateTime } from 'luxon'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getTokens } from '@terros-inc/connect-common/auth'
+import { DateTime } from 'luxon'
+import open from 'open'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { pollForToken, signInToAuth0, signInWithSensitiveScope } from './auth0'
 
 const home = vi.hoisted(() => ({ dir: '' }))

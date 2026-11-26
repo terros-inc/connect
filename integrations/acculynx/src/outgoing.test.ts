@@ -1,8 +1,8 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
 import manifest from '../terros.json' with { type: 'json' }
-import { isSyncUpdatesOn, isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
-import { handler, sendAccount as sendAccountWithConfig, toSyncState } from './outgoing.ts'
 import { contactTypes, fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
+import { handler, sendAccount as sendAccountWithConfig, toSyncState } from './outgoing.ts'
+import { isSyncUpdatesOn, isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
 
 async function sendAccount(...args: Parameters<typeof sendAccountWithConfig>): Promise<void> {
   args[1] = { contactTypeId: 'type-configured', ...args[1] }

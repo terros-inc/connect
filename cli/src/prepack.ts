@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { checkReleaseSchema } from './releaseSchema'
 import { commandRegistry } from './commands'
+import { checkReleaseSchema } from './releaseSchema'
 
 // `prepack` runs this on the terros.yml it just downloaded, which the release then bundles.
 try {

@@ -1,4 +1,3 @@
-import { DateTime } from 'luxon'
 import {
   type AccountData,
   type AccountId,
@@ -7,7 +6,7 @@ import {
   type WorkflowId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { LEADPERFECTION_SOURCE, toZip } from './send.ts'
+import { DateTime } from 'luxon'
 import {
   fromLeadPerfectionDate,
   type JobStatusChange,
@@ -17,6 +16,7 @@ import {
   type SalesAppointment,
   toLeadPerfectionDate,
 } from './leadperfection.ts'
+import { LEADPERFECTION_SOURCE, toZip } from './send.ts'
 
 export type SyncConfig = {
   workflowId?: string

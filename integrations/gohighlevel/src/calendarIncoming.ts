@@ -1,13 +1,13 @@
-import { DateTime } from 'luxon'
 import {
   type CalendarEventDataWithDetails,
   type CompanyId,
   type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { isCreatingMarker } from './creationGuard.ts'
-import { checkConfig } from './configFields.ts'
+import { DateTime } from 'luxon'
 import { isSwitchOn, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
+import { isCreatingMarker } from './creationGuard.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string

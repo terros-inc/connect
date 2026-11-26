@@ -1,4 +1,3 @@
-import { convert } from 'html-to-text'
 import {
   type AccountData,
   type AccountNote,
@@ -7,9 +6,10 @@ import {
   type UserId,
   type UserListInput,
 } from '@terros-inc/sdk'
-import { formatNote, getUserName, isNotEmpty, normalizeText } from './util.ts'
-import { type GoHighLevelUser } from './gohighlevel.ts'
+import { convert } from 'html-to-text'
 import { ALERT_NOTE_PREFIX } from './alerts.ts'
+import { type GoHighLevelUser } from './gohighlevel.ts'
+import { formatNote, getUserName, isNotEmpty, normalizeText } from './util.ts'
 
 export type GoHighLevelNote = {
   id: string

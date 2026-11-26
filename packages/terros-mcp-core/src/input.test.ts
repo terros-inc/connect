@@ -1,7 +1,7 @@
 import { expect } from 'vitest'
-import { getEndpointParameters, getObjectFields } from './parameters.ts'
-import { buildEndpointInput, getEndpointInputParameters, UnknownParameterError, type ParsedArgs } from './input.ts'
 import type { Endpoint } from './endpoint.ts'
+import { buildEndpointInput, getEndpointInputParameters, UnknownParameterError, type ParsedArgs } from './input.ts'
+import { getEndpointParameters, getObjectFields } from './parameters.ts'
 
 describe('buildEndpointInput', () => {
   it('identifies unknown flags by error type so schema refresh does not depend on wording', () => {

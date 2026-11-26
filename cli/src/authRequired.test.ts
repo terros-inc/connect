@@ -1,7 +1,7 @@
-import { format } from 'node:util'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { format } from 'node:util'
 import { AuthRequiredError } from '@terros-inc/connect-common/auth'
 
 // Runs the real CLI with only the network and home directory faked, so a schema load and the command itself both reach

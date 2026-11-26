@@ -1,5 +1,5 @@
-import type { ParsedArgs } from 'minimist'
 import type { EndpointParameter } from '@terros-inc/mcp-core'
+import type { ParsedArgs } from 'minimist'
 
 export type ApiLogInput = {
   companyId: string

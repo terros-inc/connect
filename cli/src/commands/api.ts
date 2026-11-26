@@ -1,14 +1,14 @@
-import type { ParsedArgs } from 'minimist'
 import { withoutUploadUrls } from '@terros-inc/mcp-core'
-import { reportError } from '../reportError'
-import { loadEndpointsAfterRefresh } from '../loadEndpoints'
-import { formatOutput } from '../formatOutput'
-import { clearOpenApiCache } from '../cache'
-import { runApiHistoryQuery } from '../apiHistory'
+import type { ParsedArgs } from 'minimist'
 import { buildTerrosClient } from '../api/query'
-import type { CommandContext } from './types'
-import { apiLogParameters, parseApiLogParams } from './apiLogParams'
+import { runApiHistoryQuery } from '../apiHistory'
+import { clearOpenApiCache } from '../cache'
+import { formatOutput } from '../formatOutput'
+import { loadEndpointsAfterRefresh } from '../loadEndpoints'
+import { reportError } from '../reportError'
 import { apiCallParameters, parseApiCallParams } from './apiCallParams'
+import { apiLogParameters, parseApiLogParams } from './apiLogParams'
+import type { CommandContext } from './types'
 
 export const apiCommands = {
   call: {

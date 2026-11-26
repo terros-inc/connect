@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { type AccountWebhook, type AccountWebhookData, type TerrosClient, wrapConnectHandler } from '@terros-inc/sdk'
+import { AccuLynxClient, AccuLynxError, type AccuLynxContactType } from './acculynx.ts'
 import {
   type AccuLynxSendConfig,
   getAddressCountry,
@@ -14,7 +15,6 @@ import {
   toAccuLynxContact,
   toAccuLynxJob,
 } from './records.ts'
-import { AccuLynxClient, AccuLynxError, type AccuLynxContactType } from './acculynx.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook, void, AccuLynxSendConfig>(async (input, client) => {
   const payload = input.context.payload

@@ -1,8 +1,8 @@
-import { getTokens } from './oauth/tokens.ts'
-import { AuthRequiredError } from './oauth/auth0.ts'
-import { type ApiRoute, isResponseError, TerrosApiError } from './models.ts'
-import { environmentApiKey, interactiveSignInRefusal, resolveEnvironment } from './environment.ts'
 import { getAnalyticsHeaders, type TerrosHeaderMetadata } from './analytics.ts'
+import { environmentApiKey, interactiveSignInRefusal, resolveEnvironment } from './environment.ts'
+import { type ApiRoute, isResponseError, TerrosApiError } from './models.ts'
+import { AuthRequiredError } from './oauth/auth0.ts'
+import { getTokens } from './oauth/tokens.ts'
 
 export type TerrosClientConfig = {
   apiKey?: string

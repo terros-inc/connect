@@ -5,8 +5,8 @@ import {
   type WebhookPayload,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import type { SalesforceLeadAddRequest } from './model'
 import { addLead } from './api'
+import type { SalesforceLeadAddRequest } from './model'
 
 type ResidentDetails = {
   firstName?: string
