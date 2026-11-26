@@ -1,7 +1,7 @@
 import type { AccountWebhookData } from '@terros-inc/sdk'
 import manifest from '../terros.json' with { type: 'json' }
-import { isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
-import { handler, sendAccount as sendAccountWithConfig } from './outgoing.ts'
+import { isSyncUpdatesOn, isTestModeOn, matchesAccountFilter, toAccuLynxJob, toAccuLynxPhone } from './records.ts'
+import { handler, sendAccount as sendAccountWithConfig, toSyncState } from './outgoing.ts'
 import { contactTypes, fakeAccuLynx, fakeTerros } from './fakeAccuLynx.ts'
 
 async function sendAccount(...args: Parameters<typeof sendAccountWithConfig>): Promise<void> {
@@ -44,6 +44,51 @@ const created = {
   'POST /contacts': { status: 201, body: { id: 'contact-1' } },
   'POST /jobs': { status: 201, body: { id: 'job-1' } },
   'POST /jobs/external-references': { status: 201, body: {} },
+}
+
+function savedState(
+  sentNoteIds: string[] = [],
+  extra: { job?: boolean; leadSourceId?: string; country?: string } = {}
+): string {
+  const input = account(
+    extra.job ? { address: { ...account().address!, country: (extra.country ?? 'US') as 'US' | 'CA' | 'PR' } } : {}
+  )
+  return JSON.stringify(
+    toSyncState(
+      input,
+      { recordType: extra.job ? 'job' : 'contact', leadSourceId: extra.leadSourceId },
+      extra.job ? 'job' : 'contact',
+      sentNoteIds
+    )
+  )
+}
+
+function fakeLinkedTerros(
+  state: string,
+  current = account({ externalLeadId: 'contact-1' })
+): ReturnType<typeof fakeTerros> {
+  const location = current.address ? { ...current.address } : undefined
+  if (location) {
+    delete location.country
+    delete location.line2
+  }
+  return fakeTerros(
+    'success',
+    { 'CF.syncstate': state },
+    {
+      accountId: current.id,
+      homeowner: {
+        firstName: 'Location',
+        lastName: 'Resident',
+        email: 'location@example.test',
+        phone: '312-555-0188',
+      },
+      resident: current.resident,
+      location,
+      notes: current.notes,
+      externalLeadId: current.externalLeadId ?? 'contact-1',
+    }
+  )
 }
 
 describe('sendAccount', () => {
@@ -94,6 +139,53 @@ describe('sendAccount', () => {
 
     expect(calls.map((call) => call.path)).toEqual(['/contacts/search', '/contacts', '/contacts/contact-1'])
     expect(updates).toEqual([{ account: { accountId: 'Account.example', externalLeadId: 'contact-1' } }])
+  })
+
+  // Prevents a note that existed at first send from being appended again when update sync handles the link event.
+  test('an update-enabled create saves its field fingerprint and initial note IDs with the link', async () => {
+    const { client } = fakeAccuLynx(created)
+    const { terros, updates } = fakeTerros()
+    await sendAccount(
+      account({
+        notes: [{ noteId: 'Note.example', text: 'Initial note', timestamp: 1, userId: 'U.example' }],
+      }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      client,
+      terros
+    )
+
+    const saved = updates[0] as { account: { externalLeadId: string; customFieldsPatch: Record<string, string> } }
+    expect(saved.account.externalLeadId).toBe('contact-1')
+    expect(JSON.parse(saved.account.customFieldsPatch['CF.syncstate']!)).toMatchObject({
+      version: 1,
+      fingerprint: expect.any(String),
+      sentNoteIds: ['Note.example'],
+    })
+
+    const replay = fakeAccuLynx({})
+    const linked = account({
+      externalLeadId: 'contact-1',
+      notes: [{ noteId: 'Note.example', text: 'Initial note', timestamp: 1, userId: 'U.example' }],
+    })
+    const replayTerros = fakeLinkedTerros(saved.account.customFieldsPatch['CF.syncstate']!, linked)
+    await sendAccount(
+      linked,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      replay.client,
+      replayTerros.terros
+    )
+    expect(replay.calls).toEqual([])
+    expect(replayTerros.updates).toEqual([])
+  })
+
+  // Prevents a bad update-sync configuration from creating an unlinked vendor record on every retry.
+  test('update sync validates its state field before any AccuLynx request', async () => {
+    const fake = fakeAccuLynx(created)
+
+    await expect(
+      sendAccount(account(), { recordType: 'contact', syncUpdates: 'true' }, fake.client, fakeTerros().terros)
+    ).rejects.toThrow('syncStateFieldId')
+    expect(fake.calls).toEqual([])
   })
 
   test('configured contactTypeId is trimmed before contact creation', async () => {
@@ -267,7 +359,7 @@ describe('sendAccount', () => {
 
     await sendAccount(
       account({ workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Sold' } }),
-      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: true },
+      { recordType: 'job', triggerStages: 'Sold', addressCountry: 'US', testMode: 'true' },
       client,
       terros
     )
@@ -422,25 +514,7 @@ describe('sendAccount', () => {
     error.mockRestore()
   })
 
-  // Prevents migrated and unsaved install values from changing the safety switch's behavior.
-  test.each([
-    { value: true, expected: true },
-    { value: false, expected: false },
-    { value: undefined, expected: false },
-    { value: null, expected: false },
-    { value: ' TRUE ', expected: true },
-    { value: 'Yes', expected: true },
-    { value: ' ON ', expected: true },
-    { value: '1', expected: true },
-    { value: ' FALSE ', expected: false },
-    { value: 'No', expected: false },
-    { value: ' OFF ', expected: false },
-    { value: '0', expected: false },
-  ])('reads testMode $value as $expected', ({ value, expected }) => {
-    expect(isTestModeOn(value)).toBe(expected)
-  })
-
-  // Prevents a misspelled legacy safety switch from silently enabling live writes.
+  // Prevents a misspelled safety switch from silently enabling live writes.
   test('an unknown testMode value is logged and treated as on', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     expect(isTestModeOn('ture')).toBe(true)
@@ -448,9 +522,10 @@ describe('sendAccount', () => {
     error.mockRestore()
   })
 
-  test('declares testMode as a boolean install field', () => {
+  test('declares the install field and permissions used by Send', () => {
     const send = manifest.scripts.find((script) => script.slug === 'acculynx-send')
     expect(send?.configSchema.find((field) => field.name === 'testMode')?.type).toBe('boolean')
+    expect(send?.permissions).toEqual(['account:list', 'account:save'])
   })
 
   // Prevents early-stage accounts from being irreversibly created in AccuLynx while preserving name-valued settings
@@ -790,6 +865,520 @@ describe('sendAccount', () => {
     expect(output).toContain('created but is not yet readable (likely unassigned)')
     log.mockRestore()
   })
+
+  // Prevents a webhook-originated stage/closer update from echoing back to AccuLynx when account/get returns the
+  // location's indexed homeowner instead of the account resident.
+  test('a linked account with only inbound fields changed makes no AccuLynx call', async () => {
+    const fake = fakeAccuLynx({})
+    const terros = fakeLinkedTerros(savedState())
+    await sendAccount(
+      account({
+        externalLeadId: 'contact-1',
+        workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Approved' },
+        closer: owner(),
+        customFieldMap: { 'CF.syncstate': savedState() },
+      }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls).toEqual([])
+    expect(terros.updates).toEqual([])
+  })
+
+  // Prevents a queued delivery from writing to the former AccuLynx record after the durable link was cleared.
+  test('uses the re-read account link as authoritative', async () => {
+    const fake = fakeAccuLynx({})
+    const current = account({ externalLeadId: undefined })
+    const terros = fakeTerros(
+      'success',
+      { 'CF.syncstate': savedState() },
+      { resident: current.resident, location: current.address, externalLeadId: undefined }
+    )
+
+    await sendAccount(
+      account({ externalLeadId: 'contact-1', resident: { ...account().resident, firstName: 'Taylor' } }),
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls).toEqual([])
+    expect(terros.updates).toEqual([])
+  })
+
+  // Prevents duplicate contacts while applying every supported contact change, and avoids add-only phone/email
+  // duplicates by reading those collections first.
+  test('updates an existing contact and saves a snapshot that makes the next event a no-op', async () => {
+    const changed = account({
+      externalLeadId: 'contact-1',
+      resident: {
+        firstName: 'Taylor',
+        lastName: 'Example',
+        businessName: 'Acme Roofing',
+        email: 'user@example.test',
+        phone: '312-555-0199',
+      },
+      address: { ...account().address!, line1: '2 Main St' },
+      customFieldMap: { 'CF.syncstate': savedState() },
+    })
+    const fake = fakeAccuLynx({
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'PUT /contacts/contact-1': { status: 204 },
+      'POST /contacts/contact-1/email-addresses': { status: 201 },
+      'POST /contacts/contact-1/phone-numbers': { status: 201 },
+    })
+    const terros = fakeLinkedTerros(savedState(), changed)
+
+    await sendAccount(
+      changed,
+      { recordType: 'contact', syncUpdates: 'yes', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      'GET /contacts/contact-1',
+      'PUT /contacts/contact-1',
+      'GET /contacts/contact-1/email-addresses',
+      'GET /contacts/contact-1/phone-numbers',
+      'POST /contacts/contact-1/email-addresses',
+      'POST /contacts/contact-1/phone-numbers',
+    ])
+    expect(fake.calls.find((call) => call.method === 'PUT')?.body).toMatchObject({
+      firstName: 'Taylor',
+      companyName: 'Acme Roofing',
+      mailingAddress: { street1: '2 Main St' },
+    })
+    const state = (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account
+      .customFieldsPatch['CF.syncstate']
+
+    const second = fakeAccuLynx({})
+    await sendAccount(
+      { ...changed, customFieldMap: { 'CF.syncstate': state! } },
+      { recordType: 'contact', syncUpdates: 'on', syncStateFieldId: 'CF.syncstate' },
+      second.client,
+      fakeLinkedTerros(state!, changed).terros
+    )
+    expect(second.calls).toEqual([])
+  })
+
+  // Prevents a retried older delivery from reverting contact fields or advancing the fingerprint to stale values.
+  test('builds linked updates from the re-read account instead of the delivery snapshot', async () => {
+    const prior = savedState()
+    const staleDelivery = account({
+      externalLeadId: 'contact-1',
+      customFieldMap: { 'CF.syncstate': prior },
+    })
+    const current = account({
+      externalLeadId: 'contact-1',
+      resident: { ...account().resident, firstName: 'Taylor' },
+      address: { ...account().address!, line1: '2 Main St' },
+      customFieldMap: { 'CF.syncstate': prior },
+    })
+    const fake = fakeAccuLynx({
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'PUT /contacts/contact-1': { status: 204 },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+    })
+    const terros = fakeLinkedTerros(prior, current)
+
+    await sendAccount(
+      staleDelivery,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      terros.terros
+    )
+
+    expect(fake.calls.find((call) => call.method === 'PUT')?.body).toMatchObject({
+      firstName: 'Taylor',
+      mailingAddress: { street1: '2 Main St' },
+    })
+    const state = JSON.parse(
+      (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account.customFieldsPatch[
+        'CF.syncstate'
+      ]!
+    ) as { fingerprint: string }
+    expect(state.fingerprint).toBe(toSyncState(current, { recordType: 'contact' }, 'contact').fingerprint)
+  })
+
+  // Prevents state/country returned by AccuLynx from making a partial mailing-address update look necessary.
+  test('compares only mailing-address fields present in the contact update payload', async () => {
+    const prior = savedState()
+    const changed = account({
+      externalLeadId: 'contact-1',
+      resident: { ...account().resident, email: 'user@example.test' },
+      customFieldMap: { 'CF.syncstate': prior },
+    })
+    const fake = fakeAccuLynx({
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          crossReference: 'Account.example',
+          contactTypeIds: ['type-example'],
+          mailingAddress: {
+            street1: '1 Main St',
+            city: 'Springfield',
+            state: { abbreviation: 'IL' },
+            country: { abbreviation: 'US' },
+            zipCode: '62701',
+          },
+        },
+      },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'POST /contacts/contact-1/email-addresses': { status: 201 },
+    })
+
+    await sendAccount(
+      changed,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      fake.client,
+      fakeLinkedTerros(prior, changed).terros
+    )
+
+    expect(fake.calls.some((call) => call.method === 'PUT')).toBe(false)
+  })
+
+  // Prevents an unavailable inferred contact-update endpoint from blocking documented phone, email, and note writes,
+  // while retaining the old fingerprint so the basic fields are retried.
+  test('continues independent writes when a basic contact update fails and retries its fingerprint', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const prior = savedState()
+    const note = { noteId: 'Note.example-new' as const, text: 'New note', timestamp: 2, userId: 'U.example' as const }
+    const changed = account({
+      externalLeadId: 'contact-1',
+      resident: { ...account().resident, firstName: 'Taylor', email: 'user@example.test' },
+      notes: [note],
+      customFieldMap: { 'CF.syncstate': prior },
+    })
+    const replies = {
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          crossReference: 'Account.example',
+          contactTypeIds: ['type-example'],
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'PUT /contacts/contact-1': { status: 404, body: { message: 'Entity not found' } },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'POST /contacts/contact-1/email-addresses': { status: 201 },
+      'POST /contacts/contact-1/notes': { status: 201 },
+    }
+    const terros = fakeLinkedTerros(prior, changed)
+    const first = fakeAccuLynx(replies)
+
+    await sendAccount(
+      changed,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      first.client,
+      terros.terros
+    )
+
+    expect(first.calls.map((call) => `${call.method} ${call.path}`)).toContain('POST /contacts/contact-1/notes')
+    expect(first.calls.find((call) => call.method === 'PUT')?.body).toMatchObject({
+      crossReference: 'Account.example',
+      contactTypeIds: ['type-example'],
+    })
+    const checkpoint = JSON.parse(
+      (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account.customFieldsPatch[
+        'CF.syncstate'
+      ]!
+    ) as { fingerprint: string; sentNoteIds: string[] }
+    expect(checkpoint).toMatchObject({
+      fingerprint: JSON.parse(prior).fingerprint,
+      sentNoteIds: ['Note.example-new'],
+    })
+
+    const retry = fakeAccuLynx({ ...replies, 'GET /contacts/contact-1/email-addresses': { body: { items: [] } } })
+    await sendAccount(
+      changed,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      retry.client,
+      terros.terros
+    )
+    expect(retry.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /contacts/contact-1')
+    expect(retry.calls.map((call) => `${call.method} ${call.path}`)).not.toContain('POST /contacts/contact-1/notes')
+    expect(terros.updates).toHaveLength(1)
+    error.mockRestore()
+  })
+
+  // Prevents triggerStages from stranding linked jobs after they advance, while retaining the location filter.
+  test('updates a linked job outside the trigger stage and skips one outside the account filter', async () => {
+    const changed = account({
+      externalLeadId: 'job-1',
+      workflowState: { workflowId: 'WF.north', stageId: 'S.example', stageName: 'Installed' },
+      address: { ...account().address!, line1: '2 Main St', line2: 'Unit 2', country: 'CA' },
+      customFieldMap: { 'CF.syncstate': savedState([], { job: true, leadSourceId: 'source-old' }) },
+    })
+    const replies = {
+      'GET /jobs/job-1': {
+        body: {
+          id: 'job-1',
+          contacts: [{ isPrimary: true, contact: { id: 'contact-1', firstName: 'Pat', lastName: 'Example' } }],
+          locationAddress: {
+            street1: '1 Main St',
+            city: 'Springfield',
+            state: { abbreviation: 'IL' },
+            country: { abbreviation: 'US' },
+            zipCode: '62701',
+          },
+          leadSource: { id: 'source-old' },
+        },
+      },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'PUT /contacts/contact-1': { status: 204 },
+      'PUT /jobs/job-1/address': { status: 204 },
+      'PUT /jobs/job-1/lead-source': { status: 204 },
+    }
+    const fake = fakeAccuLynx(replies)
+    await sendAccount(
+      changed,
+      {
+        recordType: 'job',
+        syncUpdates: '1',
+        syncStateFieldId: 'CF.syncstate',
+        triggerStages: 'Sold',
+        leadSourceId: 'source-new',
+      },
+      fake.client,
+      fakeLinkedTerros(savedState([], { job: true, leadSourceId: 'source-old' }), changed).terros
+    )
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /jobs/job-1/address')
+    expect(fake.calls.map((call) => `${call.method} ${call.path}`)).toContain('PUT /jobs/job-1/lead-source')
+    expect(fake.calls.find((call) => call.path === '/jobs/job-1/address')?.body).toMatchObject({
+      street1: '2 Main St',
+      street2: 'Unit 2',
+      country: 'CA',
+    })
+
+    const filtered = fakeAccuLynx(replies)
+    await sendAccount(
+      changed,
+      {
+        recordType: 'job',
+        syncUpdates: 'true',
+        syncStateFieldId: 'CF.syncstate',
+        accountFilterField: 'workflowState.workflowId',
+        accountFilterValues: 'WF.south',
+      },
+      filtered.client,
+      fakeTerros().terros
+    )
+    expect(filtered.calls).toEqual([])
+  })
+
+  // Prevents retrying every historical note and proves each new note is persisted after one append.
+  test.each([
+    { recordType: 'job' as const, linkedId: 'job-1', writePath: '/jobs/job-1/messages' },
+    { recordType: 'contact' as const, linkedId: 'contact-1', writePath: '/contacts/contact-1/notes' },
+  ])('posts a new $recordType note once and includes its noteId', async ({ recordType, linkedId, writePath }) => {
+    const oldNote = {
+      noteId: 'Note.example-old' as const,
+      text: 'Already sent',
+      timestamp: 1,
+      userId: 'U.example' as const,
+    }
+    const newNote = {
+      noteId: 'Note.example-new' as const,
+      text: recordType === 'contact' ? 'x'.repeat(1100) : 'New note',
+      timestamp: 2,
+      userId: 'U.example' as const,
+    }
+    const input = account({
+      externalLeadId: linkedId,
+      notes: [oldNote, newNote],
+      customFieldMap: {
+        'CF.syncstate': savedState(['Note.example-old'], recordType === 'job' ? { job: true, country: 'US' } : {}),
+      },
+    })
+    const replies = {
+      ...(recordType === 'job'
+        ? {
+            'GET /jobs/job-1': {
+              body: {
+                id: 'job-1',
+                contacts: [{ isPrimary: true, contact: { id: 'contact-1', firstName: 'Pat', lastName: 'Example' } }],
+                locationAddress: {
+                  street1: '1 Main St',
+                  city: 'Springfield',
+                  state: { abbreviation: 'IL' },
+                  country: { abbreviation: 'US' },
+                  zipCode: '62701',
+                },
+              },
+            },
+          }
+        : {
+            'GET /contacts/contact-1': {
+              body: {
+                id: 'contact-1',
+                firstName: 'Pat',
+                lastName: 'Example',
+                mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+              },
+            },
+          }),
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      ...(recordType === 'job'
+        ? {
+            'GET /contacts/contact-1': {
+              body: {
+                id: 'contact-1',
+                firstName: 'Pat',
+                lastName: 'Example',
+                companyName: '',
+                mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+              },
+            },
+          }
+        : {}),
+      [`POST ${writePath}`]: { status: 201 },
+    }
+    const fake = fakeAccuLynx(replies)
+    const initialState = savedState(['Note.example-old'], recordType === 'job' ? { job: true, country: 'US' } : {})
+    const terros = fakeLinkedTerros(initialState, input)
+    await sendAccount(
+      input,
+      { recordType, syncUpdates: 'true', syncStateFieldId: 'CF.syncstate', addressCountry: 'US' },
+      fake.client,
+      terros.terros
+    )
+
+    const noteCall = fake.calls.find((call) => call.path === writePath)
+    if (recordType === 'job') {
+      expect(noteCall?.body).toEqual({ message: 'Terros note Note.example-new\nNew note' })
+    } else {
+      const posted = (noteCall?.body as { note: string }).note
+      expect(posted).toHaveLength(1000)
+      expect(posted).toMatch(/^Terros note Note\.example-new\n/)
+    }
+    const state = (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account
+      .customFieldsPatch['CF.syncstate']
+    const second = fakeAccuLynx({})
+    await sendAccount(
+      { ...input, customFieldMap: { 'CF.syncstate': state! } },
+      { recordType, syncUpdates: 'true', syncStateFieldId: 'CF.syncstate', addressCountry: 'US' },
+      second.client,
+      fakeLinkedTerros(state!, input).terros
+    )
+    expect(second.calls).toEqual([])
+  })
+
+  // Prevents checkpoint webhook snapshots and queued pre-sync events from reposting later notes.
+  test('replayed checkpoint snapshots do not repost either of two new notes', async () => {
+    const prior = savedState()
+    const notes = [
+      { noteId: 'Note.example-one' as const, text: 'First note', timestamp: 1, userId: 'U.example' as const },
+      { noteId: 'Note.example-two' as const, text: 'Second note', timestamp: 2, userId: 'U.example' as const },
+    ]
+    const input = account({
+      externalLeadId: 'contact-1',
+      notes,
+      customFieldMap: { 'CF.syncstate': prior },
+    })
+    const replies = {
+      'GET /contacts/contact-1': {
+        body: {
+          id: 'contact-1',
+          firstName: 'Pat',
+          lastName: 'Example',
+          companyName: '',
+          mailingAddress: { street1: '1 Main St', city: 'Springfield', zipCode: '62701' },
+        },
+      },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [{ address: 'pat@example.test' }] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [{ number: '3125550100' }] } },
+      'POST /contacts/contact-1/notes': { status: 201 },
+    }
+    const terros = fakeLinkedTerros(prior, input)
+    const first = fakeAccuLynx(replies)
+    await sendAccount(
+      input,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      first.client,
+      terros.terros
+    )
+    const firstCheckpoint = (terros.updates[0] as { account: { customFieldsPatch: Record<string, string> } }).account
+      .customFieldsPatch['CF.syncstate']!
+
+    const replay = fakeAccuLynx({})
+    await sendAccount(
+      { ...input, customFieldMap: { 'CF.syncstate': firstCheckpoint } },
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate' },
+      replay.client,
+      terros.terros
+    )
+
+    expect(first.calls.filter((call) => call.path === '/contacts/contact-1/notes')).toHaveLength(2)
+    expect(replay.calls).toEqual([])
+  })
+
+  // Prevents dry-run validation from writing either system while still showing the exact planned update.
+  test('test mode logs linked-account writes without performing them', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const fake = fakeAccuLynx({
+      'GET /company-settings': { body: { companyId: 'company-example', name: 'Acme Roofing' } },
+      'GET /contacts/contact-1': { body: { id: 'contact-1', firstName: 'Pat' } },
+      'GET /contacts/contact-1/email-addresses': { body: { items: [] } },
+      'GET /contacts/contact-1/phone-numbers': { body: { items: [] } },
+    })
+    const current = account({
+      externalLeadId: 'contact-1',
+      resident: { ...account().resident, firstName: 'Taylor' },
+      customFieldMap: { 'CF.syncstate': savedState() },
+    })
+    const terros = fakeLinkedTerros(savedState(), current)
+    await sendAccount(
+      current,
+      { recordType: 'contact', syncUpdates: 'true', syncStateFieldId: 'CF.syncstate', testMode: 'true' },
+      fake.client,
+      terros.terros
+    )
+    expect(fake.calls.every((call) => call.method === 'GET')).toBe(true)
+    expect(terros.updates).toEqual([])
+    expect(log.mock.calls.flat().join('\n')).toContain('DRY RUN: would update AccuLynx')
+    log.mockRestore()
+  })
 })
 
 describe('AccuLynx record mapping', () => {
@@ -799,6 +1388,15 @@ describe('AccuLynx record mapping', () => {
     expect(toAccuLynxPhone('312.555.0100')).toBe('3125550100')
     expect(toAccuLynxPhone('+44 20 555 0100')).toBeUndefined()
     expect(toAccuLynxPhone(undefined)).toBeUndefined()
+  })
+
+  test('syncUpdates accepts only explicit on values and fails closed on unknown text', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(['true', 'yes', 'on', '1'].every((value) => isSyncUpdatesOn(value))).toBe(true)
+    expect(['', 'false', 'no', 'off', '0'].every((value) => !isSyncUpdatesOn(value))).toBe(true)
+    expect(isSyncUpdatesOn('ture')).toBe(false)
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('treating it as false'))
+    error.mockRestore()
   })
 
   // Prevents a location's configured fallback from filing a webhook address under the wrong country.

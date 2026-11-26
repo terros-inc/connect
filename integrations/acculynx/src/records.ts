@@ -12,6 +12,8 @@ export type AccuLynxSendConfig = {
   triggerStages?: string
   addressCountry?: string
   testMode?: boolean | string
+  syncUpdates?: string
+  syncStateFieldId?: string
 }
 
 const offSwitchValues = ['', 'false', 'no', 'off', '0']
@@ -28,6 +30,24 @@ export function isTestModeOn(value: boolean | string | null | undefined): boolea
     console.error(`Config testMode is "${value}", expected true or false; treating it as true`)
   }
   return true
+}
+
+// Update sync fails closed: unlike test mode, a typo must never enable vendor writes.
+export function isSyncUpdatesOn(value: string | boolean | undefined): boolean {
+  if (typeof value === 'boolean') return value
+  const text = (value ?? '').trim().toLowerCase()
+  if (offSwitchValues.includes(text)) return false
+  if (onSwitchValues.includes(text)) return true
+  console.error(`Config syncUpdates is "${value}", expected true or false; treating it as false`)
+  return false
+}
+
+export function getSyncStateFieldId(value: string | undefined): `CF.${string}` {
+  const fieldId = String(value ?? '').trim()
+  if (!fieldId.startsWith('CF.') || fieldId.length <= 3) {
+    throw Error('syncStateFieldId must be a Terros account custom field ID beginning with CF.')
+  }
+  return fieldId as `CF.${string}`
 }
 
 // Neither record type is a default: the install must say which one it sends.

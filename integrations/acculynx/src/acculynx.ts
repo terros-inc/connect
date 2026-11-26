@@ -25,8 +25,19 @@ export type AccuLynxAddress = {
   city?: string
   zipCode?: string
   state?: { abbreviation?: string }
+  country?: { abbreviation?: string }
 }
-export type AccuLynxContact = { id?: string; crossReference?: string }
+export type AccuLynxContact = {
+  id?: string
+  firstName?: string
+  lastName?: string
+  companyName?: string
+  crossReference?: string
+  contactTypeIds?: string[]
+  mailingAddress?: AccuLynxAddress
+}
+export type AccuLynxEmailAddress = { address?: string }
+export type AccuLynxPhoneNumber = { number?: string }
 export type AccuLynxContactType = { id?: string; name?: string; isDefault?: boolean }
 export type AccuLynxCompanySettings = {
   companyId?: string
@@ -44,7 +55,11 @@ export type AccuLynxUser = { email?: string }
 export type AccuLynxJob = {
   id?: string
   locationAddress?: AccuLynxAddress
-  contacts?: { isPrimary?: boolean; contact?: { firstName?: string; lastName?: string; companyName?: string } }[]
+  leadSource?: { id?: string }
+  contacts?: {
+    isPrimary?: boolean
+    contact?: AccuLynxContact
+  }[]
 }
 
 export class AccuLynxError extends Error {
@@ -97,12 +112,73 @@ export class AccuLynxClient {
     return JSON.stringify(value).split(this.apiKey).join('[REDACTED]')
   }
 
+  // AccuLynx answers 416, not an empty list, for a page past the end.
+  private async listContactTypesPage(query: URLSearchParams): Promise<AccuLynxContactType[]> {
+    try {
+      const result = (await this.request('GET', `/contacts/contact-types?${query}`)) as {
+        items?: AccuLynxContactType[]
+      }
+      return result?.items ?? []
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 416) return []
+      throw error
+    }
+  }
+
   createContact(contact: Record<string, unknown>): Promise<AccuLynxCreated> {
     return this.request('POST', '/contacts', contact) as Promise<AccuLynxCreated>
   }
 
+  async updateContact(contactId: string, contact: Record<string, unknown>): Promise<void> {
+    await this.request('PUT', `/contacts/${encodeURIComponent(contactId)}`, contact)
+  }
+
+  async getContactEmailAddresses(contactId: string): Promise<AccuLynxEmailAddress[]> {
+    const result = (await this.request('GET', `/contacts/${encodeURIComponent(contactId)}/email-addresses`)) as {
+      items?: AccuLynxEmailAddress[]
+    }
+    return result.items ?? []
+  }
+
+  async getContactPhoneNumbers(contactId: string): Promise<AccuLynxPhoneNumber[]> {
+    const result = (await this.request('GET', `/contacts/${encodeURIComponent(contactId)}/phone-numbers`)) as {
+      items?: AccuLynxPhoneNumber[]
+    }
+    return result.items ?? []
+  }
+
+  async createContactEmailAddress(contactId: string, address: string): Promise<void> {
+    await this.request('POST', `/contacts/${encodeURIComponent(contactId)}/email-addresses`, {
+      address,
+      type: 'Personal',
+    })
+  }
+
+  async createContactPhoneNumber(contactId: string, number: string): Promise<void> {
+    await this.request('POST', `/contacts/${encodeURIComponent(contactId)}/phone-numbers`, {
+      number,
+      type: 'Home',
+    })
+  }
+
+  async createContactNote(contactId: string, note: string): Promise<void> {
+    await this.request('POST', `/contacts/${encodeURIComponent(contactId)}/notes`, { note })
+  }
+
   createJob(job: Record<string, unknown>): Promise<AccuLynxCreated> {
     return this.request('POST', '/jobs', job) as Promise<AccuLynxCreated>
+  }
+
+  async updateJobAddress(jobId: string, address: Record<string, unknown>): Promise<void> {
+    await this.request('PUT', `/jobs/${encodeURIComponent(jobId)}/address`, address)
+  }
+
+  async updateJobLeadSource(jobId: string, leadSourceId: string): Promise<void> {
+    await this.request('PUT', `/jobs/${encodeURIComponent(jobId)}/lead-source`, { id: leadSourceId })
+  }
+
+  async createJobMessage(jobId: string, message: string): Promise<void> {
+    await this.request('POST', `/jobs/${encodeURIComponent(jobId)}/messages`, { message })
   }
 
   async createJobExternalReference(jobId: string, projectId: string): Promise<void> {
@@ -136,19 +212,6 @@ export class AccuLynxClient {
   private async searchContactsPage(query: URLSearchParams, body: unknown): Promise<AccuLynxContact[]> {
     try {
       const result = (await this.request('POST', `/contacts/search?${query}`, body)) as { items?: AccuLynxContact[] }
-      return result?.items ?? []
-    } catch (error) {
-      if (error instanceof AccuLynxError && error.status === 416) return []
-      throw error
-    }
-  }
-
-  // AccuLynx answers 416, not an empty list, for a page past the end.
-  private async listContactTypesPage(query: URLSearchParams): Promise<AccuLynxContactType[]> {
-    try {
-      const result = (await this.request('GET', `/contacts/contact-types?${query}`)) as {
-        items?: AccuLynxContactType[]
-      }
       return result?.items ?? []
     } catch (error) {
       if (error instanceof AccuLynxError && error.status === 416) return []
