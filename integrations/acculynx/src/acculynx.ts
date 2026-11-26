@@ -34,7 +34,13 @@ export type AccuLynxCompanySettings = {
   timeZoneInfo?: unknown
   hasInsurance?: boolean
 }
-export type AccuLynxMilestone = { name?: string; duration?: { startDate?: string } }
+export type AccuLynxMilestone = {
+  name?: string
+  duration?: { startDate?: string }
+  statuses?: { name?: string; isCurrent?: boolean; duration?: { startDate?: string } }[]
+}
+export type AccuLynxCompanyRepresentative = { user?: { id?: string } }
+export type AccuLynxUser = { email?: string }
 export type AccuLynxJob = {
   id?: string
   locationAddress?: AccuLynxAddress
@@ -169,7 +175,31 @@ export class AccuLynxClient {
   // Undefined when this key cannot see the job: it is in another location, does not exist, or is not returned.
   async getCurrentJobMilestone(jobId: string): Promise<AccuLynxMilestone | undefined> {
     try {
-      return (await this.request('GET', `/jobs/${encodeURIComponent(jobId)}/milestones/current`)) as AccuLynxMilestone
+      return (await this.request(
+        'GET',
+        `/jobs/${encodeURIComponent(jobId)}/milestones/current?includes=status`
+      )) as AccuLynxMilestone
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 404) return undefined
+      throw error
+    }
+  }
+
+  async getJobCompanyRepresentative(jobId: string): Promise<AccuLynxCompanyRepresentative | undefined> {
+    try {
+      return (await this.request(
+        'GET',
+        `/jobs/${encodeURIComponent(jobId)}/representatives/company`
+      )) as AccuLynxCompanyRepresentative
+    } catch (error) {
+      if (error instanceof AccuLynxError && error.status === 404) return undefined
+      throw error
+    }
+  }
+
+  async getUser(userId: string): Promise<AccuLynxUser | undefined> {
+    try {
+      return (await this.request('GET', `/users/${encodeURIComponent(userId)}`)) as AccuLynxUser
     } catch (error) {
       if (error instanceof AccuLynxError && error.status === 404) return undefined
       throw error

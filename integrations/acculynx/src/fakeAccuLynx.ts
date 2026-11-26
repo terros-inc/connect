@@ -1,3 +1,4 @@
+import type { SmallUser } from '@terros-inc/sdk'
 import { type Clock, RateLimiter } from './rateLimit.ts'
 import { AccuLynxClient } from './acculynx.ts'
 
@@ -56,7 +57,7 @@ export function contactTypes(...items: { id: string; name: string; isDefault: bo
 }
 
 // Records Terros account calls and answers success.
-export function fakeTerros(type: 'success' | 'error' = 'success') {
+export function fakeTerros(type: 'success' | 'error' = 'success', users: SmallUser[] = []) {
   const updates: unknown[] = []
   const upserts: unknown[] = []
   const account = {
@@ -69,5 +70,6 @@ export function fakeTerros(type: 'success' | 'error' = 'success') {
       return { type, account: { accountId: input.account.accountId ?? 'Account.example' } }
     },
   }
-  return { terros: { account } as never, updates, upserts }
+  const user = { list: async () => ({ type: 'success', users }) }
+  return { terros: { account, user } as never, updates, upserts }
 }
