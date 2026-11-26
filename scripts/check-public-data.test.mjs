@@ -1,12 +1,12 @@
-import { test } from 'node:test'
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import assert from 'node:assert/strict'
 // Tests for check-public-data.mjs (TECH-5914), run by `node --test scripts/check-public-data.test.mjs` in public-data.yml. The
 // denylisted name is synthetic, and the realistic IDs, emails and phone numbers are joined at run time,
 // so this file itself passes the check it tests.
 import { execFileSync, spawnSync } from 'node:child_process'
-import assert from 'node:assert/strict'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { test } from 'node:test'
 
 const SCRIPT = join(import.meta.dirname, 'check-public-data.mjs')
 const NAME = 'Zephyr Roofing'

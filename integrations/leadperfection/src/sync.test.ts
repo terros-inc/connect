@@ -1,8 +1,8 @@
 import type { AccountId, AccountWebhookData } from '@terros-inc/sdk'
-import { findTarget, LIMITS, syncResults, type SyncConfig } from './sync.ts'
-import { sendAccount } from './send.ts'
-import { getLeadLeadRow, jobStatusChangeRow, salesAppointmentRow } from './fixtures.ts'
 import { fakeLeadPerfection, fakeTerros } from './fakeLeadPerfection.ts'
+import { getLeadLeadRow, jobStatusChangeRow, salesAppointmentRow } from './fixtures.ts'
+import { sendAccount } from './send.ts'
+import { findTarget, LIMITS, syncResults, type SyncConfig } from './sync.ts'
 
 const now = Date.parse('2026-11-18T15:00:00Z')
 const config: SyncConfig = {

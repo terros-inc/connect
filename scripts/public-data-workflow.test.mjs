@@ -1,7 +1,7 @@
-import { test } from 'node:test'
-import { join } from 'node:path'
-import { readdirSync, readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { test } from 'node:test'
 // The public-data workflows' trust boundary (TECH-5914): the customer-name denylist secret reaches only
 // code from the default branch, never code a PR can change, and never a fork PR. A pull_request run takes
 // its workflow file from the PR, so the secret may appear only in a pull_request_target workflow. This

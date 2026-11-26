@@ -1,6 +1,6 @@
 import { type AccountId, type TerrosClient, type WorkflowId, wrapConnectHandler } from '@terros-inc/sdk'
-import { cleanNullValue, getRequestType, toMilliseconds } from './util.ts'
 import { JobNimbusClient } from './jobnimbus.ts'
+import { cleanNullValue, getRequestType, toMilliseconds } from './util.ts'
 
 type JobNimbusScriptConfig = {
   accountSource?: string

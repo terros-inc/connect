@@ -1,6 +1,6 @@
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { validateConnectScripts } from './validate'
 
 const serverSchema = {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { handler as accountSync, isOpportunityStage } from './outgoing.ts'
 import { FakeApis, LOCATION_ID, makeInput, PIPELINE_ID } from './fakeApis.ts'
+import { handler as accountSync, isOpportunityStage } from './outgoing.ts'
 
 const config = { locationId: LOCATION_ID, pipelineId: PIPELINE_ID }
 const ALERT_URL = 'https://alerts.example.com/hook'

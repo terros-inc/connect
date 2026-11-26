@@ -1,7 +1,7 @@
-import type { ParsedArgs } from 'minimist'
 import type { EndpointParameter } from '@terros-inc/mcp-core'
-import { INPUT_FILE_FLAG, readInputFile } from '../inputFile'
+import type { ParsedArgs } from 'minimist'
 import { impersonationFlagMessage } from '../impersonation'
+import { INPUT_FILE_FLAG, readInputFile } from '../inputFile'
 
 export const apiCallParameters: EndpointParameter[] = [
   {

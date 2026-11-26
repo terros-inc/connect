@@ -1,8 +1,8 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
-import { skipReason, sync, type CalendarEventWebhook, type Outcome } from './sync.ts'
-import { ServiceTitanClient } from './servicetitan.ts'
-import { PermanentError } from './errors.ts'
 import { parseConfig, parseSecrets, type RawConfig } from './config.ts'
+import { PermanentError } from './errors.ts'
+import { ServiceTitanClient } from './servicetitan.ts'
+import { skipReason, sync, type CalendarEventWebhook, type Outcome } from './sync.ts'
 
 const log = (level: 'info' | 'warn' | 'error', message: string): void => console[level](message)
 

@@ -1,6 +1,6 @@
 import { CommandCollisionError } from '@terros-inc/mcp-core'
-import { BUILTINS_EXTENSION, checkReleaseSchema } from './releaseSchema'
 import type { CommandRegistry } from './commands/types'
+import { BUILTINS_EXTENSION, checkReleaseSchema } from './releaseSchema'
 
 const run = vi.fn()
 const registry: CommandRegistry = {

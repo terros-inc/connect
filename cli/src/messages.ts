@@ -1,5 +1,5 @@
-import minimist from 'minimist'
 import { getArrayItemTypes, getStringLiteralValues, type EndpointParameter } from '@terros-inc/mcp-core'
+import minimist from 'minimist'
 import { STAFF_IMPERSONATION_HELP } from './impersonation'
 
 // People and AI agents otherwise learn what they can see by calling commands and parsing permission errors.

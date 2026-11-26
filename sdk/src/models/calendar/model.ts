@@ -1,7 +1,7 @@
-import type { SmallUser, TeamId, UserId } from '../user'
-import type { TinyTeam } from '../team'
-import type { Address, LatLng } from '../location'
 import type { AccountId, DispositionId, LocationId, TinyResidentData, TinyWorkflowAccount } from '../account'
+import type { Address, LatLng } from '../location'
+import type { TinyTeam } from '../team'
+import type { SmallUser, TeamId, UserId } from '../user'
 
 export type CalendarEventId = `Event:${string}` | `Event.${string}`
 /** @deprecated */

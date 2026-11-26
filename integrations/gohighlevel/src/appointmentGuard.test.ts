@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, vi } from 'vitest'
-import { handler as accountHandler } from './outgoing.ts'
-import { handler as opportunityWebhook } from './incoming.ts'
-import { CALENDAR_ID, CONNECT_USER, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
-import { MAX_APPOINTMENT_CREATES, creatingMarker, isFreshMarker } from './creationGuard.ts'
-import { handler as appointmentWebhook } from './calendarIncoming.ts'
-import { handler as appointmentSync } from './calendar.ts'
 import { ALERT_NOTE_PREFIX } from './alerts.ts'
+import { handler as appointmentSync } from './calendar.ts'
+import { handler as appointmentWebhook } from './calendarIncoming.ts'
+import { MAX_APPOINTMENT_CREATES, creatingMarker, isFreshMarker } from './creationGuard.ts'
+import { CALENDAR_ID, CONNECT_USER, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
+import { handler as opportunityWebhook } from './incoming.ts'
+import { handler as accountHandler } from './outgoing.ts'
 
 const config = { locationId: LOCATION_ID, calendarId: CALENDAR_ID, pipelineId: PIPELINE_ID }
 

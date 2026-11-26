@@ -1,10 +1,10 @@
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { parseEndpoints } from '@terros-inc/mcp-core'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { getTokens } from '@terros-inc/connect-common/auth'
-import { clearOpenApiCache, clearRuntimeCaches } from '../cache'
+import { parseEndpoints } from '@terros-inc/mcp-core'
 import { buildTerrosClient } from '../api/query'
+import { clearOpenApiCache, clearRuntimeCaches } from '../cache'
 import { cacheKey, loadInternalSchema, loadInternalSchemaWithStatus } from './internal'
 
 const home = vi.hoisted(() => ({ path: '' }))

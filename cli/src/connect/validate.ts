@@ -1,10 +1,10 @@
-import process from 'node:process'
-import { basename, join, relative, sep } from 'node:path'
 import { readFile } from 'node:fs/promises'
-import { type z } from 'zod'
+import { basename, join, relative, sep } from 'node:path'
+import process from 'node:process'
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js'
-import { CONFIG_FILE_NAME } from './constants'
+import { type z } from 'zod'
 import { ConnectConfig, type ConnectConfig as ConnectConfigData, UnsavedScript } from './configSchema'
+import { CONFIG_FILE_NAME } from './constants'
 
 export const CONNECT_SCRIPT_SCHEMA_URL = 'https://docs.terros.com/openapi/connect-script.schema.json'
 

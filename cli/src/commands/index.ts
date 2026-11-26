@@ -1,8 +1,8 @@
-import { whoamiCommand } from './whoami'
-import type { CommandGroup, CommandRegistry } from './types'
-import { connectCommands } from './connect'
-import { authCommands } from './auth'
 import { apiCommands } from './api'
+import { authCommands } from './auth'
+import { connectCommands } from './connect'
+import type { CommandGroup, CommandRegistry } from './types'
+import { whoamiCommand } from './whoami'
 
 const MCP_REMOVED_MESSAGE = `\`terros mcp\`, the local stdio MCP server, was removed in @terros-inc/cli 3.0.0.
 Connect your AI client to the hosted Terros MCP server instead: add https://mcp.terros.com/mcp as a remote (HTTP)

@@ -1,5 +1,5 @@
-import type { TokenResponse } from './types.ts'
 import { AUTH0_CLIENT_ID, AUTH0_DOMAIN } from './constants.ts'
+import type { TokenResponse } from './types.ts'
 
 const AUTH_REQUIRED_MESSAGES = {
   expired: 'Your Terros session has expired. Run `terros auth login` to sign in again.',

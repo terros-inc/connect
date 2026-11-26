@@ -1,10 +1,10 @@
-import { setTimeout as sleep } from 'node:timers/promises'
-import { join } from 'node:path'
-import { mkdir, writeFile, readFile, chmod, rename, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import { mkdir, writeFile, readFile, chmod, rename, rm, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { resolveEnvironment } from '../environment.ts'
-import type { SavedTokens, TokenResponse } from './types.ts'
 import { AuthRequiredError, refreshTokens } from './auth0.ts'
+import type { SavedTokens, TokenResponse } from './types.ts'
 
 const AUTH_DIR_MODE = 0o700
 const AUTH_FILE_MODE = 0o600

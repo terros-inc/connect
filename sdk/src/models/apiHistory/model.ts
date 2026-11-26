@@ -1,5 +1,5 @@
-import type { UserId } from '../user'
 import type { CompanyId } from '../company'
+import type { UserId } from '../user'
 
 export type ApiHistoryItem = {
   requestId: string

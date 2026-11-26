@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { handler as accountSync } from './outgoing.ts'
-import { handler as opportunityWebhook } from './incoming.ts'
-import { CALENDAR_ID, FakeApis, LOCATION_ID, makeInput, PIPELINE_ID } from './fakeApis.ts'
 import { handler as appointmentSync } from './calendar.ts'
+import { CALENDAR_ID, FakeApis, LOCATION_ID, makeInput, PIPELINE_ID } from './fakeApis.ts'
+import { handler as opportunityWebhook } from './incoming.ts'
+import { handler as accountSync } from './outgoing.ts'
 
 const config = { locationId: LOCATION_ID, pipelineId: PIPELINE_ID, calendarId: CALENDAR_ID, stageMappings: {} }
 let fake: FakeApis

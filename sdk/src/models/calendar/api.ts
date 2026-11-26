@@ -1,7 +1,7 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { AvailableCloser, RoleId, TeamId, TinyCloser, UserId } from '../user'
-import type { LatLng } from '../location'
 import type { AccountId, LocationId, UpsertLatLng } from '../account'
+import type { LatLng } from '../location'
+import type { AvailableCloser, RoleId, TeamId, TinyCloser, UserId } from '../user'
 import type {
   CalendarEventData,
   CalendarEventDataWithDetails,

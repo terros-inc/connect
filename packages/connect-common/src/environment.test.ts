@@ -1,5 +1,5 @@
-import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { resolveEnvironment } from './environment.ts'
 
 const configDir = join(homedir(), '.config', 'terros')

@@ -1,9 +1,9 @@
-import type { TeamId, UserId } from '../user'
-import type { AuditProps } from '../shared'
-import type { LatLng } from '../location'
-import type { CustomFieldFilter } from '../customFields/model'
-import type { CustomFieldId, CustomFieldType } from '../customFields'
 import type { AccountStatusId, WorkflowStageId } from '../account'
+import type { CustomFieldId, CustomFieldType } from '../customFields'
+import type { CustomFieldFilter } from '../customFields/model'
+import type { LatLng } from '../location'
+import type { AuditProps } from '../shared'
+import type { TeamId, UserId } from '../user'
 
 export type AreaId = `Area.${string}`
 export type AreaAssignmentType = 'user' | 'team' | 'company' | 'draft'

@@ -7,8 +7,8 @@ export * from './parser.ts'
 export * from './response.ts'
 export * from './types.ts'
 
-import { parseEndpoints } from './parser.ts'
 import type { EndpointGroups } from './endpoint.ts'
+import { parseEndpoints } from './parser.ts'
 
 export type SpecDocument = string | (() => string | Promise<string>)
 

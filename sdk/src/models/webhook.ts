@@ -1,8 +1,8 @@
-import type { SmallUser, TeamId, UserId, UserProfileData } from './user'
-import type { SmallAddress } from './location'
-import type { CustomFieldMap } from './customFields'
-import type { CompanyData, CompanyId } from './company'
 import type { AccountId, AccountNote, TinyResidentData, WorkflowActionId, WorkflowId, WorkflowStageId } from './account'
+import type { CompanyData, CompanyId } from './company'
+import type { CustomFieldMap } from './customFields'
+import type { SmallAddress } from './location'
+import type { SmallUser, TeamId, UserId, UserProfileData } from './user'
 
 export type WebhookAuditProps = {
   createdAt: string

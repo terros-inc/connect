@@ -1,7 +1,7 @@
-import { cwd } from 'node:process'
-import { join } from 'node:path'
-import { readFile, stat } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { cwd } from 'node:process'
 import {
   type AppId,
   type AppUpdateInput,
@@ -9,9 +9,9 @@ import {
   TerrosClient,
   type VersionAddSuccess,
 } from '@terros-inc/sdk'
-import { buildScriptPayload } from './validate'
-import { packageScripts, type ScriptZip } from './package'
 import { type ConnectConfig } from './configSchema'
+import { packageScripts, type ScriptZip } from './package'
+import { buildScriptPayload } from './validate'
 
 export async function publishConnectScripts(): Promise<void> {
   const { scripts, config } = await packageScripts()

@@ -1,7 +1,7 @@
-import { extname } from 'node:path'
 import { readFileSync } from 'node:fs'
-import type { ParsedArgs } from 'minimist'
+import { extname } from 'node:path'
 import { UPLOAD_URL_KEYS } from '@terros-inc/mcp-core'
+import type { ParsedArgs } from 'minimist'
 
 export const UPLOAD_FILE_FLAG = 'uploadFile'
 

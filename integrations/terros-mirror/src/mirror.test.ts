@@ -2,8 +2,8 @@
 // The fake matches by sourceId the way account/upsert, account/match and calendar/event/upsert do, so the tests
 // show what the target company ends up holding, not which calls were made.
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { handler as copyAppointment } from './appointment.ts'
 import { handler as copyAccount } from './account.ts'
+import { handler as copyAppointment } from './appointment.ts'
 
 const TARGET_KEY = 'target-key-example'
 

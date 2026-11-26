@@ -1,4 +1,5 @@
 import { type AccountData, type SmallUser } from '@terros-inc/sdk'
+import { type GoHighLevelUser } from './gohighlevel.ts'
 import {
   getChanges,
   getIncomingUserIds,
@@ -7,7 +8,6 @@ import {
   toText,
   type GoHighLevelNote,
 } from './notes.ts'
-import { type GoHighLevelUser } from './gohighlevel.ts'
 
 describe('GoHighLevel note sync', () => {
   test('converts GHL note HTML to text', () => {

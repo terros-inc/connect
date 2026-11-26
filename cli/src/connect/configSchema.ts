@@ -1,9 +1,9 @@
-import { cwd } from 'node:process'
-import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { cwd } from 'node:process'
 import { z } from 'zod'
-import { CONNECT_PERMISSION_TYPES } from './permissionTypes'
 import { CONFIG_FILE_NAME } from './constants'
+import { CONNECT_PERMISSION_TYPES } from './permissionTypes'
 
 export const ScriptType = z.enum(['incoming', 'outgoing', 'scheduled'])
 

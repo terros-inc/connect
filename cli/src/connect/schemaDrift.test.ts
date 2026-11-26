@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
-import { CONNECT_SCRIPT_SCHEMA_URL } from './validate'
 import { ConnectConfig } from './configSchema'
+import { CONNECT_SCRIPT_SCHEMA_URL } from './validate'
 
 const run = process.env.RUN_CONNECT_SCHEMA_DRIFT === '1' ? it : it.skip
 

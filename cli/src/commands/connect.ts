@@ -1,7 +1,7 @@
-import { runConnectValidation } from '../connect/validate'
-import { publishConnectScripts } from '../connect/publish'
-import { packageScripts } from '../connect/package'
 import { cleanBuildDir } from '../connect/clean'
+import { packageScripts } from '../connect/package'
+import { publishConnectScripts } from '../connect/publish'
+import { runConnectValidation } from '../connect/validate'
 
 export const connectCommands = {
   validate: {

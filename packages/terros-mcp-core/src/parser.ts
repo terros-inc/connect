@@ -1,8 +1,8 @@
 import { parse } from 'yaml'
-import { getCommandWords, HELP_WORD } from './util.ts'
-import type { OpenAPISchema } from './types.ts'
-import type { EndpointGroups, Endpoints } from './endpoint.ts'
 import { CommandCollisionError } from './command.ts'
+import type { EndpointGroups, Endpoints } from './endpoint.ts'
+import type { OpenAPISchema } from './types.ts'
+import { getCommandWords, HELP_WORD } from './util.ts'
 
 export function parseEndpoints(file: string): EndpointGroups {
   const data = parse(file) as OpenAPISchema

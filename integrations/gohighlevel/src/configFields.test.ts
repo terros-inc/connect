@@ -1,8 +1,8 @@
 import manifest from '../terros.json' with { type: 'json' }
-import { isOpportunityStage } from './outgoing.ts'
-import { checkConfig, configSchemaFor, scriptFieldNames, type ScriptKey } from './configFields.ts'
-import { isSwitchOn, toGhlStage, toTerrosStage } from './config.ts'
 import { splitList } from './alerts.ts'
+import { isSwitchOn, toGhlStage, toTerrosStage } from './config.ts'
+import { checkConfig, configSchemaFor, scriptFieldNames, type ScriptKey } from './configFields.ts'
+import { isOpportunityStage } from './outgoing.ts'
 
 const scriptNames: Record<ScriptKey, string> = {
   accountSync: 'GoHighLevel Account Sync',

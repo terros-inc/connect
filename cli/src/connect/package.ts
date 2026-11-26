@@ -1,12 +1,12 @@
-import { promisify } from 'node:util'
-import { cwd } from 'node:process'
-import { join, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { join, resolve } from 'node:path'
+import { cwd } from 'node:process'
+import { promisify } from 'node:util'
 import { build } from 'rolldown'
-import { validateConnectScripts } from './validate'
-import { BUILD_DIR, BUNDLE_NAME, ZIP_NAME } from './constants'
 import { type ConnectConfig, type UnsavedScript } from './configSchema'
+import { BUILD_DIR, BUNDLE_NAME, ZIP_NAME } from './constants'
+import { validateConnectScripts } from './validate'
 const execFileAsync = promisify(execFile)
 
 type ScriptBuildOptions = {

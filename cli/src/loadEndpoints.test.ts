@@ -1,9 +1,9 @@
-import { join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
-import { loadEndpoints, loadEndpointsAfterRefresh, loadOfflineEndpoints } from './loadEndpoints'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { loadInternalSchema, loadInternalSchemaWithStatus } from './crud/internal'
+import { loadEndpoints, loadEndpointsAfterRefresh, loadOfflineEndpoints } from './loadEndpoints'
 
 const home = vi.hoisted(() => ({ path: '' }))
 vi.mock('node:os', async (importOriginal) => ({

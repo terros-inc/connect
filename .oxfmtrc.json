@@ -19,7 +19,7 @@
   ],
   "sortImports": {
     "newlinesBetween": false,
-    "order": "desc",
+    "order": "asc",
     "groups": ["side_effect", "builtin", "external", "internal", "parent", "sibling", "index"]
   }
 }

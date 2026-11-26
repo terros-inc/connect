@@ -6,7 +6,7 @@ import {
   type TerrosClient,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { maskEmail } from './util.ts'
+import { linkPrimaryContact, syncPrimaryContact } from './contact.ts'
 import {
   getCreateSkipReason,
   getStatusName,
@@ -15,7 +15,7 @@ import {
   toJobNimbusRecord,
   toNewJobNimbusRecord,
 } from './jobnimbus.ts'
-import { linkPrimaryContact, syncPrimaryContact } from './contact.ts'
+import { maskEmail } from './util.ts'
 
 export const handler = wrapConnectHandler<AccountWebhook, void, JobNimbusScriptConfig>(async (input, client) => {
   const account = getAccountToSend(input.context.payload)

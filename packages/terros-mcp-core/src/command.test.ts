@@ -1,6 +1,6 @@
-import { parseEndpoints } from './parser.ts'
-import type { Endpoint, EndpointGroups } from './endpoint.ts'
 import { buildCommandTree, findCommand, getChildCommandNames, getEndpointPaths } from './command.ts'
+import type { Endpoint, EndpointGroups } from './endpoint.ts'
+import { parseEndpoints } from './parser.ts'
 
 const spec = (...paths: string[]): string =>
   JSON.stringify({

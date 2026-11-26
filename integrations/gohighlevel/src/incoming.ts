@@ -1,9 +1,9 @@
 import { wrapConnectHandler } from '@terros-inc/sdk'
-import { ghlApi, isNotEmpty } from './util.ts'
-import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
-import { listUsers } from './gohighlevel.ts'
-import { checkConfig } from './configFields.ts'
 import { hasTerrosStageMapping, isSwitchOn, toTerrosStage, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
+import { listUsers } from './gohighlevel.ts'
+import { getChanges, getIncomingUserIds, getMissingUserIds, getUserInput, type GoHighLevelNote } from './notes.ts'
+import { ghlApi, isNotEmpty } from './util.ts'
 
 type ScriptConfig = RunSwitches & {
   locationId: string

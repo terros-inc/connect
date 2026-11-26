@@ -1,6 +1,6 @@
-import open from 'open'
-import { DateTime } from 'luxon'
 import { AUTH0_CLIENT_ID, AUTH0_DOMAIN, type TokenResponse } from '@terros-inc/connect-common/auth'
+import { DateTime } from 'luxon'
+import open from 'open'
 import type { DeviceCodeResponse } from './types'
 
 /** The API refuses to issue an API key unless the sign-in token grants this scope. */

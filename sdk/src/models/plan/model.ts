@@ -1,5 +1,5 @@
-import type { TeamId, UserId } from '../user'
 import type { AuditProps } from '../shared'
+import type { TeamId, UserId } from '../user'
 
 type Digit = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
 type WeekOfYear = `0${Exclude<Digit, 0>}` | `${1 | 2 | 3 | 4}${Digit}` | `5${0 | 1 | 2}`

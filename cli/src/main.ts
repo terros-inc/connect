@@ -1,4 +1,4 @@
-import minimist from 'minimist'
+import { interactiveSignInRefusal, resolveEnvironment } from '@terros-inc/connect-common'
 import {
   buildEndpointInput,
   CommandCollisionError,
@@ -13,10 +13,31 @@ import {
   UPLOAD_URL_KEYS,
   withoutUploadUrls,
 } from '@terros-inc/mcp-core'
-import { interactiveSignInRefusal, resolveEnvironment } from '@terros-inc/connect-common'
+import minimist from 'minimist'
 import packageJson from '../package.json'
-import { readUploadFile, UPLOAD_FILE_FLAG, uploadToResponse } from './uploadFile'
-import { reportError } from './reportError'
+import { buildTerrosClient } from './api/query'
+import { runApiHistoryQuery } from './apiHistory'
+import { signInWithSensitiveScope } from './auth/auth0'
+import { clearOpenApiCache } from './cache'
+import { commandRegistry, getCommandGroup } from './commands'
+import {
+  buildCliCommandTree,
+  checkBuiltinCollisions,
+  findBuiltin,
+  formatBuiltinHelp,
+  matchCommand,
+  type CommandLevel,
+} from './commandTree'
+import { formatOutput } from './formatOutput'
+import { companyScopeHint, impersonationFlagMessage } from './impersonation'
+import { readInputFile } from './inputFile'
+import {
+  loadEndpoints,
+  loadEndpointsAfterRefresh,
+  loadPublicEndpoints,
+  loadOfflineEndpoints,
+  type SchemaStatus,
+} from './loadEndpoints'
 import {
   formatCommandsHelp,
   formatCommandUsage,
@@ -28,29 +49,8 @@ import {
   preserveNumericString,
   getArrayParameterSyntax,
 } from './messages'
-import {
-  loadEndpoints,
-  loadEndpointsAfterRefresh,
-  loadPublicEndpoints,
-  loadOfflineEndpoints,
-  type SchemaStatus,
-} from './loadEndpoints'
-import { readInputFile } from './inputFile'
-import { companyScopeHint, impersonationFlagMessage } from './impersonation'
-import { formatOutput } from './formatOutput'
-import {
-  buildCliCommandTree,
-  checkBuiltinCollisions,
-  findBuiltin,
-  formatBuiltinHelp,
-  matchCommand,
-  type CommandLevel,
-} from './commandTree'
-import { commandRegistry, getCommandGroup } from './commands'
-import { clearOpenApiCache } from './cache'
-import { signInWithSensitiveScope } from './auth/auth0'
-import { runApiHistoryQuery } from './apiHistory'
-import { buildTerrosClient } from './api/query'
+import { reportError } from './reportError'
+import { readUploadFile, UPLOAD_FILE_FLAG, uploadToResponse } from './uploadFile'
 
 /** A negative number, in the forms minimist itself reads as a number: `-124.5`, `-3`, `-.5`, `-1e-3`. */
 const NEGATIVE_NUMBER = /^-(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i

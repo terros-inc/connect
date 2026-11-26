@@ -1,9 +1,9 @@
 import type { ApiSuccess } from '@terros-inc/connect-common'
-import type { RoleId, SmallUser, TeamId, UserId, UserIdentifier } from '../user'
-import type { LatLng } from '../location'
-import { type RangeFilter, type CustomFieldFilter } from '../customFields/model'
-import { type CustomFieldMap } from '../customFields'
 import type { CompanyId } from '../company'
+import { type CustomFieldMap } from '../customFields'
+import { type RangeFilter, type CustomFieldFilter } from '../customFields/model'
+import type { LatLng } from '../location'
+import type { RoleId, SmallUser, TeamId, UserId, UserIdentifier } from '../user'
 import type {
   AccountData,
   AccountDataResponse,

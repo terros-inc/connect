@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, vi } from 'vitest'
-import { handler as accountHandler } from './outgoing.ts'
-import { CALENDAR_ID, CONNECT_USER, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
-import { handler as appointmentWebhook } from './calendarIncoming.ts'
 import { handler as appointmentSync } from './calendar.ts'
+import { handler as appointmentWebhook } from './calendarIncoming.ts'
+import { CALENDAR_ID, CONNECT_USER, FakeApis, LOCATION_ID, PIPELINE_ID, makeInput } from './fakeApis.ts'
+import { handler as accountHandler } from './outgoing.ts'
 
 const config = {
   locationId: LOCATION_ID,

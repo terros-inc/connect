@@ -7,8 +7,9 @@ import {
   type UserId,
   wrapConnectHandler,
 } from '@terros-inc/sdk'
-import { ghlApi, isNotFound } from './util.ts'
-import { findUserId, toContact } from './gohighlevel.ts'
+import { sendAlert, type AlertConfig } from './alerts.ts'
+import { isSwitchOn, type RunSwitches } from './config.ts'
+import { checkConfig } from './configFields.ts'
 import {
   countCreateAttempts,
   createNoteText,
@@ -17,9 +18,8 @@ import {
   MAX_APPOINTMENT_CREATES,
   realSourceId,
 } from './creationGuard.ts'
-import { checkConfig } from './configFields.ts'
-import { isSwitchOn, type RunSwitches } from './config.ts'
-import { sendAlert, type AlertConfig } from './alerts.ts'
+import { findUserId, toContact } from './gohighlevel.ts'
+import { ghlApi, isNotFound } from './util.ts'
 
 type ScriptConfig = RunSwitches &
   AlertConfig & {

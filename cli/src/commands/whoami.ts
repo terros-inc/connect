@@ -1,5 +1,5 @@
-import { getPreferredName, type UserProfileSuccess } from '@terros-inc/sdk'
 import { resolveEnvironment } from '@terros-inc/connect-common'
+import { getPreferredName, type UserProfileSuccess } from '@terros-inc/sdk'
 import { buildTerrosClient } from '../api/query'
 
 export const whoamiCommand = {

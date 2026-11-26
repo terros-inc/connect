@@ -1,4 +1,7 @@
 import manifest from '../terros.json' with { type: 'json' }
+import { parseConfig } from './config.ts'
+import { PermanentError } from './errors.ts'
+import { fakeServiceTitan } from './fakeServiceTitan.ts'
 import {
   determineCampaignId,
   parseJobLink,
@@ -8,9 +11,6 @@ import {
   type EventData,
   type Ports,
 } from './sync.ts'
-import { fakeServiceTitan } from './fakeServiceTitan.ts'
-import { PermanentError } from './errors.ts'
-import { parseConfig } from './config.ts'
 
 function fixture(options: { budgetMs?: number } = {}) {
   const fake = fakeServiceTitan(options)

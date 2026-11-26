@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
-import { splitTopLevelUnion } from './util.ts'
-import { getEndpointParameters, getObjectFields } from './parameters.ts'
 import type { Endpoint, EndpointParameter } from './endpoint.ts'
+import { getEndpointParameters, getObjectFields } from './parameters.ts'
+import { splitTopLevelUnion } from './util.ts'
 
 export class UnknownParameterError extends Error {
   name = 'UnknownParameterError'
