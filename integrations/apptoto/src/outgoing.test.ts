@@ -65,7 +65,7 @@ function installApptoto(initial?: StoredEvent, writeResponse?: () => Response): 
         return writeResponse?.() ?? Response.json({ events: body.events })
       }
       if (method === 'DELETE') {
-        events.delete(externalId)
+        if (!events.delete(externalId)) return Response.json({ error: 'not found' }, { status: 404 })
         return writeResponse?.() ?? Response.json({ events: [] })
       }
       return Response.json({ error: 'unexpected request' }, { status: 500 })
@@ -129,7 +129,7 @@ test('removing an appointment deletes it by external id so reminders stop', asyn
   )
 
   expect(world.events).toHaveLength(0)
-  expect(world.requests.map(({ method }) => method)).toEqual(['GET', 'DELETE'])
+  expect(world.requests.map(({ method }) => method)).toEqual(['DELETE'])
 })
 
 test('accepts successful writes without a response body instead of retrying them', async () => {
@@ -141,29 +141,40 @@ test('accepts successful writes without a response body instead of retrying them
   expect(world.requests.filter(({ method }) => method === 'PUT')).toHaveLength(1)
 })
 
-test('skips an update when the existing event belongs to another calendar', async () => {
-  const world = installApptoto({ external_id: 'Event.example', calendar_id: '99' })
+test('skips an add or update when the existing event belongs to another calendar', async () => {
+  for (const action of ['add', 'update'] as const) {
+    const world = installApptoto({ external_id: 'Event.example', calendar_id: '99' })
 
-  await syncAppointment(event, fakeClient(), config, secrets)
+    await syncAppointment({ ...event, action }, fakeClient(), config, secrets)
 
-  expect(world.requests).toHaveLength(1)
-  expect(world.requests[0]?.method).toBe('GET')
+    expect(world.requests.map(({ method }) => method)).toEqual(['GET'])
+    expect(world.events.get('Event.example')?.calendar_id).toBe('99')
+  }
   expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Apptoto cannot move events'))
 })
 
-test('skips a delete when the existing event belongs to another calendar', async () => {
-  const world = installApptoto({ external_id: 'Event.example', calendar_id: '99' })
+test('cancelling after the install calendar changed still deletes the synced event so no reminder sends', async () => {
+  const world = installApptoto()
+  await syncAppointment(event, fakeClient(), { calendarId: '42' }, secrets)
 
   await syncAppointment(
     { entity: 'Event', action: 'remove', data: { id: 'Event.example' } },
     fakeClient(),
-    config,
+    { calendarId: '99' },
     secrets
   )
 
-  expect(world.events).toHaveLength(1)
-  expect(world.requests.map(({ method }) => method)).toEqual(['GET'])
-  expect(console.log).toHaveBeenCalledWith(expect.stringContaining('not configured calendar 42'))
+  expect(world.events).toHaveLength(0)
+  expect(world.requests.at(-1)?.method).toBe('DELETE')
+})
+
+test('removing an appointment that never synced succeeds without retrying', async () => {
+  const world = installApptoto()
+
+  await expect(
+    syncAppointment({ entity: 'Event', action: 'remove', data: { id: 'Event.example' } }, fakeClient(), config, secrets)
+  ).resolves.toBeUndefined()
+  expect(world.requests.map(({ method }) => method)).toEqual(['DELETE'])
 })
 
 test('stops on a 429 instead of consuming more of the minute or daily quota', async () => {

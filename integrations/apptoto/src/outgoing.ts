@@ -105,9 +105,13 @@ async function findEvent(secrets: Secrets, externalId: string): Promise<ApptotoE
     if (!result) return undefined
     return 'event' in result ? result.event : result
   } catch (error) {
-    if (error instanceof ApptotoApiError && error.status === 404) return undefined
+    if (isNotFound(error)) return undefined
     throw error
   }
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof ApptotoApiError && error.status === 404
 }
 
 function isOn(value: boolean | string | undefined): boolean {
@@ -129,22 +133,18 @@ export async function syncAppointment(
   const dryRun = isOn(scriptConfig.dryRun)
   if (payload.action === 'remove') {
     if (dryRun) {
-      console.log(
-        `DRY RUN: would delete Apptoto event for Terros event ${payload.data.id} on calendar ${scriptConfig.calendarId}`
-      )
+      console.log(`DRY RUN: would delete Apptoto event for Terros event ${payload.data.id} on any calendar`)
       return
     }
-    const existing = await findEvent(secrets, payload.data.id)
-    if (!existing) return
-    if (String(existing.calendar_id) !== String(scriptConfig.calendarId)) {
-      console.log(
-        `Skipping delete for Terros event ${payload.data.id}: its Apptoto event is on calendar ${existing.calendar_id}, not configured calendar ${scriptConfig.calendarId}`
-      )
-      return
+    // No calendar check: external_id is unique per Apptoto account, so the match is this appointment's event even
+    // if the install's calendar changed after it synced, and leaving it would send reminders for a cancelled appointment.
+    try {
+      await apptotoRequest(secrets, `/v1/events?external_id=${encodeURIComponent(payload.data.id)}`, {
+        method: 'DELETE',
+      })
+    } catch (error) {
+      if (!isNotFound(error)) throw error
     }
-    await apptotoRequest(secrets, `/v1/events?external_id=${encodeURIComponent(payload.data.id)}`, {
-      method: 'DELETE',
-    })
     return
   }
 
