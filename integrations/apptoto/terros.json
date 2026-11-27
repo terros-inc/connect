@@ -62,7 +62,7 @@
         "username": "Apptoto account email",
         "apiKey": "API key from Apptoto Settings → Integrations"
       },
-      "permissions": ["account:save", "event:read", "event:save"],
+      "permissions": ["account:save", "event:read", "event:save", "event:delete", "event:manage"],
       "slug": "apptoto-appointment-webhook"
     }
   ]

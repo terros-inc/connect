@@ -1,16 +1,10 @@
 import { type AccountId, type CalendarEventId, type TerrosClient, wrapConnectHandler } from '@terros-inc/sdk'
-
-const APPTOTO_API = 'https://api.apptoto.com'
+import { apptotoRequest, findEvent, isNotFound, isOn, type Secrets } from './apptoto.ts'
 
 type ScriptConfig = {
   calendarId: string
   disabled?: boolean | string
   dryRun?: boolean | string
-}
-
-type Secrets = {
-  username: string
-  apiKey: string
 }
 
 type EventData = {
@@ -25,25 +19,10 @@ export type CalendarEventWebhook =
   | { entity: 'Event'; action: 'add' | 'update'; data: EventData }
   | { entity: 'Event'; action: 'remove'; data: { id: CalendarEventId } }
 
-type ApptotoEvent = {
-  id: number
-  calendar_id: number | string
-  external_id?: string
-}
-
 type Participant = {
   name?: string
   phone?: string
   email?: string
-}
-
-class ApptotoApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number
-  ) {
-    super(message)
-  }
 }
 
 function value(record: Record<string, unknown>, key: string): string | undefined {
@@ -65,57 +44,6 @@ export function toParticipant(resident: Record<string, unknown> | undefined): Pa
     ...(email ? { email } : {}),
   }
   return Object.keys(participant).length ? participant : undefined
-}
-
-function authorization(secrets: Secrets): string {
-  if (!secrets.username || !secrets.apiKey) throw new Error('Apptoto username and apiKey are required')
-  return `Basic ${Buffer.from(`${secrets.username}:${secrets.apiKey}`).toString('base64')}`
-}
-
-async function apptotoRequest<T>(secrets: Secrets, path: string, init: RequestInit = {}): Promise<T | undefined> {
-  const response = await fetch(`${APPTOTO_API}${path}`, {
-    ...init,
-    headers: {
-      Authorization: authorization(secrets),
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init.headers,
-    },
-  })
-  if (response.status === 429) {
-    const retryAfter = response.headers.get('retry-after')
-    throw new ApptotoApiError(
-      `Apptoto rate limit exceeded${retryAfter ? `; retry after ${retryAfter}` : ''}`,
-      response.status
-    )
-  }
-  if (!response.ok) {
-    throw new ApptotoApiError(`Apptoto ${init.method ?? 'GET'} ${path} failed with ${response.status}`, response.status)
-  }
-  if (response.status === 204) return undefined
-  const body = await response.text()
-  return body ? (JSON.parse(body) as T) : undefined
-}
-
-async function findEvent(secrets: Secrets, externalId: string): Promise<ApptotoEvent | undefined> {
-  try {
-    const result = await apptotoRequest<ApptotoEvent | { event: ApptotoEvent }>(
-      secrets,
-      `/v1/event?external_id=${encodeURIComponent(externalId)}`
-    )
-    if (!result) return undefined
-    return 'event' in result ? result.event : result
-  } catch (error) {
-    if (isNotFound(error)) return undefined
-    throw error
-  }
-}
-
-function isNotFound(error: unknown): boolean {
-  return error instanceof ApptotoApiError && error.status === 404
-}
-
-function isOn(value: boolean | string | undefined): boolean {
-  return value === true || value === 'true'
 }
 
 export async function syncAppointment(
@@ -149,7 +77,7 @@ export async function syncAppointment(
   }
 
   const event = payload.data
-  const existing = await findEvent(secrets, event.id)
+  const existing = await findEvent(secrets, { external_id: event.id })
   if (existing && String(existing.calendar_id) !== String(scriptConfig.calendarId)) {
     console.log(
       `Skipping Terros event ${event.id}: its Apptoto event is on calendar ${existing.calendar_id}, and Apptoto cannot move events to configured calendar ${scriptConfig.calendarId}`
