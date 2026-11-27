@@ -142,6 +142,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -159,10 +160,24 @@ test('a confirmation moves the linked account to the mapped stage, found through
       route: 'account/upsert',
       input: {
         requestType: 'update',
-        account: { accountId: 'Account.example', workflowTarget: 'Confirmed', lastActionDate: expect.any(Number) },
+        account: { accountId: 'Account.example', workflowTarget: 'Confirmed' },
       },
     },
   ])
+})
+
+// Apptoto retries a 5xx up to 5 times; a write stamped with the delivery time would keep moving the account forward.
+test('a redelivered confirmation writes the same account values', async () => {
+  installApptoto()
+  const { client, writes } = fakeTerros()
+  vi.useFakeTimers({ now: Date.parse('2026-10-13T12:00:00Z'), toFake: ['Date'] })
+
+  await applyWebhook(participantWebhook('confirmed'), client, config, secrets)
+  vi.setSystemTime(Date.parse('2026-10-13T12:01:00Z'))
+  await applyWebhook({ ...participantWebhook('confirmed'), apptoto_id: '4_example' }, client, config, secrets)
+
+  expect(writes).toHaveLength(2)
+  expect(writes[1]).toEqual(writes[0])
 })
 
 // Apptoto reports a reschedule request as a not_coming_* state; mistaking it for a plain cancellation picks the wrong stage.

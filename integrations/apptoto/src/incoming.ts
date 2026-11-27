@@ -92,10 +92,8 @@ async function applyResponse(
     console.log(`DRY RUN: would move ${event.accountId} to ${stage} for ${response} on ${event.eventId}`)
     return
   }
-  await client.account.upsert({
-    requestType: 'update',
-    account: { accountId: event.accountId, workflowTarget: stage, lastActionDate: Date.now() },
-  })
+  // No lastActionDate: the payload has no response timestamp, and Date.now() would move it on every redelivery.
+  await client.account.upsert({ requestType: 'update', account: { accountId: event.accountId, workflowTarget: stage } })
   console.log(`Moved ${event.accountId} to ${stage} for ${response} on ${event.eventId}`)
 }
 
