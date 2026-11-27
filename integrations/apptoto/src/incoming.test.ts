@@ -63,6 +63,23 @@ function participantWebhook(state: string): ApptotoWebhook {
   } as ApptotoWebhook
 }
 
+// GET /v1/event as Apptoto returns it now, with participant 789's current response.
+function currentEvent(state: string) {
+  return {
+    ...apptotoEvent,
+    participants: [
+      {
+        id: 789,
+        name: 'Pat Example',
+        phone: '555-555-0100',
+        normalized_phone: '+15555550100',
+        email: 'user@example.test',
+        state,
+      },
+    ],
+  }
+}
+
 const rescheduled = { start_time: '2026-10-15T13:00:00-07:00', end_time: '2026-10-15T14:00:00-07:00' }
 
 const terrosEvent: CalendarEventData = {
@@ -100,11 +117,17 @@ function fakeTerros(events: CalendarEventData[] = [terrosEvent]) {
           if (!event) throw notFound(eventId)
           return { type: 'success', event }
         }),
-        upsert: vi.fn(async (input) => {
-          writes.push({ route: 'calendar/event/upsert', input })
-          const event = { ...stored.get(input.event.eventId)!, ...input.event }
+        update: vi.fn(async (input) => {
+          writes.push({ route: 'calendar/event/update', input })
+          const existing = stored.get(input.event.eventId)
+          if (!existing) throw notFound(input.event.eventId)
+          const event = { ...existing, ...input.event }
           stored.set(event.eventId, event)
           return { type: 'success', event }
+        }),
+        upsert: vi.fn(async (input) => {
+          writes.push({ route: 'calendar/event/upsert', input })
+          throw new Error('unexpected upsert')
         }),
         remove: vi.fn(async (input) => {
           writes.push({ route: 'calendar/event/remove', input })
@@ -149,7 +172,7 @@ afterEach(() => {
 
 // The participant payload nests its event without external_id, so a lookup by Apptoto's own ids would match nothing.
 test('a confirmation moves the linked account to the mapped stage, found through the Apptoto event id', async () => {
-  const requests = installApptoto()
+  const requests = installApptoto([currentEvent('confirmed')])
   const { client, writes } = fakeTerros()
 
   await applyWebhook(participantWebhook('confirmed'), client, config, secrets)
@@ -168,7 +191,7 @@ test('a confirmation moves the linked account to the mapped stage, found through
 
 // Apptoto retries a 5xx up to 5 times; a write stamped with the delivery time would keep moving the account forward.
 test('a redelivered confirmation writes the same account values', async () => {
-  installApptoto()
+  installApptoto([currentEvent('confirmed')])
   const { client, writes } = fakeTerros()
   vi.useFakeTimers({ now: Date.parse('2026-10-13T12:00:00Z'), toFake: ['Date'] })
 
@@ -186,7 +209,7 @@ test.each([
   ['not_coming_no_reschedule', 'Cancelled'],
   ['not_coming_needs_reschedule', 'Reschedule'],
 ])('participant state %s moves the account to %s', async (state, stage) => {
-  installApptoto()
+  installApptoto([currentEvent(state)])
   const { client, writes } = fakeTerros()
 
   await applyWebhook(participantWebhook(state), client, config, secrets)
@@ -194,8 +217,28 @@ test.each([
   expect(writes.map(({ input }) => input.account.workflowTarget)).toEqual([stage])
 })
 
+// Apptoto retries failed deliveries, so an older response can arrive after a newer one was applied.
+test('a stale response redelivered after a newer one leaves the account at the newer stage', async () => {
+  installApptoto([currentEvent('not_coming')])
+  const { client, writes } = fakeTerros()
+
+  await applyWebhook({ ...participantWebhook('not_coming'), apptoto_id: '4_first' }, client, config, secrets)
+  await applyWebhook({ ...participantWebhook('confirmed'), apptoto_id: '3_retry' }, client, config, secrets)
+
+  expect(writes.map(({ input }) => input.account.workflowTarget)).toEqual(['Cancelled', 'Cancelled'])
+})
+
+test('a response from a participant Apptoto no longer has on the event is skipped', async () => {
+  installApptoto([{ ...currentEvent('confirmed'), participants: [] }])
+  const { client, writes } = fakeTerros()
+
+  await applyWebhook(participantWebhook('confirmed'), client, config, secrets)
+
+  expect(writes).toEqual([])
+})
+
 test('a blank stage mapping leaves the account stage unchanged', async () => {
-  installApptoto()
+  installApptoto([currentEvent('confirmed')])
   const { client, writes } = fakeTerros()
 
   await applyWebhook(
@@ -215,7 +258,7 @@ test.each([
   ['no external id', null],
   ['a Terros event id that no longer exists', 'Event.removed'],
 ])('an Apptoto event with %s is skipped without writing to Terros', async (_case, externalId) => {
-  installApptoto([{ ...apptotoEvent, external_id: externalId }])
+  installApptoto([{ ...currentEvent('confirmed'), external_id: externalId }])
   const { client, writes } = fakeTerros()
 
   await applyWebhook(participantWebhook('confirmed'), client, config, secrets)
@@ -226,7 +269,7 @@ test.each([
 })
 
 test('an event on another Apptoto calendar is skipped', async () => {
-  installApptoto([{ ...apptotoEvent, calendar_id: 46 }])
+  installApptoto([{ ...currentEvent('confirmed'), calendar_id: 46 }])
   const { client, writes } = fakeTerros()
 
   await applyWebhook(participantWebhook('confirmed'), client, config, secrets)
@@ -246,6 +289,17 @@ test('a rescheduled Apptoto event moves the linked Terros event to the new start
     eventDate: Date.parse('2026-10-15T20:00:00Z'),
     duration: 60,
   })
+})
+
+// The Terros event can be removed after it was read; a reschedule written as an upsert would recreate it.
+test('a reschedule for a Terros event removed since it was read creates nothing', async () => {
+  installApptoto([{ ...apptotoEvent, ...rescheduled }])
+  const { client, writes } = fakeTerros([])
+  vi.mocked(client.calendar.event.get).mockResolvedValueOnce({ type: 'success', event: terrosEvent } as never)
+
+  await applyWebhook({ event: { ...apptotoEvent, ...rescheduled } }, client, config, secrets)
+
+  expect(writes.map(({ route }) => route)).toEqual(['calendar/event/update'])
 })
 
 // Apptoto Appointment Sync's own upsert fires event_updated; writing it back would loop between the two scripts.
@@ -312,7 +366,7 @@ test.each([
 )
 
 test.each([
-  ['a confirmation', participantWebhook('confirmed'), apptotoEvent],
+  ['a confirmation', participantWebhook('confirmed'), currentEvent('confirmed')],
   ['a reschedule', { event: { ...apptotoEvent, ...rescheduled } }, { ...apptotoEvent, ...rescheduled }],
   ['a delete', { event: { ...apptotoEvent, is_deleted: true } }, { ...apptotoEvent, is_deleted: true }],
 ])('dry run writes nothing for %s, and the kill switch skips before any lookup', async (_case, payload, current) => {

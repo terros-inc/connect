@@ -17,7 +17,6 @@ type ApptotoParticipant = {
   id: number
   event_id: number
   state?: string
-  event?: Partial<ApptotoEvent>
 }
 
 export type ApptotoWebhook = {
@@ -56,25 +55,31 @@ export async function applyWebhook(
 }
 
 async function applyResponse(
-  participant: ApptotoParticipant,
+  delivered: ApptotoParticipant,
   client: TerrosClient,
   scriptConfig: ScriptConfig,
   secrets: Secrets
 ): Promise<void> {
+  // The participant webhook nests only a summary of its event, without external_id, so the event is always read. Its
+  // participants also give the current response: Apptoto can redeliver an older response after a newer one was applied.
+  const apptotoEvent = await findEvent(secrets, { id: delivered.event_id })
+  if (!apptotoEvent) {
+    console.log(`Skipping Apptoto participant ${delivered.id}: Apptoto event ${delivered.event_id} was not found`)
+    return
+  }
+  const participant = apptotoEvent.participants
+    ? apptotoEvent.participants.find(({ id }) => id === delivered.id)
+    : delivered
+  if (!participant) {
+    console.log(`Skipping Apptoto participant ${delivered.id}: Apptoto event ${delivered.event_id} no longer has it`)
+    return
+  }
   const response = participant.state ? responseByState[participant.state] : undefined
   if (!response) {
-    console.log(`Skipping Apptoto participant ${participant.id}: state ${participant.state ?? '(none)'} is not handled`)
+    console.log(`Skipping Apptoto participant ${delivered.id}: state ${participant.state ?? '(none)'} is not handled`)
     return
   }
-  // The participant webhook nests only a summary of its event, without external_id.
-  const apptotoEvent = participant.event?.external_id
-    ? participant.event
-    : await findEvent(secrets, { id: participant.event_id })
-  if (!apptotoEvent) {
-    console.log(`Skipping Apptoto participant ${participant.id}: Apptoto event ${participant.event_id} was not found`)
-    return
-  }
-  const event = await findLinkedEvent(client, scriptConfig, { ...apptotoEvent, id: participant.event_id })
+  const event = await findLinkedEvent(client, scriptConfig, apptotoEvent)
   if (!event) return
 
   // Terros events have no current field for a reminder response (notes and outcomeId are deprecated), so only the
@@ -136,7 +141,14 @@ async function applyEventChange(
     console.log(`DRY RUN: would move ${event.eventId} to ${JSON.stringify(time)} from Apptoto event ${apptotoEvent.id}`)
     return
   }
-  await client.calendar.event.upsert({ event: { eventId: event.eventId, ...time } })
+  // update, not upsert: if the Terros event was removed since it was read, a reschedule must not recreate it.
+  try {
+    await client.calendar.event.update({ event: { eventId: event.eventId, ...time } })
+  } catch (error) {
+    if (!isTerrosNotFound(error)) throw error
+    console.log(`Skipping Apptoto event ${apptotoEvent.id}: ${event.eventId} was removed from Terros`)
+    return
+  }
   console.log(`Moved ${event.eventId} to ${JSON.stringify(time)} from Apptoto event ${apptotoEvent.id}`)
 }
 

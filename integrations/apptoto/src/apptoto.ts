@@ -12,6 +12,7 @@ export type ApptotoEvent = {
   start_time?: string
   end_time?: string
   is_deleted?: boolean
+  participants?: { id: number; state?: string }[] | null
 }
 
 class ApptotoApiError extends Error {
