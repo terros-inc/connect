@@ -1,7 +1,7 @@
 import { parse } from 'yaml'
 import { getCommandWords, HELP_WORD } from './util.ts'
 import type { OpenAPISchema } from './types.ts'
-import type { EndpointGroups, Endpoints } from './endpoint.ts'
+import type { EndpointExample, EndpointGroups, Endpoints } from './endpoint.ts'
 import { CommandCollisionError } from './command.ts'
 
 export function parseEndpoints(file: string): EndpointGroups {
@@ -36,11 +36,19 @@ export function parseEndpoints(file: string): EndpointGroups {
     groupEndpoints[rest.join(' ')] = {
       path,
       description: config.post.description ?? config.post.summary,
-      example: example ?? Object.values(examples ?? {}).find((named) => named.value !== undefined)?.value,
+      examples: toExamples(example, examples),
       properties: schema,
       components: data.components,
     }
   })
 
   return endpoints
+}
+
+/** The single `example`, else each named example that has a value: an operation can show both calling modes. */
+function toExamples(example: unknown, examples: { [name: string]: { value?: unknown } } = {}): EndpointExample[] {
+  if (example !== undefined) return [{ value: example }]
+  return Object.entries(examples)
+    .filter(([, named]) => named.value !== undefined)
+    .map(([name, named]) => ({ name, value: named.value }))
 }

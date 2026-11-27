@@ -488,11 +488,40 @@ describe('the example in endpoint help', () => {
   it('sends exactly the documented request body', () => {
     const bed = endpoint()
     if (!bed) throw new Error('missing endpoint')
-    const args = getExampleArguments(bed, bed.example)
+    const args = getExampleArguments(bed, bed.examples?.[0]?.value)
 
     expect(args).toBeDefined()
     expect(buildEndpointInput(bed, parseArgv(args ?? []))).toEqual(example)
     expect(args).toContain('--searchInput.tag=-h')
+  })
+
+  // An operation documenting two ways to call it, such as checking yourself and checking another user, showed only the
+  // first, so help never showed the second.
+  it('shows every named example it can reproduce, labeled, and leaves out one it cannot', async () => {
+    const document = JSON.parse(spec('/garden/bed/check'))
+    const body = document.paths['/garden/bed/check'].post.requestBody.content['application/json']
+    body.schema.properties = { bedId: { type: 'string' }, userId: { type: 'string' } }
+    body.examples = {
+      'Check yourself': { value: { bedId: 'Bed.example' } },
+      'Check another\nuser': { value: { bedId: 'Bed.example', userId: 'U.example' } },
+      'Unknown field': { value: { bedId: 'Bed.example', size: 4 } },
+    }
+    vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(JSON.stringify(document)))
+    vi.mocked(loadPublicEndpoints).mockImplementation(async () => parseEndpoints(JSON.stringify(document)))
+    log.mockClear()
+
+    await main(['garden', 'bed', 'check', 'help'])
+
+    expect(String(log.mock.calls[0]?.[0])).toContain(
+      [
+        'Examples:',
+        '  # Check yourself',
+        '  terros garden bed check --bedId Bed.example',
+        '  # Check another user',
+        '  terros garden bed check --bedId Bed.example --userId U.example',
+        '',
+      ].join('\n')
+    )
   })
 
   it('is left out when a field of the example has no parameter', () => {
