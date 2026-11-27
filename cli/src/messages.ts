@@ -105,7 +105,8 @@ export function formatSubcommandParametersHelp(
   if (examples.length > 0) {
     lines.push('', examples.length > 1 ? 'Examples:' : 'Example:')
     for (const { name, args } of examples) {
-      if (examples.length > 1 && name) lines.push(`  # ${name}`)
+      // The name comes from the API document; a line break in it would end the comment and start a command line.
+      if (examples.length > 1 && name) lines.push(`  # ${name.replace(/\s+/g, ' ')}`)
       lines.push(`  terros ${[...commandParts, ...args.map(quoteShellArgument)].join(' ')}`)
     }
   }

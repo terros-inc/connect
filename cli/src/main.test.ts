@@ -503,7 +503,7 @@ describe('the example in endpoint help', () => {
     body.schema.properties = { bedId: { type: 'string' }, userId: { type: 'string' } }
     body.examples = {
       'Check yourself': { value: { bedId: 'Bed.example' } },
-      'Check another user': { value: { bedId: 'Bed.example', userId: 'U.example' } },
+      'Check another\nuser': { value: { bedId: 'Bed.example', userId: 'U.example' } },
       'Unknown field': { value: { bedId: 'Bed.example', size: 4 } },
     }
     vi.mocked(loadEndpoints).mockImplementation(async () => parseEndpoints(JSON.stringify(document)))
