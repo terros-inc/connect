@@ -7,6 +7,7 @@ import {
   getEndpointInputParameters,
   getExampleArguments,
   matchesStringLiteral,
+  type Endpoint,
   type EndpointGroups,
   type CommandNode,
   type EndpointParameter,
@@ -27,6 +28,7 @@ import {
   formatFlagArgument,
   preserveNumericString,
   getArrayParameterSyntax,
+  type CommandExample,
 } from './messages'
 import {
   loadEndpoints,
@@ -352,13 +354,21 @@ async function showHelp(words: string[], requestedDepth: unknown): Promise<void>
         description,
         true,
         level.subcommands,
-        getExampleArguments(endpoint, endpoint.example)
+        getCommandExamples(endpoint)
       )
     )
     return
   }
 
   console.log(formatLevelHelp(level))
+}
+
+/** Each documented example the flags can reproduce exactly; one they cannot is left out rather than shown wrong. */
+function getCommandExamples(endpoint: Endpoint): CommandExample[] {
+  return (endpoint.examples ?? []).flatMap(({ name, value }) => {
+    const args = getExampleArguments(endpoint, value)
+    return args ? [{ name, args }] : []
+  })
 }
 
 /**

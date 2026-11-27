@@ -15,6 +15,7 @@ Getting started (people and AI agents):
   terros auth login         sign in
   terros user profile       see who you are signed in as: company, teams, roles and permissions
   terros permission list    list your permissions in detail
+  terros permission check   check whether you, or another user with --userId, may act on a record, and why
 
 Commands:
   account

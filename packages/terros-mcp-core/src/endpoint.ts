@@ -8,11 +8,14 @@ export type EndpointParameter = {
   description?: string
 }
 
+/** A request body from the document, with its name when the document gives several. */
+export type EndpointExample = { name?: string; value: unknown }
+
 export type Endpoint = {
   path: string
   description?: string
-  /** A request body from the document's examples, used to show a sample command. */
-  example?: unknown
+  /** Request bodies from the document's examples, used to show sample commands. */
+  examples?: EndpointExample[]
   properties: Schema
   components: Components
 }

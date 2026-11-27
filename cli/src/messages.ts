@@ -6,7 +6,8 @@ import { STAFF_IMPERSONATION_HELP } from './impersonation'
 const GETTING_STARTED_HELP = `Getting started (people and AI agents):
   terros auth login         sign in
   terros user profile       see who you are signed in as: company, teams, roles and permissions
-  terros permission list    list your permissions in detail`
+  terros permission list    list your permissions in detail
+  terros permission check   check whether you, or another user with --userId, may act on a record, and why`
 
 export const HELP_PARENT_MESSAGE = `
 usage: terros <command> [<subcommand> ...] [parameters]
@@ -56,6 +57,9 @@ export function formatCommandUsage(command: string): string {
   return [`usage: terros ${command} [parameters]`, '', `Run "terros ${command} help" to see its parameters.`].join('\n')
 }
 
+/** A sample command's flags, with the document's name for it when it gives several. */
+export type CommandExample = { name?: string; args: string[] }
+
 export function formatSubcommandParametersHelp(
   command: string,
   subcommand: string | undefined,
@@ -63,7 +67,7 @@ export function formatSubcommandParametersHelp(
   description?: string,
   showDepthHelp = false,
   subcommands: string[] = [],
-  exampleArguments?: string[]
+  examples: CommandExample[] = []
 ): string {
   const commandParts = [command]
   if (subcommand) commandParts.push(subcommand)
@@ -98,8 +102,12 @@ export function formatSubcommandParametersHelp(
     })
   }
 
-  if (exampleArguments) {
-    lines.push('', 'Example:', `  terros ${[...commandParts, ...exampleArguments.map(quoteShellArgument)].join(' ')}`)
+  if (examples.length > 0) {
+    lines.push('', examples.length > 1 ? 'Examples:' : 'Example:')
+    for (const { name, args } of examples) {
+      if (examples.length > 1 && name) lines.push(`  # ${name}`)
+      lines.push(`  terros ${[...commandParts, ...args.map(quoteShellArgument)].join(' ')}`)
+    }
   }
 
   if (showDepthHelp) {
