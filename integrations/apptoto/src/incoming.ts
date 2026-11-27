@@ -36,8 +36,8 @@ const responseByState: Record<string, ParticipantResponse> = {
   not_coming_needs_reschedule: 'participant_needs_reschedule',
 }
 
-// Every write below sets a value from the payload rather than applying a delta, so a redelivered webhook repeats the
-// same write. Apptoto's apptoto_id changes on each delivery attempt, so nothing keys on it.
+// Every write below sets a value rather than applying a delta, so a redelivered webhook repeats the same write.
+// Apptoto's apptoto_id changes on each delivery attempt, so nothing keys on it.
 export async function applyWebhook(
   payload: ApptotoWebhook,
   client: TerrosClient,
@@ -51,7 +51,7 @@ export async function applyWebhook(
   if (!scriptConfig.calendarId) throw new Error('Apptoto calendarId is required')
 
   if (payload.participant) return applyResponse(payload.participant, client, scriptConfig, secrets)
-  if (payload.event) return applyEventChange(payload.event, client, scriptConfig)
+  if (payload.event) return applyEventChange(payload.event, client, scriptConfig, secrets)
   console.log(`Skipping Apptoto webhook with fields ${Object.keys(payload).sort().join(', ') || '(none)'}`)
 }
 
@@ -98,10 +98,20 @@ async function applyResponse(
 }
 
 async function applyEventChange(
-  apptotoEvent: ApptotoEvent,
+  delivered: ApptotoEvent,
   client: TerrosClient,
-  scriptConfig: ScriptConfig
+  scriptConfig: ScriptConfig,
+  secrets: Secrets
 ): Promise<void> {
+  // Apptoto can redeliver an older webhook after a newer change was applied, so apply the event as Apptoto has it now
+  // rather than as the payload describes it. Apptoto's docs don't say whether it still returns a deleted event, so a
+  // delivered delete also stands when the lookup finds nothing.
+  const apptotoEvent =
+    (await findEvent(secrets, { id: delivered.id })) ?? (delivered.is_deleted ? delivered : undefined)
+  if (!apptotoEvent) {
+    console.log(`Skipping Apptoto event ${delivered.id}: Apptoto no longer has it`)
+    return
+  }
   const event = await findLinkedEvent(client, scriptConfig, apptotoEvent)
   if (!event) return
   const dryRun = isOn(scriptConfig.dryRun)
@@ -165,7 +175,7 @@ export function toEventTime(apptotoEvent: Pick<ApptotoEvent, 'id' | 'start_time'
 } {
   const start = Date.parse(apptotoEvent.start_time ?? '')
   const end = Date.parse(apptotoEvent.end_time ?? '')
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
     throw new Error(`Apptoto event ${apptotoEvent.id} has an invalid start_time or end_time`)
   }
   return { eventDate: start, duration: Math.round((end - start) / 60_000) }

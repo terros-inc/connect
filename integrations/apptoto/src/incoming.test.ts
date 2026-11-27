@@ -237,6 +237,7 @@ test('an event on another Apptoto calendar is skipped', async () => {
 })
 
 test('a rescheduled Apptoto event moves the linked Terros event to the new start and duration', async () => {
+  installApptoto([{ ...apptotoEvent, ...rescheduled }])
   const { client, stored } = fakeTerros()
 
   await applyWebhook({ event: { ...apptotoEvent, ...rescheduled } }, client, config, secrets)
@@ -249,40 +250,79 @@ test('a rescheduled Apptoto event moves the linked Terros event to the new start
 
 // Apptoto Appointment Sync's own upsert fires event_updated; writing it back would loop between the two scripts.
 test('an event update with the time Terros already has writes nothing', async () => {
-  const { client, writes } = fakeTerros()
-
   const renamed = { ...apptotoEvent, title: 'Renamed in Apptoto', updated_on_calendar: '2026-10-13T08:00:00-07:00' }
+  installApptoto([renamed])
+  const { client, writes } = fakeTerros()
 
   await applyWebhook({ event: renamed }, client, config, secrets)
 
   expect(writes).toEqual([])
 })
 
-test('a deleted Apptoto event removes the linked Terros event, and a redelivery changes nothing', async () => {
-  const { client, stored, writes } = fakeTerros()
-  const deleted = { event: { ...apptotoEvent, is_deleted: true }, apptoto_id: '3_first' }
+// Apptoto Appointment Sync sends a zero-duration appointment with equal start and end; rejecting the echo fails the
+// execution, and Apptoto retries it.
+test('the echo of a zero-duration appointment writes nothing', async () => {
+  const instant = { ...apptotoEvent, end_time: apptotoEvent.start_time }
+  installApptoto([instant])
+  const { client, writes } = fakeTerros([{ ...terrosEvent, duration: 0 }])
 
-  await applyWebhook(deleted, client, config, secrets)
-  await applyWebhook({ ...deleted, apptoto_id: '3_retry' }, client, config, secrets)
+  await applyWebhook({ event: instant }, client, config, secrets)
 
-  expect(stored.size).toBe(0)
-  expect(writes.map(({ route }) => route)).toEqual(['calendar/event/remove'])
+  expect(writes).toEqual([])
 })
 
-test('dry run writes nothing, and the kill switch skips before any lookup', async () => {
-  const requests = installApptoto()
+// A retried older delivery must not undo a newer reschedule, which Apptoto Appointment Sync would then push back.
+test('an older event webhook redelivered after a newer reschedule leaves the newer time', async () => {
+  installApptoto([{ ...apptotoEvent, ...rescheduled }])
+  const { client, stored, writes } = fakeTerros()
+
+  await applyWebhook({ event: { ...apptotoEvent, ...rescheduled }, apptoto_id: '4_first' }, client, config, secrets)
+  await applyWebhook({ event: apptotoEvent, apptoto_id: '3_retry' }, client, config, secrets)
+
+  expect(writes).toHaveLength(1)
+  expect(stored.get('Event.example')).toMatchObject({ eventDate: Date.parse('2026-10-15T20:00:00Z'), duration: 60 })
+})
+
+test('a delete webhook for an event Apptoto has since restored does not remove the Terros event', async () => {
+  installApptoto()
   const { client, writes } = fakeTerros()
 
-  for (const payload of [
-    participantWebhook('confirmed'),
-    { event: { ...apptotoEvent, ...rescheduled } },
-    { event: { ...apptotoEvent, is_deleted: true } },
-  ]) {
-    await applyWebhook(payload, client, { ...config, dryRun: 'true' }, secrets)
-    await applyWebhook(payload, client, { ...config, disabled: true }, secrets)
+  await applyWebhook({ event: { ...apptotoEvent, is_deleted: true } }, client, config, secrets)
+
+  expect(writes).toEqual([])
+})
+
+// Apptoto's docs don't say whether GET /v1/event returns a deleted event or a 404, so both must remove it.
+test.each([
+  ['returns it as deleted', [{ ...apptotoEvent, is_deleted: true }]],
+  ['no longer returns it', []],
+])(
+  'a deleted Apptoto event removes the linked Terros event when Apptoto %s, and a redelivery changes nothing',
+  async (_case, current) => {
+    installApptoto(current)
+    const { client, stored, writes } = fakeTerros()
+    const deleted = { event: { ...apptotoEvent, is_deleted: true }, apptoto_id: '3_first' }
+
+    await applyWebhook(deleted, client, config, secrets)
+    await applyWebhook({ ...deleted, apptoto_id: '3_retry' }, client, config, secrets)
+
+    expect(stored.size).toBe(0)
+    expect(writes.map(({ route }) => route)).toEqual(['calendar/event/remove'])
   }
+)
+
+test.each([
+  ['a confirmation', participantWebhook('confirmed'), apptotoEvent],
+  ['a reschedule', { event: { ...apptotoEvent, ...rescheduled } }, { ...apptotoEvent, ...rescheduled }],
+  ['a delete', { event: { ...apptotoEvent, is_deleted: true } }, { ...apptotoEvent, is_deleted: true }],
+])('dry run writes nothing for %s, and the kill switch skips before any lookup', async (_case, payload, current) => {
+  const requests = installApptoto([current])
+  const { client, writes } = fakeTerros()
+
+  await applyWebhook(payload, client, { ...config, dryRun: 'true' }, secrets)
+  await applyWebhook(payload, client, { ...config, disabled: true }, secrets)
 
   expect(writes).toEqual([])
   expect(requests).toHaveLength(1)
-  expect(client.calendar.event.get).toHaveBeenCalledTimes(3)
+  expect(client.calendar.event.get).toHaveBeenCalledTimes(1)
 })
